@@ -1,6 +1,7 @@
 tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
 
   [ bertagaz ]
+  * Initial release (Close #544338).
   * Remove ubuntu's specific XSBC-Original-Maintainer field a in debian/control.
   * Remove deprecated XB-Python-Version field in debian/control.
   * Add install dependency on python-mock.

@@ -1,0 +1,1507 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="792.86096"
+   height="530.68115"
+   id="svg2"
+   sodipodi:version="0.32"
+   inkscape:version="0.46"
+   sodipodi:docname="network-and-reliance-topology.svg"
+   inkscape:output_extension="org.inkscape.output.svg.inkscape"
+   inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+   inkscape:export-xdpi="90.862091"
+   inkscape:export-ydpi="90.862091"
+   version="1.0">
+  <defs
+     id="defs4">
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-234.62661 : 597.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="509.46787 : 597.48055 : 1"
+       inkscape:persp3d-origin="137.42063 : 422.08685 : 1"
+       id="perspective5299" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-228.62661 : 505.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="515.46787 : 505.48055 : 1"
+       inkscape:persp3d-origin="143.42063 : 330.08685 : 1"
+       id="perspective5269" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-222.62661 : 398.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="521.46787 : 398.48055 : 1"
+       inkscape:persp3d-origin="149.42063 : 223.08685 : 1"
+       id="perspective5239" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-226.62661 : 327.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="517.46787 : 327.48055 : 1"
+       inkscape:persp3d-origin="145.42063 : 152.08685 : 1"
+       id="perspective5209" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-232.62661 : 702.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="511.46787 : 702.48055 : 1"
+       inkscape:persp3d-origin="139.42063 : 527.08685 : 1"
+       id="perspective5179" />
+    <linearGradient
+       inkscape:collect="always"
+       id="linearGradient5053">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop5055" />
+      <stop
+         style="stop-color:#000000;stop-opacity:0;"
+         offset="1"
+         id="stop5057" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       id="linearGradient5017">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop5019" />
+      <stop
+         style="stop-color:#000000;stop-opacity:0;"
+         offset="1"
+         id="stop5021" />
+    </linearGradient>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Mend"
+       style="overflow:visible">
+      <path
+         id="path3303"
+         d="M 0,0 L 5,-5 L -12.5,0 L 5,5 L 0,0 z"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
+    <marker
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1MendReddish"
+       style="overflow:visible">
+      <path
+         id="path2635"
+         d="M 0,0 L 5,-5 L -12.5,0 L 5,5 L 0,0 z"
+         style="fill:#e90000;fill-rule:evenodd;stroke:#e90000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
+    <inkscape:perspective
+       id="perspective3267"
+       inkscape:persp3d-origin="125.57937 : 28.08685 : 1"
+       inkscape:vp_z="-246.46787 : 203.48055 : 1"
+       inkscape:vp_y="-6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="497.62661 : 203.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective3251"
+       inkscape:persp3d-origin="141.42063 : 133.08685 : 1"
+       inkscape:vp_z="513.46787 : 308.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="-230.62661 : 308.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective3235"
+       inkscape:persp3d-origin="147.42063 : 645.08685 : 1"
+       inkscape:vp_z="519.46787 : 820.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="-224.62661 : 820.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective3219"
+       inkscape:persp3d-origin="132.42063 : 329.08685 : 1"
+       inkscape:vp_z="504.46787 : 504.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="-239.62661 : 504.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective3203"
+       inkscape:persp3d-origin="137.42063 : 226.08685 : 1"
+       inkscape:vp_z="509.46787 : 401.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="-234.62661 : 401.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       id="perspective3187"
+       inkscape:persp3d-origin="137.42063 : 435.08685 : 1"
+       inkscape:vp_z="509.46787 : 610.48055 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_x="-234.62661 : 610.48055 : 1"
+       sodipodi:type="inkscape:persp3d" />
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="-231 : 706.18109 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="513.09448 : 706.18109 : 1"
+       inkscape:persp3d-origin="141.04724 : 530.78739 : 1"
+       id="perspective10" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5023"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5053"
+       id="linearGradient5059"
+       x1="-486.79852"
+       y1="381.96805"
+       x2="-368"
+       y2="381.96805"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5177"
+       gradientUnits="userSpaceOnUse"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5207"
+       gradientUnits="userSpaceOnUse"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5237"
+       gradientUnits="userSpaceOnUse"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5267"
+       gradientUnits="userSpaceOnUse"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5017"
+       id="linearGradient5297"
+       gradientUnits="userSpaceOnUse"
+       x1="105.01035"
+       y1="272.36218"
+       x2="176.98965"
+       y2="272.36218" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     gridtolerance="10000"
+     guidetolerance="10"
+     objecttolerance="10"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.4848971"
+     inkscape:cx="403.50545"
+     inkscape:cy="287.96539"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1598"
+     inkscape:window-height="1198"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:snap-global="false"
+     showguides="true">
+    <inkscape:grid
+       type="xygrid"
+       id="grid3680"
+       visible="true"
+       enabled="true" />
+  </sodipodi:namedview>
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-29.895332,-159.56549)">
+    <text
+       xml:space="preserve"
+       style="font-size:24px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+       x="245.12035"
+       y="177.79987"
+       id="text3269"
+       sodipodi:linespacing="100%"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"><tspan
+         sodipodi:role="line"
+         id="tspan3271"
+         x="245.12035"
+         y="177.79987"
+         style="font-size:24px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">Tahoe-LAFS network topology</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="29.942207"
+       y="221.43034"
+       id="text3273"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         id="tspan3275"
+         x="29.942207"
+         y="221.43034"
+         style="font-size:16px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">Tahoe-LAFS storage servers</tspan></text>
+    <path
+       sodipodi:type="arc"
+       style="opacity:0.75702485;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#e90000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.96078431;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+       id="path3277"
+       sodipodi:cx="334"
+       sodipodi:cy="432.86218"
+       sodipodi:rx="48"
+       sodipodi:ry="46.5"
+       d="M 382,432.86218 A 48,46.5 0 1 1 286,432.86218 A 48,46.5 0 1 1 382,432.86218 z"
+       transform="translate(275.28238,-84.93289)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151" />
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Sans"
+       x="596.63654"
+       y="284.49683"
+       id="text3279"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="596.63654"
+         y="284.49683"
+         style="font-size:16px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan2753">Tahoe-LAFS client</tspan></text>
+    <rect
+       style="opacity:0.75702485;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#fe0000;stroke-width:2.16678953;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.96078431;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+       id="rect3283"
+       width="62.804142"
+       height="70.508224"
+       x="335.01871"
+       y="312.34866"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151" />
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="312.0188"
+       y="294.88391"
+       id="text3285"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         id="tspan3287"
+         x="312.0188"
+         y="294.88391"
+         style="font-size:16px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">Tahoe-LAFS gateway</tspan></text>
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 333.93531,335.34609 L 171.71511,274.14082"
+       id="path3289"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 333.93531,347.65796 L 171.77716,347.93344"
+       id="path4069"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 333.93531,360.9636 L 171.70467,427.68681"
+       id="path5618"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 333.93531,373.7529 L 171.56231,504.45981"
+       id="path6135"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 336.17932,383.94028 L 171.4245,581.90625"
+       id="path6652"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1Mend);stroke-opacity:1;display:inline"
+       d="M 343.67934,383.94028 L 171.31542,659.3527"
+       id="path7169"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-start="#rect3283" />
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="212.43573"
+       y="351.35602"
+       id="text7686"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="212.43573"
+         y="351.35602"
+         id="tspan2799"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans" /><tspan
+         sodipodi:role="line"
+         x="212.43573"
+         y="361.35602"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan5144">over TCP/SSL</tspan></text>
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#e90000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-end:url(#Arrow1MendReddish);stroke-opacity:1;display:inline"
+       d="M 559.8984,347.42122 L 461.94619,347.55756"
+       id="path7690"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:connection-end="#rect2791" />
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="512.73608"
+       y="350.61343"
+       id="text8207"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="512.73608"
+         y="350.61343"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan6123" /><tspan
+         sodipodi:role="line"
+         x="512.73608"
+         y="360.61343"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan6127">over HTTP(S)</tspan><tspan
+         sodipodi:role="line"
+         x="512.73608"
+         y="370.61343"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan2831">or (S)FTP</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+       x="428.97223"
+       y="344.07248"
+       id="text8211"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         id="tspan8213"
+         x="428.97223"
+         y="344.07248"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">HTTP(S)</tspan><tspan
+         sodipodi:role="line"
+         x="428.97223"
+         y="354.07248"
+         id="tspan8215"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">server</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+       x="366.35303"
+       y="342.36261"
+       id="text8217"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="366.35303"
+         y="342.36261"
+         id="tspan2785"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">Tahoe-LAFS</tspan><tspan
+         sodipodi:role="line"
+         x="366.35303"
+         y="352.36261"
+         id="tspan8221"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">storage</tspan><tspan
+         sodipodi:role="line"
+         x="366.35303"
+         y="362.36261"
+         id="tspan2783"
+         style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:100%;writing-mode:lr-tb;text-anchor:middle;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">client</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#e90000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="349.68079"
+       y="522.66956"
+       id="text8407"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         id="tspan8409"
+         x="349.68079"
+         y="522.66956"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">Red</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#e90000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="377.22623"
+       y="522.66956"
+       id="text8411"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="377.22623"
+         y="522.66956"
+         id="tspan8417"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">means that whoever controls that link or that machine can</tspan><tspan
+         sodipodi:role="line"
+         x="377.22623"
+         y="534.66956"
+         id="tspan8415"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">see your files and change their contents.  In other words, you<tspan
+   style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique"
+   id="tspan5160" /></tspan><tspan
+         sodipodi:role="line"
+         x="377.22623"
+         y="546.66956"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan5180"><tspan
+   style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique"
+   id="tspan5182">rely on</tspan> that component for confidentiality and integrity.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="338.61414"
+       y="590.89514"
+       id="text8455"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         x="338.61414"
+         y="590.89514"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+         id="tspan2817">Black</tspan><tspan
+         sodipodi:role="line"
+         x="338.61414"
+         y="602.89514"
+         id="tspan6119" /></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:DejaVu Serif"
+       x="375.40201"
+       y="590.89514"
+       id="text8459"
+       sodipodi:linespacing="100%"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"><tspan
+         sodipodi:role="line"
+         x="375.40201"
+         y="590.89514"
+         id="tspan8465"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">means that whoever controls that link or that machine cannot</tspan><tspan
+         sodipodi:role="line"
+         x="375.40201"
+         y="602.89514"
+         id="tspan8469"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans">see your files or change their contents.  In other words, you</tspan><tspan
+         sodipodi:role="line"
+         x="375.40201"
+         y="614.89514"
+         id="tspan8479"
+         style="font-size:12px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"><tspan
+   style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique"
+   id="tspan5192">do not rely on</tspan> that component for confidentiality and integrity.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Serif;-inkscape-font-specification:Sans Italic"
+       x="663.29926"
+       y="303.39594"
+       id="text2761"
+       sodipodi:linespacing="100%"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151"><tspan
+         sodipodi:role="line"
+         id="tspan2763"
+         x="663.29926"
+         y="303.39594"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• web browser</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="315.39594"
+         id="tspan2765"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• command-line tool</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="327.39594"
+         id="tspan2767"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• Windows virtual drive</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="339.39594"
+         id="tspan2769"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• JavaScript frontends</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="351.39594"
+         id="tspan2787"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• tahoe backup tool</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="363.39594"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique"
+         id="tspan2823">• duplicity</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="375.39594"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique"
+         id="tspan2835">• (S)FTP client</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="387.39594"
+         id="tspan2775"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• GridBackup (incomplete)</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="399.39594"
+         id="tspan2781"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique">• FUSE (incomplete)</tspan><tspan
+         sodipodi:role="line"
+         x="663.29926"
+         y="411.39594"
+         id="tspan2773"
+         style="font-size:12px;font-style:oblique;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans Oblique" /></text>
+    <rect
+       style="opacity:0.75702485;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#fe0000;stroke-width:2.16678953;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.96078431;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+       id="rect2791"
+       width="62.804142"
+       height="70.508224"
+       x="398.05865"
+       y="312.34866"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151" />
+    <g
+       id="g5891"
+       transform="translate(7.1983103,-31.29876)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5859"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5861"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5863"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5865"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5867"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5869"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5871"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5873"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5875"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5877"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5879"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5881"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5883"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5885"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5887"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5889"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <g
+       id="g5943"
+       transform="translate(7.1983103,356.14805)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5945"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5947"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5949"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5951"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5953"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5955"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5957"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5959"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5961"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5963"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5965"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5967"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5969"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5971"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5973"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5975"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <g
+       id="g5977"
+       transform="translate(7.1983103,278.65867)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5979"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5981"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5983"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path5985"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5987"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5989"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5991"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5993"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5995"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5997"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path5999"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6001"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6003"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6005"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6007"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6009"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <g
+       id="g6011"
+       transform="translate(7.1983103,201.16929)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6013"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6015"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6017"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6019"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6021"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6023"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6025"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6027"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6029"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6031"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6033"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6035"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6037"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6039"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6041"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6043"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <g
+       id="g6045"
+       transform="translate(7.1983103,123.67994)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6047"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6049"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6051"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6053"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6055"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6057"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6059"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6061"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6063"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6065"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6067"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6069"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6071"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6073"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6075"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6077"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <g
+       id="g6079"
+       transform="translate(7.1983103,46.190595)"
+       inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+       inkscape:export-xdpi="151"
+       inkscape:export-ydpi="151">
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-243.81548)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6081"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6083"
+         d="M 129.50211,285.26188 C 115.62316,285.69886 104.77823,289.37664 104.77823,293.78988 C 104.77823,298.49733 117.11378,302.31787 132.31295,302.31787 C 147.51211,302.31787 159.84766,298.49733 159.84766,293.78988 C 159.84766,289.08242 147.51211,285.26188 132.31295,285.26188 C 131.363,285.26188 130.42737,285.23275 129.50211,285.26188 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:3.53885722;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.62935,-213.78587)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6085"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         transform="matrix(1.8356478,0,0,1.7055983,609.59346,-198.76387)"
+         d="M -245,306.36218 A 15,5 0 1 1 -275,306.36218 A 15,5 0 1 1 -245,306.36218 z"
+         sodipodi:ry="5"
+         sodipodi:rx="15"
+         sodipodi:cy="306.36218"
+         sodipodi:cx="-260"
+         id="path6087"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate"
+         sodipodi:type="arc" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6089"
+         d="M 104.51272,278.92156 C 104.51272,323.91123 104.51272,323.91123 104.51272,323.91123"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6091"
+         d="M 160.20443,278.81929 C 160.20443,323.80896 160.20443,323.80896 160.20443,323.80896"
+         style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:3;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6093"
+         d="M 128.84004,333.94646 C 119.28626,333.59248 110.80074,331.66349 106.55141,328.8796 C 104.75332,327.70161 103.68184,326.44836 103.26147,325.03157 C 103.18313,324.76752 103.11903,324.43938 103.11903,324.30236 C 103.11903,324.06234 103.13518,324.05324 103.56098,324.05324 L 104.00292,324.05324 L 104.00292,322.45759 L 104.00292,320.86194 L 104.77632,320.08121 C 106.14874,318.69578 108.33312,317.46177 111.05665,316.53327 C 111.6283,316.3384 111.84052,316.30203 112.01631,316.36887 C 112.90843,316.70805 116.18253,317.51029 117.96828,317.82724 C 118.43011,317.90923 118.86026,318.00422 118.92417,318.03837 C 118.98808,318.07251 118.65,318.16906 118.17287,318.25291 C 116.00921,318.63313 112.8969,319.51932 110.85301,320.33714 C 109.58816,320.84324 108.12213,321.70959 107.42146,322.36498 C 106.80818,322.93863 106.53211,323.44245 106.5909,323.88072 C 106.69211,324.63533 107.62868,325.53083 109.24557,326.41898 C 112.28343,328.08767 117.5252,329.42604 123.49255,330.05662 C 126.92886,330.41975 127.83828,330.4614 132.33138,330.4614 C 136.82919,330.4614 137.75474,330.4189 141.16599,330.05576 C 147.87305,329.34179 153.20144,327.8698 156.32391,325.86835 C 157.31581,325.23256 158.09659,324.31659 158.09659,323.78876 C 158.09659,321.95228 152.7352,319.39521 146.49686,318.25637 C 146.02355,318.16996 145.64955,318.08604 145.66573,318.06986 C 145.68191,318.05369 146.38735,317.90369 147.23338,317.73655 C 149.7088,317.24749 152.88167,316.42175 152.88167,316.26657 C 152.88167,316.22674 152.60325,316.11293 152.26296,316.01364 C 151.92266,315.91436 151.37576,315.75503 151.04762,315.65959 C 150.12386,315.39091 148.19934,314.95816 146.74768,314.6927 L 145.43085,314.45191 L 146.08477,314.33936 C 149.26718,313.79166 152.92482,312.68123 155.01707,311.62759 C 157.32514,310.46526 158.38795,309.27474 158.00849,308.27669 C 157.7767,307.66704 156.40208,306.55038 155.03787,305.86354 C 153.06997,304.87276 149.39293,303.73914 146.48309,303.22614 L 145.60878,303.072 L 146.92503,302.83055 C 149.36149,302.3836 152.97006,301.44246 152.97006,301.25396 C 152.97006,301.09357 149.19789,300.11402 146.96999,299.69588 L 145.69867,299.45728 L 147.10257,299.17079 C 152.08244,298.15457 155.92235,296.59056 157.42662,294.96577 C 158.25715,294.0687 158.27471,293.53116 157.50155,292.67123 C 156.44243,291.49324 153.82619,290.19506 150.67196,289.28238 C 149.35713,288.90194 146.90893,288.32705 146.07577,288.2031 C 145.3819,288.09987 145.43865,288.03495 146.36558,287.87162 C 147.85629,287.60894 150.0111,287.11693 151.49317,286.70083 L 152.88889,286.30897 L 153.62979,286.57047 C 156.40396,287.54963 158.48081,288.72281 159.84226,290.07979 L 160.57146,290.80659 L 160.57146,293.77365 L 160.57146,296.74071 L 159.94398,297.40128 C 158.87698,298.52455 157.04195,299.64877 154.7501,300.5833 C 154.2329,300.79419 153.64071,301.01666 153.4341,301.07768 C 153.22749,301.13871 153.05845,301.21892 153.05845,301.25593 C 153.05845,301.29294 153.26727,301.39093 153.52249,301.47367 C 156.0454,302.29158 158.65721,303.75969 159.93064,305.07575 L 160.57146,305.73801 L 160.57146,308.75799 L 160.57146,311.77797 L 159.88645,312.46085 C 158.54039,313.8027 156.0228,315.2028 153.4341,316.04917 C 153.17888,316.13261 152.97006,316.23116 152.97006,316.26818 C 152.97006,316.30519 153.1391,316.38508 153.34571,316.44572 C 154.04612,316.65126 155.92726,317.43611 156.72657,317.85625 C 158.01288,318.53238 159.06307,319.27016 159.84226,320.04506 L 160.57146,320.77024 L 160.57146,322.50013 L 160.57146,324.23002 L 161.0576,324.23002 C 161.63277,324.23002 161.64834,324.2769 161.35959,325.13878 C 160.80058,326.80733 159.27752,328.31899 156.85915,329.60551 C 151.07802,332.68098 140.19456,334.36713 128.84004,333.94645 L 128.84004,333.94646 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6095"
+         d="M 111.42754,316.1251 C 108.31976,315.00883 106.21363,313.82948 104.82051,312.42541 L 104.00292,311.60139 L 104.00292,308.78801 L 104.00292,305.97464 L 104.42276,305.46958 C 105.48399,304.19299 107.3852,302.98143 110.00106,301.9148 C 111.61611,301.25625 111.45078,301.26671 113.01853,301.72382 C 114.58552,302.18072 115.87141,302.48603 117.70311,302.8361 C 118.85853,303.05692 118.94993,303.08736 118.63119,303.1452 C 112.58046,304.24321 107.69445,306.32516 106.7795,308.19526 C 106.56414,308.63544 106.55097,308.7163 106.64405,309.02699 C 106.7008,309.21639 106.95245,309.59575 107.20372,309.87068 C 108.77494,311.58984 112.95367,313.25868 118.18925,314.25791 C 118.77261,314.36925 119.15047,314.47332 119.02894,314.48918 C 117.75047,314.65605 114.88895,315.29486 113.00459,315.83404 C 111.7516,316.19256 111.66161,316.20917 111.42754,316.1251 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6097"
+         d="M 111.5536,301.25626 C 111.50857,301.21393 111.19331,301.07985 110.85301,300.95831 C 107.86637,299.89159 105.55706,298.50453 104.38119,297.07105 L 104.00292,296.60991 L 104.00292,293.7463 L 104.00292,290.88268 L 104.82051,290.07135 C 105.78464,289.1146 106.81519,288.40955 108.33395,287.66766 C 109.46269,287.11628 111.48453,286.31142 111.74086,286.31142 C 111.81917,286.31142 112.42705,286.46831 113.0917,286.66007 C 114.96791,287.20137 118.4993,287.97743 119.18125,287.99831 C 119.31624,288.00244 119.02894,288.078 118.5428,288.16622 C 113.27194,289.12275 108.87136,290.84972 107.2067,292.61497 C 106.47325,293.39274 106.38254,293.87043 106.8378,294.55775 C 107.68402,295.83531 110.53151,297.32249 114.05515,298.3272 C 115.36655,298.70113 117.17693,299.12879 118.21734,299.31043 C 118.94607,299.43765 118.90734,299.5021 118.01247,299.6514 C 116.25786,299.94413 112.00524,301.02634 111.73799,301.24814 C 111.67957,301.29662 111.60025,301.30012 111.5536,301.25626 L 111.5536,301.25626 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6099"
+         d="M 110.89434,285.8727 C 107.9146,284.81338 105.73921,283.51229 104.44457,282.01511 L 104.04711,281.55548 L 104.00292,280.28742 L 103.95872,279.01938 L 103.53888,278.99244 L 103.11903,278.9655 L 103.11903,278.54697 C 103.11903,276.50293 105.01825,274.27429 108.06034,272.74857 C 115.91094,268.81122 131.39222,267.37209 144.66156,269.34615 C 151.62357,270.38188 157.0402,272.34391 159.67684,274.78503 C 160.82262,275.84585 161.50725,277.16352 161.60855,278.50287 L 161.65764,279.15196 L 161.11454,279.15196 L 160.57146,279.15196 L 160.57146,280.44495 L 160.57146,281.73795 L 159.84226,282.46589 C 158.49364,283.81215 156.34784,285.01458 153.60108,285.96321 L 152.86209,286.21844 L 151.83332,285.91401 C 150.47181,285.51112 148.52968,285.04935 147.00385,284.76574 C 146.32326,284.63923 145.70675,284.51317 145.63383,284.4856 C 145.56091,284.45803 146.13764,284.30551 146.91546,284.14666 C 151.22086,283.2674 154.39371,282.13556 156.4614,280.74139 C 157.1412,280.28303 157.87347,279.55052 158.00946,279.19284 C 158.23315,278.60448 158.01247,278.01357 157.33156,277.37771 C 154.16635,274.4219 145.00442,272.2448 134.71787,272.00414 C 127.45144,271.83414 120.90587,272.44827 115.4624,273.81075 C 110.70359,275.00186 107.16649,276.84951 106.65019,278.41393 C 106.50436,278.85578 106.73092,279.39667 107.3003,279.96605 C 108.99737,281.66312 112.93122,283.20101 118.18925,284.22293 L 119.24991,284.42908 L 118.36602,284.58439 C 116.46904,284.9177 113.2798,285.68641 112.1713,286.07751 C 111.83553,286.19598 111.77751,286.18667 110.89434,285.8727 L 110.89434,285.8727 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6101"
+         d="M 104.00292,301.29849 L 104.00292,296.83358 L 104.37857,297.24571 C 105.63915,298.62871 107.23221,299.63074 109.92494,300.73436 C 110.72706,301.06311 111.32147,301.33329 111.24584,301.33476 C 111.01618,301.33922 109.59866,301.93317 108.28975,302.57336 C 106.49974,303.44887 105.28925,304.30428 104.37857,305.33729 L 104.00292,305.76339 L 104.00292,301.29849 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6103"
+         d="M 104.00292,286.20941 L 104.00292,281.75496 L 104.77632,282.51323 C 105.63093,283.35112 106.8058,284.1747 108.00723,284.7781 C 108.8708,285.21181 110.46225,285.8775 111.05189,286.05167 C 111.48748,286.18032 111.52607,286.26787 111.18447,286.35239 C 110.79557,286.44861 108.89611,287.26176 107.96492,287.73067 C 106.55787,288.4392 105.78589,288.98189 104.61841,290.08323 L 104.00292,290.66386 L 104.00292,286.20941 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6105"
+         d="M 104.00292,316.2336 L 104.00292,311.8397 L 104.77632,312.5641 C 106.12339,313.82582 108.07941,314.97507 110.34478,315.83585 C 110.89168,316.04366 111.33915,316.24108 111.33915,316.27457 C 111.33915,316.30807 111.17011,316.38507 110.9635,316.4457 C 110.39717,316.61187 108.938,317.20831 108.21971,317.56722 C 106.82304,318.26511 105.6562,319.06789 104.6262,320.03953 L 104.00292,320.62751 L 104.00292,316.2336 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6107"
+         d="M 159.86435,319.89194 C 158.55339,318.66966 156.80169,317.64577 154.47467,316.74162 C 153.91451,316.52398 153.42673,316.3184 153.39071,316.28478 C 153.35469,316.25116 153.75245,316.06924 154.27459,315.88051 C 156.30605,315.14625 158.44336,313.91775 159.81959,312.69331 L 160.57146,312.02437 L 160.57146,316.27104 C 160.57146,318.60671 160.56152,320.51597 160.54936,320.51386 C 160.53721,320.51174 160.22896,320.23188 159.86435,319.89194 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6109"
+         d="M 159.90279,304.88522 C 158.68832,303.71667 156.50871,302.44448 154.30602,301.6185 C 153.80114,301.42918 153.42328,301.2532 153.46633,301.22744 C 153.50937,301.20168 153.98211,301.01019 154.51686,300.80191 C 156.66559,299.96502 158.70698,298.75501 159.92982,297.59342 L 160.57146,296.98393 L 160.57146,301.23781 C 160.57146,303.57744 160.56152,305.49042 160.54936,305.48888 C 160.53721,305.48734 160.24625,305.21569 159.90279,304.88521 L 159.90279,304.88522 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+      <path
+         inkscape:export-ydpi="151"
+         inkscape:export-xdpi="151"
+         inkscape:export-filename="/home/zooko/playground/allmydata/tahoe/trunk/trunk/docs/network-and-reliance-topology.png"
+         id="path6111"
+         d="M 159.95274,290.00706 C 158.49028,288.6346 157.04423,287.77652 154.55089,286.80165 L 153.17069,286.26202 L 154.41831,285.78132 C 157.00895,284.78317 158.48143,283.91524 160.00983,282.48549 L 160.57146,281.96012 L 160.57146,286.25708 C 160.57146,288.62042 160.56152,290.5523 160.54936,290.55014 C 160.53721,290.54799 160.26873,290.3036 159.95274,290.00706 L 159.95274,290.00706 z"
+         style="opacity:0.75702485;fill:#000000;fill-opacity:0.87815121;fill-rule:nonzero;stroke:#000000;stroke-width:0.17677669;stroke-linecap:butt;stroke-linejoin:round;marker:none;marker-start:none;marker-mid:none;marker-end:none;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+       x="178.00012"
+       y="342.21909"
+       id="text2815"
+       sodipodi:linespacing="100%"><tspan
+         sodipodi:role="line"
+         id="tspan2818"
+         x="178.00012"
+         y="342.21909">Tahoe-LAFS storage protocol</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:10px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:100%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:DejaVu Sans;-inkscape-font-specification:DejaVu Sans"
+       x="469.52924"
+       y="342.69528"
+       id="text2820"
+       sodipodi:linespacing="100%"><tspan
+         sodipodi:role="line"
+         id="tspan2822"
+         x="469.52924"
+         y="342.69528">Tahoe-LAFS web-API</tspan></text>
+  </g>
+</svg>

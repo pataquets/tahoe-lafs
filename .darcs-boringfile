@@ -1,0 +1,93 @@
+# Boring file regexps:
+\.hi$
+\.o$
+\.o\.cmd$
+# *.ko files aren't boring by default because they might
+# be Korean translations rather than kernel modules.
+# \.ko$
+\.ko\.cmd$
+\.mod\.c$
+(^|/)\.tmp_versions($|/)
+(^|/)CVS($|/)
+(^|/)RCS($|/)
+~$
+#(^|/)\.[^/]
+(^|/)_darcs($|/)
+\.bak$
+\.BAK$
+\.orig$
+(^|/)vssver\.scc$
+\.swp$
+(^|/)MT($|/)
+(^|/)\{arch\}($|/)
+(^|/).arch-ids($|/)
+(^|/),
+\.class$
+\.prof$
+(^|/)\.DS_Store$
+(^|/)BitKeeper($|/)
+(^|/)ChangeSet($|/)
+(^|/)\.svn($|/)
+(^|/)\.git($|/)
+\.gitignore$
+\.py[co]$
+\#
+\.cvsignore$
+(^|/)Thumbs\.db$
+(^|/)autom4te\.cache($|/)
+
+^client-basedir
+^queen-basedir($|/)
+^_trial_temp.*($|/)
+^\.buildbot($|/)
+^MANIFEST$
+^dist($|/)
+^debian($|/)
+
+^misc/(dapper|sid|feisty)/debian/allmydata-tahoe($|/)
+^misc/(dapper|sid|feisty)/debian/allmydata-tahoe\.\w+\.debhelper$
+^misc/(dapper|sid|feisty)/debian/allmydata-tahoe\.substvars$
+^misc/(dapper|sid|feisty)/debian/files$
+
+^build($|/)
+^build-stamp$
+^python-build-stamp-2.[45]$
+^\.coverage$
+^coverage-html($|/)
+^twisted/plugins/dropin\.cache$
+^\.coverage\.el$
+^_test_memory($|/)
+
+# _version.py is generated at build time, and never checked in
+^src/allmydata/_version\.py$
+# _appname.py is generated at build time, and never checked in
+^src/allmydata/_appname\.py$
+# src/allmydata/_auto_deps.py is copied into place at build time, and never checked in
+^src/allmydata/_auto_deps\.py$
+
+# bin/tahoe scripts (not including tahoe-script.template) are generated files
+^bin/tahoe$
+^bin/tahoe\.pyscript$
+^bin/tahoe-script\.py$
+
+# this file is maintained by the buildbot
+^\.buildbot-sourcedata$
+
+# automatically-built dependencies (using the 'build-deps' target) go here
+^support
+
+# creating a tahoe egg puts files here
+allmydata_tahoe.egg-info$
+^Twisted-.*\.egg/
+
+# zipped .eggs are boring, contents of .egg directories are not
+^.*\.egg$
+
+^\.checked-deps$
+^\.built$
+
+^misc/dependencies/build($|/)
+^misc/dependencies/temp($|/)
+
+^tahoe-deps($|/)
+^tahoe-deps\.tar\.gz$

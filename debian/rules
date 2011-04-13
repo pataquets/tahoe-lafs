@@ -37,6 +37,13 @@ install: build
 		--install-layout=deb \
 		--single-version-externally-managed \
 		--root $(CURDIR)/debian/$(package)
+	
+	# Clean bin/tahoe trick stolen from upstream packaging script.
+	head -1 debian/$(package)/usr/bin/tahoe > debian/$(package)/usr/bin/tahoe.new
+	echo "from allmydata.scripts import runner" >> debian/$(package)/usr/bin/tahoe.new
+	echo "runner.run()" >> debian/$(package)//usr/bin/tahoe.new
+	chmod +x debian/$(package)/usr/bin/tahoe.new
+	mv debian/$(package)/usr/bin/tahoe.new debian/$(package)/usr/bin/tahoe
 
 binary-indep: build install
 	dh_testdir

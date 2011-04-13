@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+package=tahoe-lafs
+
+clean:
+	rm -f build-*
+	dh_testdir
+	dh_testroot
+	python setup.py clean
+	rm -rf build
+	find . -name "*\.py[co]" -exec rm -f {} \;
+	dh_clean
+
+build: build-indep
+
+build-indep:
+	touch $@
+
+build-stamp: 
+	dh_testdir
+	python setup.py build
+	touch $@
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	python setup.py install \
+		--no-compile \
+		--install-layout=deb \
+		--single-version-externally-managed \
+		--root $(CURDIR)/debian/$(package)
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+#	mv debian/$(package)/usr/share/doc/$(package)/CHANGES.txt \
+#		debian/$(package)/usr/share/doc/$(package)/changelog
+	dh_installexamples
+	dh_strip
+	dh_compress -X.py
+	dh_fixperms
+	dh_pysupport
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch:
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure

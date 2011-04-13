@@ -1,0 +1,67 @@
+tahoe-lafs (1.8.2-0ubuntu1) natty; urgency=low
+
+  * Update to version 1.8.2 (LP: #719092)
+    - Improved performance and fault tolerance of downloads
+    - Increased logging 
+    - Fixed Twisted 10.2 compatitibility
+  * Update standards version to 3.9.1
+
+ -- Paul Hummer <paul@ubuntu.com>  Wed, 23 Feb 2011 13:58:35 -0700
+
+tahoe-lafs (1.7.1-0ubuntu1) maverick; urgency=low
+
+  * Update to version 1.7.1 (LP: #609755).
+    - SFTP support
+    - support for non-ASCII character encodings
+    - more checks to make sure file hunks are more sufficiently distributed
+    - many bugfixes
+
+ -- Paul Hummer <paul@ubuntu.com>  Tue, 10 Aug 2010 17:48:58 -0600
+
+tahoe-lafs (1.6.1-0ubuntu2) lucid; urgency=low
+
+  * Restore files to the binary package by re-instating the package= from
+    debian/rules that was deleted too hastily. The empty substiution variable
+    meant that python setup.py was told to install the files outside the
+    package tmpdir. (LP: #551333)
+
+ -- James Westby <james.westby@ubuntu.com>  Tue, 30 Mar 2010 10:19:27 -0400
+
+tahoe-lafs (1.6.1-0ubuntu1) lucid; urgency=low
+
+  [Jeremy Visser]
+  * Update to bugfix release 1.6.1 (LP: #529350).
+    - Correct handling of small immutable directories.
+    - Improved user interface messages and error reporting.
+  * debian/control: bump standards-version to 3.8.4. No changes required.
+  * debian/gbp.conf: deleted as it's a temporary file left over
+  * debian/watch: fixed to have the correct tarball name and avoid SUMO version
+
+  [Fabrice Coutadeur]
+  * Switch to dpkg-source 3.0 (quilt) format
+  * debian/reduce_build_dependencies.patch: converted from direct source
+    changes done in 1.6.0 to reduce the required dependencies and not download
+    them at build time.
+  * debian/rules: deleted get-orig-source target as the watch file has been
+    fixed
+
+ -- Jeremy Visser <jeremy@visser.name>  Thu, 04 Mar 2010 19:37:54 +1100
+
+tahoe-lafs (1.6.0-0ubuntu1) lucid; urgency=low
+
+  * Update to version 1.6 (LP: #516744).
+    - Deep immutable directories.
+    - `tahoe backup` now creates immutable directories.
+    - `create-node` command added.
+    - `create-client` now implies --no-storage.
+  * debian/rules: fix find call.
+
+ -- Paul Hummer <paul@ubuntu.com>  Wed, 03 Feb 2010 19:36:39 -0700
+
+tahoe-lafs (1.5.0-0ubuntu1) karmic; urgency=low
+
+  * Initial release (LP: #417136).
+  * Relax pycryptopp dependency to 0.5.14, to help it get into Karmic.
+  * Add missing license statements.
+
+ -- Zooko O'Whielacronx (Hacker) <zooko@zooko.com>  Thu, 24 Sep 2009 00:00:05 -0600

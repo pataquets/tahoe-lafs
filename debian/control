@@ -1,0 +1,33 @@
+Source: tahoe-lafs
+Section: utils
+Priority: optional
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: Brian Warner <warner@lothar.com>
+Build-Depends: debhelper (>= 7), python-support, python-setuptools,
+ python (>= 2.5), python-twisted
+XS-Python-Version: >= 2.5
+Standards-Version: 3.9.1
+Homepage: http://allmydata.org/trac/tahoe
+
+Package: tahoe-lafs
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}, python-twisted,
+ python-foolscap (>= 0.4.1), python-openssl, python-nevow,
+ python-simplejson (>= 1.4), python-zfec (>= 1.1), python-pycryptopp (>= 0.5.14),
+ python-setuptools
+XB-Python-Version: >= 2.5
+Description: Secure distributed filesystem
+ Tahoe, the Least Authority File System, is a distributed filesystem that
+ features high reliability, strong security properties, and a fine-grained
+ sharing model. Files are encrypted, signed, erasure-coded, then distributed
+ over multiple servers, such that any (configurable) subset of the servers
+ will be sufficient to recover the data. The default 3-of-10 configuration
+ tolerates up to 7 server failures before data becomes unrecoverable.
+ .
+ Tahoe offers "provider-independent security": the confidentiality and
+ integrity of your data do not depend upon the behavior of the servers. The
+ use of erasure-coding means that reliability and availability depend only
+ upon a subset of the servers.
+ .
+ Tahoe files are accessed through a RESTful web API, a human-oriented web
+ server interface, and CLI tools.

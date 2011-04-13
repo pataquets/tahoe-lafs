@@ -1,3 +1,19 @@
+tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
+
+  [ bertagaz ]
+  * Remove ubuntu's specific XSBC-Original-Maintainer field a in debian/control.
+  * Remove deprecated XB-Python-Version field in debian/control.
+  * Add install dependency on python-mock.
+  * Update homepage in debian/control.
+  * Ignore quilt dir.
+  * Remove upstream custom build dependencies.
+  * Include munin plugins.
+  * Use upstream trick to install a clean bin/tahoe.
+  * Bump versions of several install dependencies.
+  * Bump compatibility version.
+
+ -- bertagaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
+
 tahoe-lafs (1.8.2-0ubuntu1) natty; urgency=low
 
   * Update to version 1.8.2 (LP: #719092)

@@ -1,1 +1,2 @@
 remove_upstream_setup_deps.diff
+exclude_buildtest_package.diff

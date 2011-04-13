@@ -11,6 +11,7 @@ tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
   * Use upstream trick to install a clean bin/tahoe.
   * Bump versions of several install dependencies.
   * Bump compatibility version.
+  * Exclude buildtest python package from the debian one.
 
  -- bertagaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
 

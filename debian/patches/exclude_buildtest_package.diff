@@ -1,0 +1,34 @@
+Index: tahoe/setup.py
+===================================================================
+--- tahoe.orig/setup.py	2011-04-13 22:43:22.349847608 +0200
++++ tahoe/setup.py	2011-04-13 22:43:54.277842306 +0200
+@@ -404,7 +404,7 @@
+                 "sdist": MySdist,
+                 },
+       package_dir = {'':'src'},
+-      packages=find_packages("src"),
++      packages=['allmydata'],
+       classifiers=trove_classifiers,
+       test_suite="allmydata.test",
+       install_requires=install_requires,
+Index: tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt
+===================================================================
+--- tahoe.orig/src/allmydata_tahoe.egg-info/SOURCES.txt	2011-04-13 22:46:13.953848270 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt	2011-04-13 22:46:27.061842298 +0200
+@@ -476,7 +476,5 @@
+ src/allmydata_tahoe.egg-info/not-zip-safe
+ src/allmydata_tahoe.egg-info/requires.txt
+ src/allmydata_tahoe.egg-info/top_level.txt
+-src/buildtest/__init__.py
+-src/buildtest/test_build_with_fake_dist.py
+ static/tahoe.py
+-twisted/plugins/allmydata_trial.py
+\ No newline at end of file
++twisted/plugins/allmydata_trial.py
+Index: tahoe/src/allmydata_tahoe.egg-info/top_level.txt
+===================================================================
+--- tahoe.orig/src/allmydata_tahoe.egg-info/top_level.txt	2011-04-13 22:46:53.945848318 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/top_level.txt	2011-04-13 22:47:01.213842243 +0200
+@@ -1,2 +1 @@
+ allmydata
+-buildtest

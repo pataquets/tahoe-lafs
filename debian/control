@@ -1,7 +1,7 @@
 Source: tahoe-lafs
 Section: utils
 Priority: optional
-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Maintainer: Bert Agaz <bertagaz@ptitcanardnoir.org>
 Build-Depends: debhelper (>= 7), python-support, python-setuptools,
  python (>= 2.5), python-twisted
 XS-Python-Version: >= 2.5

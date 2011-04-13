@@ -1,0 +1,2 @@
+misc/operations_helpers/munin/tahoe_* usr/share/munin/plugins/
+misc/operations_helpers/munin/*-conf etc/munin/plugin-conf.d/

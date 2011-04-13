@@ -30,6 +30,8 @@ install: build
 	dh_testroot
 	dh_clean -k
 	dh_installdirs
+	dh_install
+	chmod 755 debian/$(package)/usr/share/munin/plugins/*
 	python setup.py install \
 		--no-compile \
 		--install-layout=deb \

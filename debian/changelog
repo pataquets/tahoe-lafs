@@ -14,6 +14,9 @@ tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
   * Bump compatibility version.
   * Exclude buildtest python package from the debian one.
 
+  [ Micah Anderson]
+  * switch dh_clean -k to dh_prep
+
  -- bertagaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
 
 tahoe-lafs (1.8.2-0ubuntu1) natty; urgency=low

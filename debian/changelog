@@ -1,7 +1,7 @@
-tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
+tahoe-lafs (1.8.2-1) unstable; urgency=low
 
   [ bertagaz ]
-  * Initial release (Close #544338).
+  * Initial release (Closes: #544338).
   * Remove ubuntu's specific XSBC-Original-Maintainer field a in debian/control.
   * Remove deprecated XB-Python-Version field in debian/control.
   * Add install dependency on python-mock.
@@ -17,7 +17,7 @@ tahoe-lafs (1.8.2-1) UNRELEASED; urgency=low
   [ Micah Anderson]
   * switch dh_clean -k to dh_prep
 
- -- bertagaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
+ -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
 
 tahoe-lafs (1.8.2-0ubuntu1) natty; urgency=low
 

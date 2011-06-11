@@ -16,6 +16,7 @@ tahoe-lafs (1.8.2-1) unstable; urgency=low
 
   [ Micah Anderson]
   * switch dh_clean -k to dh_prep
+  * add myself to Uploaders
 
  -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
 

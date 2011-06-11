@@ -2,6 +2,7 @@ Source: tahoe-lafs
 Section: utils
 Priority: optional
 Maintainer: Bert Agaz <bertagaz@ptitcanardnoir.org>
+Uploaders: Micah Anderson <micah@debian.org>
 Build-Depends: debhelper (>= 7), python-support, python-setuptools,
  python (>= 2.5), python-twisted
 XS-Python-Version: >= 2.5

@@ -1,3 +1,9 @@
+tahoe-lafs (1.8.2-2) unstable; urgency=low
+
+  * Raise dependency on python-pycryptopp version, now upgraded in Debian. 
+
+ -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Wed, 15 Jun 2011 00:41:24 +0200
+
 tahoe-lafs (1.8.2-1) unstable; urgency=low
 
   [ bertagaz ]

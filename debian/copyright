@@ -8,29 +8,27 @@ Upstream Author:
     Zooko Wilcox-O'Hearn <zooko@zooko.com>
     and dozens of others
 
-Copyright © 2006-2009
+Copyright © 2006-2011
 AllMyData, Inc.
 
 You may use this package under the GNU General Public License, version 2 or, at
-your option, any later version.
+your option, any later version. You may also opt to use this package under the
+terms of the Transitive Grace Period Public License, version 1 or, at your
+option, any later version.
 
 On Debian GNU/Linux systems, the complete text of the GNU General
 Public License can be found in `/usr/share/common-licenses/GPL'.
+
+The Transitive Grace Period Public Licence has requirements similar to the GPL
+except that it allows you to wait for up to twelve months after you redistribute
+a derived work before releasing the source code of your derived work. See the
+file COPYING.TGPPL.html for the terms of the Transitive Grace Period Public
+Licence, version 1, also included below.
 
 This licence also comes with the added permission that you may link this
 program with the OpenSSL library and distribute executables, as long as you
 follow the requirements of this licence in regard to all of the software in
 the executable aside from OpenSSL.
-
-You may use this package under the Transitive Grace Period Public Licence,
-version 1 or, at your option, any later version.  The Transitive Grace Period
-Public Licence has requirements similar to the GPL except that it allows you to
-wait for up to twelve months after you redistribute a derived work before
-releasing the source code of your derived work. See the file COPYING.TGPPL.html
-for the terms of the Transitive Grace Period Public Licence, version 1.
-
-(You may choose to use this package under the terms of either licence, at your
-option.)
 
 ------- begin TGPPL1 licence
             Transitive Grace Period Public Licence ("TGPPL") v. 1.0
@@ -198,31 +196,6 @@ option.)
        this License.
 ------- end TGPPL1 licence
 
-The files mac/fuse.py and mac/fuseparts/subbedopts.py are licensed under
-the GNU Lesser General Public Licence.  In addition, on 2009-09-21 Csaba 
-Henk granted permission for those files to be under the same terms as 
-Tahoe-LAFS itself.
-
-See /usr/share/common-licenses/GPL for a copy of the GNU General Public
-License, and /usr/share/common-licenses/LGPL for the GNU Lesser General Public
-License.
-
-The file src/allmydata/util/figleaf.py is licensed under the BSD licence.
-
-------- begin BSD licence
-Copyright (c) <YEAR>, <OWNER>
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-    * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-    * Neither the name of the <ORGANIZATION> nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-------- end BSD licence
-
-
 The file src/allmydata/util/statistics.py was originally licensed under the
 GPL3, but on 2009-09-21 its author Shawn Willden declared: "I hereby license
 all patches I have contributed or will contribute to the Allmydata Tahoe-LAFS
@@ -235,3 +208,4 @@ Wilcox-O'Hearn, granted full rights to allmydata.com to re-license it as
 they see fit, and they reclicensed it the same terms as Tahoe-LAFS
 itself: you may use it under GPL version 2 or greater at your option or
 under TGPPL version 1 or greater at your option.
+

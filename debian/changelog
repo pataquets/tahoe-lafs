@@ -1,3 +1,9 @@
+tahoe-lafs (1.8.2-3) unstable; urgency=low
+
+  * Update debian/copyright to have complete licensing information
+
+ -- Micah Anderson <micah@debian.org>  Thu, 16 Jun 2011 13:33:31 -0400
+
 tahoe-lafs (1.8.2-2) unstable; urgency=low
 
   * Raise dependency on python-pycryptopp version, now upgraded in Debian. 

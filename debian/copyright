@@ -533,9 +533,9 @@ Disclaimer
   DAMAGE.
 
 
-The setuptools_darcs-1.2.12.egg directory, which is not used in the debian
-package (see patches), but is included in the upstream source is licensed under
-the BSD License:
+The setuptools_darcs-1.2.12.egg directory and the darcsver-1.7.2.egg directory,
+neither which is not used in the debian package (see patches), is included in
+the upstream source and is licensed under the BSD License:
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted under the terms of the BSD License.

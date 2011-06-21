@@ -1,3 +1,10 @@
+tahoe-lafs (1.8.2-4) unstable; urgency=low
+
+  [ Bert Agaz ]
+  * Remove Debian version number of python-pycryptopp dependency (Closes: #630825).
+
+ -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Tue, 21 Jun 2011 14:01:31 +0200
+
 tahoe-lafs (1.8.2-3) unstable; urgency=low
 
   * Update debian/copyright to have complete licensing information

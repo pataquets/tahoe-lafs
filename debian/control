@@ -7,6 +7,8 @@ Build-Depends: debhelper (>= 7), python-support, python-setuptools,
  python (>= 2.5), python-twisted
 XS-Python-Version: >= 2.5
 Standards-Version: 3.9.2
+Vcs-Git: git://anonscm.debian.org/tahoe/tahoe.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=tahoe/tahoe.git
 Homepage: http://tahoe-lafs.org/trac/tahoe
 
 Package: tahoe-lafs

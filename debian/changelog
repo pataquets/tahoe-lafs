@@ -5,6 +5,7 @@ tahoe-lafs (1.8.2-4) unstable; urgency=low
   * Remove python-twisted dependency (Closes: #631163).
     python-foolscap already depends on the needed twisted packages.
   * Remove link to /usr/share/common-licenses/BSD.
+  * Add Vcs-{Git,Browser} to debian/control.
 
  -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Tue, 21 Jun 2011 14:01:31 +0200
 

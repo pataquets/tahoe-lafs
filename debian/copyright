@@ -535,22 +535,10 @@ Disclaimer
 
 The setuptools_darcs-1.2.12.egg directory and the darcsver-1.7.2.egg directory,
 neither which is not used in the debian package (see patches), is included in
-the upstream source and is licensed under the BSD License:
+the upstream source and is licensed under the Simple Permissive Licence, which
+is included in full here:
 
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted under the terms of the BSD License.
+  "Permission is hereby granted to any person obtaining a copy of this
+   work to deal in this work without restriction (including the rights to
+   use, modify, distribute, sublicense, and/or sell copies)."
 
-    THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
-    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-    ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
-    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-    SUCH DAMAGE.
-
-On Debian systems, the complete text of the BSD License can be
-found in "/usr/share/common-licenses/BSD".

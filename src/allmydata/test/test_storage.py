@@ -97,6 +97,54 @@ class Bucket(unittest.TestCase):
         self.failUnlessEqual(br.remote_read(25, 25), "b"*25)
         self.failUnlessEqual(br.remote_read(50, 7), "c"*7)
 
+    def test_read_past_end_of_share_data(self):
+        # test vector for immutable files (hard-coded contents of an immutable share
+        # file):
+
+        # The following immutable share file content is identical to that
+        # generated with storage.immutable.ShareFile from Tahoe-LAFS v1.8.2
+        # with share data == 'a'. The total size of this content is 85
+        # bytes.
+
+        containerdata = struct.pack('>LLL', 1, 1, 1)
+
+        # A Tahoe-LAFS storage client would send as the share_data a
+        # complicated string involving hash trees and a URI Extension Block
+        # -- see allmydata/immutable/layout.py . This test, which is
+        # simulating a client, just sends 'a'.
+        share_data = 'a'
+
+        ownernumber = struct.pack('>L', 0)
+        renewsecret  = 'THIS LETS ME RENEW YOUR FILE....'
+        assert len(renewsecret) == 32
+        cancelsecret = 'THIS LETS ME KILL YOUR FILE HAHA'
+        assert len(cancelsecret) == 32
+        expirationtime = struct.pack('>L', 60*60*24*31) # 31 days in seconds
+
+        lease_data = ownernumber + renewsecret + cancelsecret + expirationtime
+
+        share_file_data = containerdata + share_data + lease_data
+
+        incoming, final = self.make_workdir("test_read_past_end_of_share_data")
+
+        fileutil.write(final, share_file_data)
+
+        mockstorageserver = mock.Mock()
+
+        # Now read from it.
+        br = BucketReader(mockstorageserver, final)
+
+        self.failUnlessEqual(br.remote_read(0, len(share_data)), share_data)
+
+        # Read past the end of share data to get the cancel secret.
+        read_length = len(share_data) + len(ownernumber) + len(renewsecret) + len(cancelsecret)
+
+        result_of_read = br.remote_read(0, read_length)
+        self.failUnlessEqual(result_of_read, share_data)
+
+        result_of_read = br.remote_read(0, len(share_data)+1)
+        self.failUnlessEqual(result_of_read, share_data)
+
 class RemoteBucket:
 
     def callRemote(self, methname, *args, **kwargs):
@@ -250,6 +298,12 @@ class Server(unittest.TestCase):
 
     def test_create(self):
         self.create("test_create")
+
+    def test_declares_fixed_1528(self):
+        ss = self.create("test_declares_fixed_1528")
+        ver = ss.remote_get_version()
+        sv1 = ver['http://allmydata.org/tahoe/protocols/storage/v1']
+        self.failUnless(sv1.get('prevents-read-past-end-of-share-data'), sv1)
 
     def allocate(self, ss, storage_index, sharenums, size, canary=None):
         renew_secret = hashutil.tagged_hash("blah", "%d" % self._lease_secret.next())
@@ -574,42 +628,10 @@ class Server(unittest.TestCase):
         readers = ss.remote_get_buckets("si0")
         self.failUnlessEqual(len(readers), 5)
 
-        # now cancel it
-        self.failUnlessRaises(IndexError, ss.remote_cancel_lease, "si0", rs0)
-        self.failUnlessRaises(IndexError, ss.remote_cancel_lease, "si0", cs1)
-        ss.remote_cancel_lease("si0", cs0)
-
-        # si0 should now be gone
-        readers = ss.remote_get_buckets("si0")
-        self.failUnlessEqual(len(readers), 0)
-        # and the renew should no longer work
-        self.failUnlessRaises(IndexError, ss.remote_renew_lease, "si0", rs0)
-
-
-        # cancel the first lease on si1, leaving the second and third in place
-        ss.remote_cancel_lease("si1", cs1)
-        readers = ss.remote_get_buckets("si1")
-        self.failUnlessEqual(len(readers), 5)
-        # the corresponding renew should no longer work
-        self.failUnlessRaises(IndexError, ss.remote_renew_lease, "si1", rs1)
-
-        leases = list(ss.get_leases("si1"))
-        self.failUnlessEqual(len(leases), 2)
-        self.failUnlessEqual(set([l.renew_secret for l in leases]), set([rs2, rs2a]))
-
-        ss.remote_renew_lease("si1", rs2)
-        # cancelling the second and third should make it go away
-        ss.remote_cancel_lease("si1", cs2)
-        ss.remote_cancel_lease("si1", cs2a)
-        readers = ss.remote_get_buckets("si1")
-        self.failUnlessEqual(len(readers), 0)
-        self.failUnlessRaises(IndexError, ss.remote_renew_lease, "si1", rs1)
-        self.failUnlessRaises(IndexError, ss.remote_renew_lease, "si1", rs2)
-        self.failUnlessRaises(IndexError, ss.remote_renew_lease, "si1", rs2a)
-
-        leases = list(ss.get_leases("si1"))
-        self.failUnlessEqual(len(leases), 0)
-
+        # There is no such method as remote_cancel_lease for now -- see
+        # ticket #1528.
+        self.failIf(hasattr(ss, 'remote_cancel_lease'), \
+                        "ss should not have a 'remote_cancel_lease' method/attribute")
 
         # test overlapping uploads
         rs3,cs3 = (hashutil.tagged_hash("blah", "%d" % self._lease_secret.next()),
@@ -795,22 +817,81 @@ class MutableServer(unittest.TestCase):
                          [])
         self.failUnlessEqual(answer, (True, {0:[],1:[],2:[]}) )
 
-        # trying to make the container too large will raise an exception
+        # Trying to make the container too large (by sending a write vector
+        # whose offset is too high) will raise an exception.
         TOOBIG = MutableShareFile.MAX_SIZE + 10
         self.failUnlessRaises(DataTooLargeError,
                               rstaraw, "si1", secrets,
-                              {0: ([], [(0,data)], TOOBIG)},
+                              {0: ([], [(TOOBIG,data)], None)},
                               [])
 
-        # it should be possible to make the container smaller, although at
-        # the moment this doesn't actually affect the share, unless the
-        # container size is dropped to zero, in which case the share is
-        # deleted.
         answer = rstaraw("si1", secrets,
-                         {0: ([], [(0,data)], len(data)+8)},
+                         {0: ([], [(0,data)], None)},
                          [])
         self.failUnlessEqual(answer, (True, {0:[],1:[],2:[]}) )
 
+        read_answer = read("si1", [0], [(0,10)])
+        self.failUnlessEqual(read_answer, {0: [data[:10]]})
+
+        # Sending a new_length shorter than the current length truncates the
+        # data.
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [], 9)},
+                         [])
+        read_answer = read("si1", [0], [(0,10)])
+        self.failUnlessEqual(read_answer, {0: [data[:9]]})
+
+        # Sending a new_length longer than the current length doesn't change
+        # the data.
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [], 20)},
+                         [])
+        assert answer == (True, {0:[],1:[],2:[]})
+        read_answer = read("si1", [0], [(0, 20)])
+        self.failUnlessEqual(read_answer, {0: [data[:9]]})
+
+        # Sending a write vector whose start is after the end of the current
+        # data doesn't reveal "whatever was there last time" (palimpsest),
+        # but instead fills with zeroes.
+
+        # To test this, we fill the data area with a recognizable pattern.
+        pattern = ''.join([chr(i) for i in range(100)])
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [(0, pattern)], None)},
+                         [])
+        assert answer == (True, {0:[],1:[],2:[]})
+        # Then truncate the data...
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [], 20)},
+                         [])
+        assert answer == (True, {0:[],1:[],2:[]})
+        # Just confirm that you get an empty string if you try to read from
+        # past the (new) endpoint now.
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [], None)},
+                         [(20, 1980)])
+        self.failUnlessEqual(answer, (True, {0:[''],1:[''],2:['']}))
+
+        # Then the extend the file by writing a vector which starts out past
+        # the end...
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [(50, 'hellothere')], None)},
+                         [])
+        assert answer == (True, {0:[],1:[],2:[]})
+        # Now if you read the stuff between 20 (where we earlier truncated)
+        # and 50, it had better be all zeroes.
+        answer = rstaraw("si1", secrets,
+                         {0: ([], [], None)},
+                         [(20, 30)])
+        self.failUnlessEqual(answer, (True, {0:['\x00'*30],1:[''],2:['']}))
+
+        # Also see if the server explicitly declares that it supports this
+        # feature.
+        ver = ss.remote_get_version()
+        storage_v1_ver = ver["http://allmydata.org/tahoe/protocols/storage/v1"]
+        self.failUnless(storage_v1_ver.get("fills-holes-with-zero-bytes"))
+
+        # If the size is dropped to zero the share is deleted.
         answer = rstaraw("si1", secrets,
                          {0: ([], [(0,data)], 0)},
                          [])
@@ -1159,10 +1240,6 @@ class MutableServer(unittest.TestCase):
 
         self.failUnlessEqual(len(list(s0.get_leases())), 6)
 
-        # cancel one of them
-        ss.remote_cancel_lease("si1", secrets(5)[2])
-        self.failUnlessEqual(len(list(s0.get_leases())), 5)
-
         all_leases = list(s0.get_leases())
         # and write enough data to expand the container, forcing the server
         # to move the leases
@@ -1195,10 +1272,6 @@ class MutableServer(unittest.TestCase):
         self.failUnlessIn("I have leases accepted by nodeids:", e_s)
         self.failUnlessIn("nodeids: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' .", e_s)
 
-        # same for cancelling
-        self.failUnlessRaises(IndexError,
-                              ss.remote_cancel_lease, "si1",
-                              secrets(20)[2])
         self.compare_leases(all_leases, list(s0.get_leases()))
 
         # reading shares should not modify the timestamp
@@ -1212,35 +1285,6 @@ class MutableServer(unittest.TestCase):
         write("si1", secrets(0),
               {0: ([], [(500, "make me really bigger")], None)}, [])
         self.compare_leases_without_timestamps(all_leases, list(s0.get_leases()))
-
-        # now cancel them all
-        ss.remote_cancel_lease("si1", secrets(0)[2])
-        ss.remote_cancel_lease("si1", secrets(1)[2])
-        ss.remote_cancel_lease("si1", secrets(2)[2])
-        ss.remote_cancel_lease("si1", secrets(3)[2])
-
-        # the slot should still be there
-        remaining_shares = read("si1", [], [(0,10)])
-        self.failUnlessEqual(len(remaining_shares), 1)
-        self.failUnlessEqual(len(list(s0.get_leases())), 1)
-
-        # cancelling a non-existent lease should raise an IndexError
-        self.failUnlessRaises(IndexError,
-                              ss.remote_cancel_lease, "si1", "nonsecret")
-
-        # and the slot should still be there
-        remaining_shares = read("si1", [], [(0,10)])
-        self.failUnlessEqual(len(remaining_shares), 1)
-        self.failUnlessEqual(len(list(s0.get_leases())), 1)
-
-        ss.remote_cancel_lease("si1", secrets(4)[2])
-        # now the slot should be gone
-        no_shares = read("si1", [], [(0,10)])
-        self.failUnlessEqual(no_shares, {})
-
-        # cancelling a lease on a non-existent share should raise an IndexError
-        self.failUnlessRaises(IndexError,
-                              ss.remote_cancel_lease, "si2", "nonsecret")
 
     def test_remove(self):
         ss = self.create("test_remove")

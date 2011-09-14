@@ -1,26 +1,28 @@
 Index: tahoe/setup.cfg
 ===================================================================
---- tahoe.orig/setup.cfg	2011-04-13 16:56:35.205847712 +0200
-+++ tahoe/setup.cfg	2011-04-13 17:10:10.317846906 +0200
-@@ -8,14 +8,3 @@
- tag_build = 
- tag_date = 0
- tag_svn_revision = 0
--
+--- tahoe.orig/setup.cfg	2011-09-14 13:28:55.000000000 +0200
++++ tahoe/setup.cfg	2011-09-14 14:00:08.127061668 +0200
+@@ -4,16 +4,6 @@
+ 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-dep-sdists/
+ 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-lafs-dep-eggs/
+ 
 -[aliases]
+-build = darcsver --count-all-patches develop --prefix=support make_executable build
+-test = darcsver --count-all-patches develop --prefix=support make_executable build trial
+-sdist = darcsver --count-all-patches sdist
+-install = darcsver --count-all-patches install
+-bdist_egg = darcsver --count-all-patches bdist_egg
+-trial = darcsver --count-all-patches trial
 -sdist_dsc = darcsver --count-all-patches sdist_dsc
 -test_mac_diskimage = darcsver --count-all-patches test_mac_diskimage
--sdist = darcsver --count-all-patches sdist
--trial = darcsver --count-all-patches trial
--build = darcsver --count-all-patches develop --prefix=support make_executable build
--install = darcsver --count-all-patches install
--test = darcsver --count-all-patches develop --prefix=support make_executable build trial
--bdist_egg = darcsver --count-all-patches bdist_egg
 -
+ [egg_info]
+ tag_build = 
+ tag_date = 0
 Index: tahoe/setup.py
 ===================================================================
---- tahoe.orig/setup.py	2011-04-13 17:08:52.401847307 +0200
-+++ tahoe/setup.py	2011-04-13 17:10:20.849842282 +0200
+--- tahoe.orig/setup.py	2011-06-25 13:19:00.000000000 +0200
++++ tahoe/setup.py	2011-09-14 13:57:36.726551958 +0200
 @@ -67,15 +67,15 @@
      del sys.argv[1]
      install_requires += ["fakedependency >= 1.0.0"]

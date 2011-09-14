@@ -15,10 +15,11 @@ clean:
 	find . -name "*\.py[co]" -exec rm -f {} \;
 	dh_clean
 
-build: build-indep
+build: build-indep build-arch
 
-build-indep:
-	touch $@
+build-arch: build-stamp
+
+build-indep: build-stamp
 
 build-stamp: 
 	dh_testdir

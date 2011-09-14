@@ -1,5 +1,17 @@
 User visible changes in Tahoe-LAFS.  -*- outline; coding: utf-8 -*-
 
+* Release 1.8.3 (2011-09-13)
+
+** Security-related Bugfix
+
+ - Fix flaw that would allow a person who knows a storage index of a file to
+   delete shares of that file (#1528).
+ - Remove corner cases in mutable file bounds management which could expose
+   extra lease info or old share data (from prior versions of the mutable
+   file) if someone with write authority to that mutable file exercised these
+   corner cases in a way that no actual Tahoe-LAFS client does. (Probably not
+   exploitable.) (#1528).
+
 * Release 1.8.2 (2011-01-30)
 
 ** Compatibility and Dependencies

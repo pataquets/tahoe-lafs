@@ -51,8 +51,8 @@ binary-indep: build install
 	dh_testroot
 	dh_installchangelogs
 	dh_installdocs
-#	mv debian/$(package)/usr/share/doc/$(package)/CHANGES.txt \
-#		debian/$(package)/usr/share/doc/$(package)/changelog
+	mv debian/$(package)/usr/share/doc/$(package)/NEWS \
+		debian/$(package)/usr/share/doc/$(package)/changelog
 	dh_installexamples
 	dh_strip
 	dh_compress -X.py

@@ -144,21 +144,6 @@ class RIStorageServer(RemoteInterface):
         """
         return Any()
 
-    def cancel_lease(storage_index=StorageIndex,
-                     cancel_secret=LeaseCancelSecret):
-        """
-        Cancel the lease on a given bucket. If this was the last lease on the
-        bucket, the bucket will be deleted. If there is no bucket for the
-        given storage_index, IndexError will be raised.
-
-        For mutable shares, if the given cancel_secret does not match an
-        existing lease, IndexError will be raised with a note listing the
-        server-nodeids on the existing leases, so leases on migrated shares
-        can be renewed or cancelled. For immutable shares, IndexError
-        (without the note) will be raised.
-        """
-        return Any()
-
     def get_buckets(storage_index=StorageIndex):
         return DictOf(int, RIBucketReader, maxKeys=MAX_BUCKETS)
 
@@ -220,12 +205,35 @@ class RIStorageServer(RemoteInterface):
         necessary. A write vector applied to a share number that did not
         exist previously will cause that share to be created.
 
-        Each write vector is accompanied by a 'new_length' argument. If
-        new_length is not None, use it to set the size of the container. This
-        can be used to pre-allocate space for a series of upcoming writes, or
-        truncate existing data. If the container is growing, new_length will
-        be applied before datav. If the container is shrinking, it will be
-        applied afterwards. If new_length==0, the share will be deleted.
+        In Tahoe-LAFS v1.8.3 or later (except 1.9.0a1), if you send a write
+        vector whose offset is beyond the end of the current data, the space
+        between the end of the current data and the beginning of the write
+        vector will be filled with zero bytes. In earlier versions the
+        contents of this space was unspecified (and might end up containing
+        secrets). Storage servers with the new zero-filling behavior will
+        advertise a true value for the 'fills-holes-with-zero-bytes' key
+        (under 'http://allmydata.org/tahoe/protocols/storage/v1') in their
+        version information.
+
+        Each write vector is accompanied by a 'new_length' argument, which
+        can be used to truncate the data. If new_length is not None and it is
+        less than the current size of the data (after applying all write
+        vectors), then the data will be truncated to new_length. If
+        new_length==0, the share will be deleted.
+
+        In Tahoe-LAFS v1.8.2 and earlier, new_length could also be used to
+        enlarge the file by sending a number larger than the size of the data
+        after applying all write vectors. That behavior was not used, and as
+        of Tahoe-LAFS v1.8.3 it no longer works and the new_length is ignored
+        in that case.
+
+        If a storage client knows that the server supports zero-filling, for
+        example from the 'fills-holes-with-zero-bytes' key in its version
+        information, it can extend the file efficiently by writing a single
+        zero byte just before the new end-of-file. Otherwise it must
+        explicitly write zeroes to all bytes between the old and new
+        end-of-file. In any case it should avoid sending new_length larger
+        than the size of the data after applying all write vectors.
 
         The read vector is used to extract data from all known shares,
         *before* any writes have been applied. The same vector is used for

@@ -1,7 +1,7 @@
-tahoe-lafs (1.8.3-1) unstable; urgency=low
+tahoe-lafs (1.8.3-1) unstable; urgency=high
 
   [ Bert Agaz ]
-  * New upstream release (Closes: #641540).
+  * New upstream release (Closes: #641540), urgency high due to security fix
   * Refresh Debian patches.
   * Add header to Debian patches.
   * Remove Debian version of python-pycryptopp dependency (Closes: #630825).
@@ -12,7 +12,7 @@ tahoe-lafs (1.8.3-1) unstable; urgency=low
   * Add a patch to reduce Twisted dependencies (Closes: #631163).
     (credit goes to Julian Taylor <jtaylor.debian@googlemail.com>).
 
- -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Tue, 21 Jun 2011 14:01:31 +0200
+ -- Micah Anderson <micah@debian.org>  Tue, 21 Jun 2011 14:01:31 +0200
 
 tahoe-lafs (1.8.2-3) unstable; urgency=low
 

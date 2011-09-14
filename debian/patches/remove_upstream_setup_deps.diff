@@ -1,3 +1,7 @@
+Description: Remove upstream setup dependencies.
+ Tahoe-lafs setup uses a custom setuptools which rely on darcsver to do some
+ smart guessings. This isn't relevant in Debian and needs to be ignored.
+Author: bertagaz <bertagaz@ptitcanardnoir.org>
 Index: tahoe/setup.cfg
 ===================================================================
 --- tahoe.orig/setup.cfg	2011-09-14 13:28:55.000000000 +0200

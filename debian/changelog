@@ -1,7 +1,7 @@
 tahoe-lafs (1.8.3-2) unstable; urgency=high
 
   [ Bert Agaz ]
-  * Fix regression on install dependency against python-twisted (Closes: #641649).
+  * Fix dependency regression against python-twisted (Closes: #641649).
 
  -- Micah Anderson <micah@debian.org>  Thu, 15 Sep 2011 17:20:56 +0200
 

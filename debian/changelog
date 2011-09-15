@@ -1,4 +1,4 @@
-tahoe-lafs (1.8.3-2) unstable; urgency=low
+tahoe-lafs (1.8.3-2) unstable; urgency=high
 
   [ Bert Agaz ]
   * Fix regression on install dependency against python-twisted (Closes: #641649).

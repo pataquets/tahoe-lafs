@@ -1,3 +1,2 @@
 remove_upstream_setup_deps.diff
 exclude_buildtest_package.diff
-fix_automatic_dependency_guessing.diff

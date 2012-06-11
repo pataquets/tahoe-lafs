@@ -29,10 +29,10 @@ except ImportError:
 
 # __full_version__ is the one that you ought to use when identifying yourself in the
 # "application" part of the Tahoe versioning scheme:
-# http://allmydata.org/trac/tahoe/wiki/Versioning
+# http://allmydata.org/trac/tahoe-lafs/wiki/Versioning
 __full_version__ = __appname__ + '/' + str(__version__)
 
-import os, platform, re, subprocess, sys
+import os, platform, re, subprocess, sys, traceback
 _distributor_id_cmdline_re = re.compile("(?:Distributor ID:)\s*(.*)", re.I)
 _release_cmdline_re = re.compile("(?:Release:)\s*(.*)", re.I)
 
@@ -133,13 +133,19 @@ def get_platform():
 
 
 from allmydata.util import verlib
-def normalized_version(verstr):
-    return verlib.NormalizedVersion(verlib.suggest_normalized_version(verstr))
+def normalized_version(verstr, what=None):
+    try:
+        return verlib.NormalizedVersion(verlib.suggest_normalized_version(verstr))
+    except (StandardError, verlib.IrrationalVersionError):
+        cls, value, trace = sys.exc_info()
+        raise PackagingError, ("could not parse %s due to %s: %s"
+                               % (what or repr(verstr), cls.__name__, value)), trace
 
 
 def get_package_versions_and_locations():
     import warnings
-    from _auto_deps import package_imports, deprecation_messages, deprecation_imports
+    from _auto_deps import package_imports, deprecation_messages, \
+        user_warning_messages, warning_imports
 
     def package_dir(srcfile):
         return os.path.dirname(os.path.dirname(os.path.normcase(os.path.realpath(srcfile))))
@@ -156,18 +162,23 @@ def get_package_versions_and_locations():
         message="BaseException.message has been deprecated as of Python 2.6",
         append=True)
 
-    # This is to suppress various DeprecationWarnings that occur when modules are imported.
-    # See http://allmydata.org/trac/tahoe/ticket/859 and http://divmod.org/trac/ticket/2994 .
+    # This is to suppress various DeprecationWarnings and UserWarnings that
+    # occur when modules are imported.  See #859, #1435 and
+    # http://divmod.org/trac/ticket/2994 .
 
     for msg in deprecation_messages:
         warnings.filterwarnings("ignore", category=DeprecationWarning, message=msg, append=True)
+    for msg in user_warning_messages:
+        warnings.filterwarnings("ignore", category=UserWarning, message=msg, append=True)
     try:
-        for modulename in deprecation_imports:
+        for modulename in warning_imports:
             try:
                 __import__(modulename)
             except ImportError:
                 pass
     finally:
+        for ign in user_warning_messages:
+            warnings.filters.pop()
         for ign in deprecation_messages:
             warnings.filters.pop()
 
@@ -182,7 +193,9 @@ def get_package_versions_and_locations():
                 __import__(modulename)
                 module = sys.modules[modulename]
             except ImportError:
-                packages.append( (pkgname, (None, None, modulename)) )
+                etype, emsg, etrace = sys.exc_info()
+                trace_info = (etype, str(emsg), ([None] + traceback.extract_tb(etrace))[-1])
+                packages.append( (pkgname, (None, None, trace_info)) )
             else:
                 if 'sqlite' in pkgname:
                     packages.append( (pkgname, (get_version(module, 'version'), package_dir(module.__file__),
@@ -203,36 +216,42 @@ def get_package_versions_and_locations():
 
 def check_requirement(req, vers_and_locs):
     # TODO: check [] options
-    # We support only disjunctions of >= and ==
+    # We support only disjunctions of <=, >=, and ==
 
     reqlist = req.split(',')
-    name = reqlist[0].split('>=')[0].split('==')[0].strip(' ').split('[')[0]
+    name = reqlist[0].split('<=')[0].split('>=')[0].split('==')[0].strip(' ').split('[')[0]
     if name not in vers_and_locs:
         raise PackagingError("no version info for %s" % (name,))
     if req.strip(' ') == name:
         return
     (actual, location, comment) = vers_and_locs[name]
     if actual is None:
-        # comment is the module name
-        raise ImportError("could not import %r for requirement %r" % (comment, req))
+        # comment is (type, message, (filename, line number, function name, text)) for the original ImportError
+        raise ImportError("for requirement %r: %s" % (req, comment))
     if actual == 'unknown':
         return
-    actualver = normalized_version(actual)
+    actualver = normalized_version(actual, what="actual version %r of %s from %r" % (actual, name, location))
 
     for r in reqlist:
-        s = r.split('>=')
+        s = r.split('<=')
         if len(s) == 2:
             required = s[1].strip(' ')
-            if actualver >= normalized_version(required):
-                return  # minimum requirement met
+            if actualver <= normalized_version(required, what="required maximum version %r in %r" % (required, req)):
+                return  # maximum requirement met
         else:
-            s = r.split('==')
+            s = r.split('>=')
             if len(s) == 2:
                 required = s[1].strip(' ')
-                if actualver == normalized_version(required):
-                    return  # exact requirement met
+                if actualver >= normalized_version(required, what="required minimum version %r in %r" % (required, req)):
+                    return  # minimum requirement met
             else:
-                raise PackagingError("no version info or could not understand requirement %r" % (req,))
+                s = r.split('==')
+                if len(s) == 2:
+                    required = s[1].strip(' ')
+                    if actualver == normalized_version(required, what="required exact version %r in %r" % (required, req)):
+                        return  # exact requirement met
+                else:
+                    raise PackagingError("no version info or could not understand requirement %r" % (req,))
 
     msg = ("We require %s, but could only find version %s.\n" % (req, actual))
     if location and location != 'unknown':
@@ -251,15 +270,21 @@ def cross_check_pkg_resources_versus_import():
     import pkg_resources
     from _auto_deps import install_requires
 
-    errors = []
-    not_pkg_resourceable = set(['sqlite3', 'python', 'platform', __appname__.lower()])
-    not_import_versionable = set(['zope.interface', 'mock', 'pyasn1'])
-    ignorable = set(['argparse', 'pyutil', 'zbase32', 'distribute'])
-
     pkg_resources_vers_and_locs = dict([(p.project_name.lower(), (str(p.version), p.location))
                                         for p in pkg_resources.require(install_requires)])
 
-    for name, (imp_ver, imp_loc, imp_comment) in _vers_and_locs_list:
+    return cross_check(pkg_resources_vers_and_locs, _vers_and_locs_list)
+
+
+def cross_check(pkg_resources_vers_and_locs, imported_vers_and_locs_list):
+    """This function returns a list of errors due to any failed cross-checks."""
+
+    errors = []
+    not_pkg_resourceable = set(['sqlite3', 'python', 'platform', __appname__.lower()])
+    not_import_versionable = set(['zope.interface', 'mock', 'pyasn1'])
+    ignorable = set(['argparse', 'pyutil', 'zbase32', 'distribute', 'twisted-web', 'twisted-core'])
+
+    for name, (imp_ver, imp_loc, imp_comment) in imported_vers_and_locs_list:
         name = name.lower()
         if name not in not_pkg_resourceable:
             if name not in pkg_resources_vers_and_locs:
@@ -267,12 +292,12 @@ def cross_check_pkg_resources_versus_import():
                     pr_ver, pr_loc = pkg_resources_vers_and_locs["distribute"]
                     if not (os.path.normpath(os.path.realpath(pr_loc)) == os.path.normpath(os.path.realpath(imp_loc))
                             and imp_comment == "distribute"):
-                        errors.append("Warning: dependency 'setuptools' found to be version %s of 'distribute' from %r "
-                                      "by pkg_resources, but 'import setuptools' gave version %s [%s] from %r. "
-                                      "The version mismatch is expected, but the location mismatch is not."
+                        errors.append("Warning: dependency 'setuptools' found to be version %r of 'distribute' from %r "
+                                      "by pkg_resources, but 'import setuptools' gave version %r [%s] from %r. "
+                                      "A version mismatch is expected, but a location mismatch is not."
                                       % (pr_ver, pr_loc, imp_ver, imp_comment or 'probably *not* distribute', imp_loc))
                 else:
-                    errors.append("Warning: dependency %s (version %s imported from %r) was not found by pkg_resources."
+                    errors.append("Warning: dependency %r (version %r imported from %r) was not found by pkg_resources."
                                   % (name, imp_ver, imp_loc))
                 continue
 
@@ -280,36 +305,36 @@ def cross_check_pkg_resources_versus_import():
             try:
                 pr_normver = normalized_version(pr_ver)
             except Exception, e:
-                errors.append("Warning: version number %s found for dependency '%s' by pkg_resources could not be parsed. "
-                              "The version found by import was %s from %r. "
+                errors.append("Warning: version number %r found for dependency %r by pkg_resources could not be parsed. "
+                              "The version found by import was %r from %r. "
                               "pkg_resources thought it should be found at %r. "
                               "The exception was %s: %s"
-                              % (pr_ver, name, imp_ver, imp_loc, pr_loc, e.__class__.name, e))
+                              % (pr_ver, name, imp_ver, imp_loc, pr_loc, e.__class__.__name__, e))
             else:
                 if imp_ver == 'unknown':
                     if name not in not_import_versionable:
-                        errors.append("Warning: unexpectedly could not find a version number for dependency %s imported from %r. "
-                                      "pkg_resources thought it should be version %s at %r."
+                        errors.append("Warning: unexpectedly could not find a version number for dependency %r imported from %r. "
+                                      "pkg_resources thought it should be version %r at %r."
                                       % (name, imp_loc, pr_ver, pr_loc))
                 else:
                     try:
                         imp_normver = normalized_version(imp_ver)
                     except Exception, e:
-                        errors.append("Warning: version number %s found for dependency %s (imported from %r) could not be parsed. "
-                                      "pkg_resources thought it should be version %s at %r. "
+                        errors.append("Warning: version number %r found for dependency %r (imported from %r) could not be parsed. "
+                                      "pkg_resources thought it should be version %r at %r. "
                                       "The exception was %s: %s"
-                                      % (imp_ver, name, imp_loc, pr_ver, pr_loc, e.__class__.name, e))
+                                      % (imp_ver, name, imp_loc, pr_ver, pr_loc, e.__class__.__name__, e))
                     else:
                         if pr_ver == 'unknown' or (pr_normver != imp_normver):
                             if not os.path.normpath(os.path.realpath(pr_loc)) == os.path.normpath(os.path.realpath(imp_loc)):
-                                errors.append("Warning: dependency '%s' found to have version number %s (normalized to %s, from %r) "
-                                              "by pkg_resources, but version %s (normalized to %s, from %r) by import."
+                                errors.append("Warning: dependency %r found to have version number %r (normalized to %r, from %r) "
+                                              "by pkg_resources, but version %r (normalized to %r, from %r) by import."
                                               % (name, pr_ver, str(pr_normver), pr_loc, imp_ver, str(imp_normver), imp_loc))
 
-    imported_packages = set([p.lower() for (p, _) in _vers_and_locs_list])
+    imported_packages = set([p.lower() for (p, _) in imported_vers_and_locs_list])
     for pr_name, (pr_ver, pr_loc) in pkg_resources_vers_and_locs.iteritems():
         if pr_name not in imported_packages and pr_name not in ignorable:
-            errors.append("Warning: dependency %s (version %s) found by pkg_resources not found by import."
+            errors.append("Warning: dependency %r (version %r) found by pkg_resources not found by import."
                           % (pr_name, pr_ver))
 
     return errors
@@ -360,7 +385,7 @@ def check_all_requirements():
     for requirement in install_requires:
         try:
             check_requirement(requirement, vers_and_locs)
-        except Exception, e:
+        except (ImportError, PackagingError), e:
             errors.append("%s: %s" % (e.__class__.__name__, e))
 
     if errors:

@@ -3,12 +3,13 @@ import binascii
 import copy
 import time
 now = time.time
-from zope.interface import implements, Interface
+from zope.interface import implements
 from twisted.internet import defer
-from twisted.internet.interfaces import IConsumer
 
-from allmydata.interfaces import IImmutableFileNode, IUploadResults
 from allmydata import uri
+from twisted.internet.interfaces import IConsumer
+from allmydata.interfaces import IImmutableFileNode, IUploadResults
+from allmydata.util import consumer
 from allmydata.check_results import CheckResults, CheckAndRepairResults
 from allmydata.util.dictutil import DictOfSets
 from pycryptopp.cipher.aes import AES
@@ -16,13 +17,9 @@ from pycryptopp.cipher.aes import AES
 # local imports
 from allmydata.immutable.checker import Checker
 from allmydata.immutable.repairer import Repairer
-from allmydata.immutable.downloader.node import DownloadNode
+from allmydata.immutable.downloader.node import DownloadNode, \
+     IDownloadStatusHandlingConsumer
 from allmydata.immutable.downloader.status import DownloadStatus
-
-class IDownloadStatusHandlingConsumer(Interface):
-    def set_download_status_read_event(read_ev):
-        """Record the DownloadStatus 'read event', to be updated with the
-        time it takes to decrypt each chunk of data."""
 
 class CiphertextFileNode:
     def __init__(self, verifycap, storage_broker, secret_holder,
@@ -55,14 +52,7 @@ class CiphertextFileNode:
         return a Deferred that fires (with the consumer) when the read is
         finished."""
         self._maybe_create_download_node()
-        actual_size = size
-        if actual_size is None:
-            actual_size = self._verifycap.size - offset
-        read_ev = self._download_status.add_read_event(offset, actual_size,
-                                                       now())
-        if IDownloadStatusHandlingConsumer.providedBy(consumer):
-            consumer.set_download_status_read_event(read_ev)
-        return self._node.read(consumer, offset, size, read_ev)
+        return self._node.read(consumer, offset, size)
 
     def get_segment(self, segnum):
         """Begin downloading a segment. I return a tuple (d, c): 'd' is a
@@ -102,7 +92,7 @@ class CiphertextFileNode:
         verifycap = self._verifycap
         storage_index = verifycap.storage_index
         sb = self._storage_broker
-        servers = sb.get_all_servers()
+        servers = sb.get_connected_servers()
         sh = self._secret_holder
 
         c = Checker(verifycap=verifycap, servers=servers,
@@ -160,7 +150,7 @@ class CiphertextFileNode:
     def check(self, monitor, verify=False, add_lease=False):
         verifycap = self._verifycap
         sb = self._storage_broker
-        servers = sb.get_all_servers()
+        servers = sb.get_connected_servers()
         sh = self._secret_holder
 
         v = Checker(verifycap=verifycap, servers=servers,
@@ -177,7 +167,7 @@ class DecryptingConsumer:
 
     def __init__(self, consumer, readkey, offset):
         self._consumer = consumer
-        self._read_event = None
+        self._read_ev = None
         # TODO: pycryptopp CTR-mode needs random-access operations: I want
         # either a=AES(readkey, offset) or better yet both of:
         #  a=AES(readkey, offset=0)
@@ -190,7 +180,7 @@ class DecryptingConsumer:
         self._decryptor.process("\x00"*offset_small)
 
     def set_download_status_read_event(self, read_ev):
-        self._read_event = read_ev
+        self._read_ev = read_ev
 
     def registerProducer(self, producer, streaming):
         # this passes through, so the real consumer can flow-control the real
@@ -203,9 +193,9 @@ class DecryptingConsumer:
     def write(self, ciphertext):
         started = now()
         plaintext = self._decryptor.process(ciphertext)
-        if self._read_event:
+        if self._read_ev:
             elapsed = now() - started
-            self._read_event.update(0, elapsed, 0)
+            self._read_ev.update(0, elapsed, 0)
         self._consumer.write(plaintext)
 
 class ImmutableFileNode:
@@ -288,3 +278,33 @@ class ImmutableFileNode:
         return self._cnode.check_and_repair(monitor, verify, add_lease)
     def check(self, monitor, verify=False, add_lease=False):
         return self._cnode.check(monitor, verify, add_lease)
+
+    def get_best_readable_version(self):
+        """
+        Return an IReadable of the best version of this file. Since
+        immutable files can have only one version, we just return the
+        current filenode.
+        """
+        return defer.succeed(self)
+
+
+    def download_best_version(self):
+        """
+        Download the best version of this file, returning its contents
+        as a bytestring. Since there is only one version of an immutable
+        file, we download and return the contents of this file.
+        """
+        d = consumer.download_to_data(self)
+        return d
+
+    # for an immutable file, download_to_data (specified in IReadable)
+    # is the same as download_best_version (specified in IFileNode). For
+    # mutable files, the difference is more meaningful, since they can
+    # have multiple versions.
+    download_to_data = download_best_version
+
+
+    # get_size() (IReadable), get_current_size() (IFilesystemNode), and
+    # get_size_of_best_version(IFileNode) are all the same for immutable
+    # files.
+    get_size_of_best_version = get_current_size

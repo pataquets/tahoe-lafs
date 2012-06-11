@@ -338,14 +338,17 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
         rend.Page.__init__(self, data)
         self.download_status = data
 
+    def child_timeline(self, ctx):
+        return DownloadStatusTimelinePage(self.download_status)
+
     def download_results(self):
         return defer.maybeDeferred(self.download_status.get_results)
 
     def relative_time(self, t):
         if t is None:
             return t
-        if self.download_status.started is not None:
-            return t - self.download_status.started
+        if self.download_status.first_timestamp is not None:
+            return t - self.download_status.first_timestamp
         return t
     def short_relative_time(self, t):
         t = self.relative_time(t)
@@ -353,142 +356,244 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
             return ""
         return "+%.6fs" % t
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        t = get_arg(req, "t")
-        if t == "json":
-            return self.json(req)
-        return rend.Page.renderHTTP(self, ctx)
+    def _find_overlap(self, events, start_key, end_key):
+        # given a list of event dicts, return a new list in which each event
+        # has an extra "row" key (an int, starting at 0), and if appropriate
+        # a "serverid" key (ascii-encoded server id), replacing the "server"
+        # key. This is a hint to our JS frontend about how to overlap the
+        # parts of the graph it is drawing.
 
-    def json(self, req):
-        req.setHeader("content-type", "text/plain")
-        data = {}
-        dyhb_events = []
-        for serverid,requests in self.download_status.dyhb_requests.iteritems():
-            for req in requests:
-                dyhb_events.append( (base32.b2a(serverid),) + req )
-        dyhb_events.sort(key=lambda req: req[1])
-        data["dyhb"] = dyhb_events
-        request_events = []
-        for serverid,requests in self.download_status.requests.iteritems():
-            for req in requests:
-                request_events.append( (base32.b2a(serverid),) + req )
-        request_events.sort(key=lambda req: (req[4],req[1]))
-        data["requests"] = request_events
-        data["segment"] = self.download_status.segment_events
-        data["read"] = self.download_status.read_events
+        # we must always make a copy, since we're going to be adding keys
+        # and don't want to change the original objects. If we're
+        # stringifying serverids, we'll also be changing the serverid keys.
+        new_events = []
+        rows = []
+        for ev in events:
+            ev = ev.copy()
+            if ev.has_key('server'):
+                ev["serverid"] = base32.b2a(ev["server"].get_serverid())
+                del ev["server"]
+            # find an empty slot in the rows
+            free_slot = None
+            for row,finished in enumerate(rows):
+                if finished is not None:
+                    if ev[start_key] > finished:
+                        free_slot = row
+                        break
+            if free_slot is None:
+                free_slot = len(rows)
+                rows.append(ev[end_key])
+            else:
+                rows[free_slot] = ev[end_key]
+            ev["row"] = free_slot
+            new_events.append(ev)
+        return new_events
+
+    def _find_overlap_requests(self, events):
+        """We compute a three-element 'row tuple' for each event: (serverid,
+        shnum, row). All elements are ints. The first is a mapping from
+        serverid to group number, the second is a mapping from shnum to
+        subgroup number. The third is a row within the subgroup.
+
+        We also return a list of lists of rowcounts, so renderers can decide
+        how much vertical space to give to each row.
+        """
+
+        serverid_to_group = {}
+        groupnum_to_rows = {} # maps groupnum to a table of rows. Each table
+                              # is a list with an element for each row number
+                              # (int starting from 0) that contains a
+                              # finish_time, indicating that the row is empty
+                              # beyond that time. If finish_time is None, it
+                              # indicate a response that has not yet
+                              # completed, so the row cannot be reused.
+        new_events = []
+        for ev in events:
+            # DownloadStatus promises to give us events in temporal order
+            ev = ev.copy()
+            ev["serverid"] = base32.b2a(ev["server"].get_serverid())
+            del ev["server"]
+            if ev["serverid"] not in serverid_to_group:
+                groupnum = len(serverid_to_group)
+                serverid_to_group[ev["serverid"]] = groupnum
+            groupnum = serverid_to_group[ev["serverid"]]
+            if groupnum not in groupnum_to_rows:
+                groupnum_to_rows[groupnum] = []
+            rows = groupnum_to_rows[groupnum]
+            # find an empty slot in the rows
+            free_slot = None
+            for row,finished in enumerate(rows):
+                if finished is not None:
+                    if ev["start_time"] > finished:
+                        free_slot = row
+                        break
+            if free_slot is None:
+                free_slot = len(rows)
+                rows.append(ev["finish_time"])
+            else:
+                rows[free_slot] = ev["finish_time"]
+            ev["row"] = (groupnum, free_slot)
+            new_events.append(ev)
+        # maybe also return serverid_to_group, groupnum_to_rows, and some
+        # indication of the highest finish_time
+        #
+        # actually, return the highest rownum for each groupnum
+        highest_rownums = [len(groupnum_to_rows[groupnum])
+                           for groupnum in range(len(serverid_to_group))]
+        return new_events, highest_rownums
+
+    def child_event_json(self, ctx):
+        inevow.IRequest(ctx).setHeader("content-type", "text/plain")
+        data = { } # this will be returned to the GET
+        ds = self.download_status
+
+        data["read"] = self._find_overlap(ds.read_events,
+                                          "start_time", "finish_time")
+        data["segment"] = self._find_overlap(ds.segment_events,
+                                             "start_time", "finish_time")
+        data["dyhb"] = self._find_overlap(ds.dyhb_requests,
+                                          "start_time", "finish_time")
+        data["block"],data["block_rownums"] = self._find_overlap_requests(ds.block_requests)
+
+        servernums = {}
+        serverid_strings = {}
+        for d_ev in data["dyhb"]:
+            if d_ev["serverid"] not in servernums:
+                servernum = len(servernums)
+                servernums[d_ev["serverid"]] = servernum
+                #title= "%s: %s" % ( ",".join([str(shnum) for shnum in shnums]))
+                serverid_strings[servernum] = d_ev["serverid"][:4]
+        data["server_info"] = dict([(serverid, {"num": servernums[serverid],
+                                                "color": self.color(base32.a2b(serverid)),
+                                                "short": serverid_strings[servernums[serverid]],
+                                                })
+                                   for serverid in servernums.keys()])
+        data["num_serverids"] = len(serverid_strings)
+        # we'd prefer the keys of serverids[] to be ints, but this is JSON,
+        # so they get converted to strings. Stupid javascript.
+        data["serverids"] = serverid_strings
+        data["bounds"] = {"min": ds.first_timestamp, "max": ds.last_timestamp}
         return simplejson.dumps(data, indent=1) + "\n"
+
+    def render_timeline_link(self, ctx, data):
+        from nevow import url
+        return T.a(href=url.URL.fromContext(ctx).child("timeline"))["timeline"]
+
+    def _rate_and_time(self, bytes, seconds):
+        time_s = self.render_time(None, seconds)
+        if seconds != 0:
+            rate = self.render_rate(None, 1.0 * bytes / seconds)
+            return T.span(title=rate)[time_s]
+        return T.span[time_s]
 
     def render_events(self, ctx, data):
         if not self.download_status.storage_index:
             return
         srt = self.short_relative_time
         l = T.div()
-        
+
         t = T.table(align="left", class_="status-download-events")
         t[T.tr[T.th["serverid"], T.th["sent"], T.th["received"],
                T.th["shnums"], T.th["RTT"]]]
-        dyhb_events = []
-        for serverid,requests in self.download_status.dyhb_requests.iteritems():
-            for req in requests:
-                dyhb_events.append( (serverid,) + req )
-        dyhb_events.sort(key=lambda req: req[1])
-        for d_ev in dyhb_events:
-            (serverid, sent, shnums, received) = d_ev
-            serverid_s = idlib.shortnodeid_b2a(serverid)
+        for d_ev in self.download_status.dyhb_requests:
+            server = d_ev["server"]
+            sent = d_ev["start_time"]
+            shnums = d_ev["response_shnums"]
+            received = d_ev["finish_time"]
             rtt = None
             if received is not None:
                 rtt = received - sent
             if not shnums:
                 shnums = ["-"]
-            t[T.tr(style="background: %s" % self.color(serverid))[
-                [T.td[serverid_s], T.td[srt(sent)], T.td[srt(received)],
+            t[T.tr(style="background: %s" % self.color(server.get_serverid()))[
+                [T.td[server.get_name()], T.td[srt(sent)], T.td[srt(received)],
                  T.td[",".join([str(shnum) for shnum in shnums])],
                  T.td[self.render_time(None, rtt)],
                  ]]]
-        
+
         l[T.h2["DYHB Requests:"], t]
         l[T.br(clear="all")]
-        
+
         t = T.table(align="left",class_="status-download-events")
         t[T.tr[T.th["range"], T.th["start"], T.th["finish"], T.th["got"],
                T.th["time"], T.th["decrypttime"], T.th["pausedtime"],
                T.th["speed"]]]
         for r_ev in self.download_status.read_events:
-            (start, length, requesttime, finishtime, bytes, decrypt, paused) = r_ev
-            if finishtime is not None:
-                rtt = finishtime - requesttime - paused
+            start = r_ev["start"]
+            length = r_ev["length"]
+            bytes = r_ev["bytes_returned"]
+            decrypt_time = ""
+            if bytes:
+                decrypt_time = self._rate_and_time(bytes, r_ev["decrypt_time"])
+            speed, rtt = "",""
+            if r_ev["finish_time"] is not None:
+                rtt = r_ev["finish_time"] - r_ev["start_time"] - r_ev["paused_time"]
                 speed = self.render_rate(None, compute_rate(bytes, rtt))
                 rtt = self.render_time(None, rtt)
-                decrypt = self.render_time(None, decrypt)
-                paused = self.render_time(None, paused)
-            else:
-                speed, rtt, decrypt, paused = "","","",""
+            paused = self.render_time(None, r_ev["paused_time"])
+
             t[T.tr[T.td["[%d:+%d]" % (start, length)],
-                   T.td[srt(requesttime)], T.td[srt(finishtime)],
-                   T.td[bytes], T.td[rtt], T.td[decrypt], T.td[paused],
+                   T.td[srt(r_ev["start_time"])], T.td[srt(r_ev["finish_time"])],
+                   T.td[bytes], T.td[rtt],
+                   T.td[decrypt_time], T.td[paused],
                    T.td[speed],
                    ]]
-        
+
         l[T.h2["Read Events:"], t]
-        l[T.br(clear="all")]
-        
-        t = T.table(align="left",class_="status-download-events")
-        t[T.tr[T.th["type"], T.th["segnum"], T.th["when"], T.th["range"],
-               T.th["decodetime"], T.th["segtime"], T.th["speed"]]]
-        reqtime = (None, None)
-        for s_ev in self.download_status.segment_events:
-            (etype, segnum, when, segstart, seglen, decodetime) = s_ev
-            if etype == "request":
-                t[T.tr[T.td["request"],
-                    T.td["seg%d" % segnum],
-                    T.td[srt(when)],
-                    T.td["-"],
-                    T.td["-"],
-                    T.td["-"],
-                    T.td["-"]]]
-                    
-                reqtime = (segnum, when)
-            elif etype == "delivery":
-                if reqtime[0] == segnum:
-                    segtime = when - reqtime[1]
-                    speed = self.render_rate(None, compute_rate(seglen, segtime))
-                    segtime = self.render_time(None, segtime)
-                else:
-                    segtime, speed = "", ""
-                t[T.tr[T.td["delivery"], T.td["seg%d" % segnum],
-                       T.td[srt(when)],
-                       T.td["[%d:+%d]" % (segstart, seglen)],
-                       T.td[self.render_time(None,decodetime)],
-                       T.td[segtime], T.td[speed]]]
-            elif etype == "error":
-                t[T.tr[T.td["error"], T.td["seg%d" % segnum]]]
-                
-        l[T.h2["Segment Events:"], t]
         l[T.br(clear="all")]
 
         t = T.table(align="left",class_="status-download-events")
+        t[T.tr[T.th["segnum"], T.th["start"], T.th["active"], T.th["finish"],
+               T.th["range"],
+               T.th["decodetime"], T.th["segtime"], T.th["speed"]]]
+        for s_ev in self.download_status.segment_events:
+            range_s = "-"
+            segtime_s = "-"
+            speed = "-"
+            decode_time = "-"
+            if s_ev["finish_time"] is not None:
+                if s_ev["success"]:
+                    segtime = s_ev["finish_time"] - s_ev["active_time"]
+                    segtime_s = self.render_time(None, segtime)
+                    seglen = s_ev["segment_length"]
+                    range_s = "[%d:+%d]" % (s_ev["segment_start"], seglen)
+                    speed = self.render_rate(None, compute_rate(seglen, segtime))
+                    decode_time = self._rate_and_time(seglen, s_ev["decode_time"])
+                else:
+                    # error
+                    range_s = "error"
+            else:
+                # not finished yet
+                pass
+
+            t[T.tr[T.td["seg%d" % s_ev["segment_number"]],
+                   T.td[srt(s_ev["start_time"])],
+                   T.td[srt(s_ev["active_time"])],
+                   T.td[srt(s_ev["finish_time"])],
+                   T.td[range_s],
+                   T.td[decode_time],
+                   T.td[segtime_s], T.td[speed]]]
+
+        l[T.h2["Segment Events:"], t]
+        l[T.br(clear="all")]
+        t = T.table(align="left",class_="status-download-events")
         t[T.tr[T.th["serverid"], T.th["shnum"], T.th["range"],
-               T.th["txtime"], T.th["rxtime"], T.th["received"], T.th["RTT"]]]
-        reqtime = (None, None)
-        request_events = []
-        for serverid,requests in self.download_status.requests.iteritems():
-            for req in requests:
-                request_events.append( (serverid,) + req )
-        request_events.sort(key=lambda req: (req[4],req[1]))
-        for r_ev in request_events:
-            (peerid, shnum, start, length, sent, receivedlen, received) = r_ev
+               T.th["txtime"], T.th["rxtime"],
+               T.th["received"], T.th["RTT"]]]
+        for r_ev in self.download_status.block_requests:
+            server = r_ev["server"]
             rtt = None
-            if received is not None:
-                rtt = received - sent
-            peerid_s = idlib.shortnodeid_b2a(peerid)
-            t[T.tr(style="background: %s" % self.color(peerid))[
-                T.td[peerid_s], T.td[shnum],
-                T.td["[%d:+%d]" % (start, length)],
-                T.td[srt(sent)], T.td[srt(received)], T.td[receivedlen],
+            if r_ev["finish_time"] is not None:
+                rtt = r_ev["finish_time"] - r_ev["start_time"]
+            color = self.color(server.get_serverid())
+            t[T.tr(style="background: %s" % color)[
+                T.td[server.get_name()], T.td[r_ev["shnum"]],
+                T.td["[%d:+%d]" % (r_ev["start"], r_ev["length"])],
+                T.td[srt(r_ev["start_time"])], T.td[srt(r_ev["finish_time"])],
+                T.td[r_ev["response_length"] or ""],
                 T.td[self.render_time(None, rtt)],
                 ]]
-                
+
         l[T.h2["Requests:"], t]
         l[T.br(clear="all")]
 
@@ -507,6 +612,39 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
             return ""
         d.addCallback(_got_results)
         return d
+
+    def render_started(self, ctx, data):
+        TIME_FORMAT = "%H:%M:%S %d-%b-%Y"
+        started_s = time.strftime(TIME_FORMAT,
+                                  time.localtime(data.get_started()))
+        return started_s + " (%s)" % data.get_started()
+
+    def render_si(self, ctx, data):
+        si_s = base32.b2a_or_none(data.get_storage_index())
+        if si_s is None:
+            si_s = "(None)"
+        return si_s
+
+    def render_helper(self, ctx, data):
+        return {True: "Yes",
+                False: "No"}[data.using_helper()]
+
+    def render_total_size(self, ctx, data):
+        size = data.get_size()
+        if size is None:
+            return "(unknown)"
+        return size
+
+    def render_progress(self, ctx, data):
+        progress = data.get_progress()
+        # TODO: make an ascii-art bar
+        return "%.1f%%" % (100.0 * progress)
+
+    def render_status(self, ctx, data):
+        return data.get_status()
+
+class DownloadStatusTimelinePage(rend.Page):
+    docFactory = getxmlfile("download-status-timeline.xhtml")
 
     def render_started(self, ctx, data):
         TIME_FORMAT = "%H:%M:%S %d-%b-%Y"
@@ -1151,6 +1289,23 @@ class Statistics(rend.Page):
         bytes = data["counters"].get("mutable.bytes_retrieved", 0)
         return "%s files / %s bytes (%s)" % (files, bytes,
                                              abbreviate_size(bytes))
+
+    def render_drop_monitored(self, ctx, data):
+        dirs = data["counters"].get("drop_upload.dirs_monitored", 0)
+        return "%s directories" % (dirs,)
+
+    def render_drop_uploads(self, ctx, data):
+        # TODO: bytes uploaded
+        files = data["counters"].get("drop_upload.files_uploaded", 0)
+        return "%s files" % (files,)
+
+    def render_drop_queued(self, ctx, data):
+        files = data["counters"].get("drop_upload.files_queued", 0)
+        return "%s files" % (files,)
+
+    def render_drop_failed(self, ctx, data):
+        files = data["counters"].get("drop_upload.files_failed", 0)
+        return "%s files" % (files,)
 
     def render_raw(self, ctx, data):
         raw = pprint.pformat(data)

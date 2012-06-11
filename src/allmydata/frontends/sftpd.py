@@ -30,6 +30,7 @@ from allmydata.util.consumer import download_to_data
 from allmydata.interfaces import IFileNode, IDirectoryNode, ExistingChildError, \
      NoSuchChildError, ChildOfWrongTypeError
 from allmydata.mutable.common import NotWriteableError
+from allmydata.mutable.publish import MutableFileHandle
 from allmydata.immutable.upload import FileHandle
 from allmydata.dirnode import update_metadata
 from allmydata.util.fileutil import EncryptedTemporaryFile
@@ -460,6 +461,12 @@ class OverwriteableFileConsumer(PrefixingLogMixin):
         The caller must perform no more overwrites until the Deferred has fired."""
 
         if noisy: self.log(".read(%r, %r), current_size = %r" % (offset, length, self.current_size), level=NOISY)
+
+        # Note that the overwrite method is synchronous. When a write request is processed
+        # (e.g. a writeChunk request on the async queue of GeneralSFTPFile), overwrite will
+        # be called and will update self.current_size if necessary before returning. Therefore,
+        # self.current_size will be up-to-date for a subsequent call to this read method, and
+        # so it is correct to do the check for a read past the end-of-file here.
         if offset >= self.current_size:
             def _eof(): raise EOFError("read past end of file")
             return defer.execute(_eof)
@@ -663,22 +670,17 @@ class GeneralSFTPFile(PrefixingLogMixin):
         else:
             assert IFileNode.providedBy(filenode), filenode
 
-            if filenode.is_mutable():
-                self.async.addCallback(lambda ign: filenode.download_best_version())
-                def _downloaded(data):
-                    self.consumer = OverwriteableFileConsumer(len(data), tempfile_maker)
-                    self.consumer.write(data)
-                    self.consumer.finish()
-                    return None
-                self.async.addCallback(_downloaded)
-            else:
-                download_size = filenode.get_size()
-                assert download_size is not None, "download_size is None"
+            self.async.addCallback(lambda ignored: filenode.get_best_readable_version())
+
+            def _read(version):
+                if noisy: self.log("_read", level=NOISY)
+                download_size = version.get_size()
+                assert download_size is not None
+
                 self.consumer = OverwriteableFileConsumer(download_size, tempfile_maker)
-                def _read(ign):
-                    if noisy: self.log("_read immutable", level=NOISY)
-                    filenode.read(self.consumer, 0, None)
-                self.async.addCallback(_read)
+
+                version.read(self.consumer, 0, None)
+            self.async.addCallback(_read)
 
         eventually(self.async.callback, None)
 
@@ -799,7 +801,7 @@ class GeneralSFTPFile(PrefixingLogMixin):
         abandoned = self.abandoned
         parent = self.parent
         childname = self.childname
-        
+
         # has_changed is set when writeChunk is called, not when the write occurs, so
         # it is correct to optimize out the commit if it is False at the close call.
         has_changed = self.has_changed
@@ -822,9 +824,7 @@ class GeneralSFTPFile(PrefixingLogMixin):
                     assert parent and childname, (parent, childname, self.metadata)
                     d2.addCallback(lambda ign: parent.set_metadata_for(childname, self.metadata))
 
-                d2.addCallback(lambda ign: self.consumer.get_current_size())
-                d2.addCallback(lambda size: self.consumer.read(0, size))
-                d2.addCallback(lambda new_contents: self.filenode.overwrite(new_contents))
+                d2.addCallback(lambda ign: self.filenode.overwrite(MutableFileHandle(self.consumer.get_file())))
             else:
                 def _add_file(ign):
                     self.log("_add_file childname=%r" % (childname,), level=OPERATIONAL)
@@ -1000,7 +1000,7 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
     def _abandon_any_heisenfiles(self, userpath, direntry):
         request = "._abandon_any_heisenfiles(%r, %r)" % (userpath, direntry)
         self.log(request, level=OPERATIONAL)
-        
+
         assert isinstance(userpath, str), userpath
 
         # First we synchronously mark all heisenfiles matching the userpath or direntry
@@ -1868,10 +1868,7 @@ class ShellSession(PrefixingLogMixin):
         if hasattr(protocol, 'transport') and protocol.transport is None:
             protocol.transport = FakeTransport()  # work around Twisted bug
 
-        d = defer.succeed(None)
-        d.addCallback(lambda ign: protocol.write("This server supports only SFTP, not shell sessions.\n"))
-        d.addCallback(lambda ign: protocol.processEnded(Reason(ProcessTerminated(exitCode=1))))
-        return d
+        return self._unsupported(protocol)
 
     def execCommand(self, protocol, cmd):
         self.log(".execCommand(%r, %r)" % (protocol, cmd), level=OPERATIONAL)
@@ -1881,11 +1878,19 @@ class ShellSession(PrefixingLogMixin):
         d = defer.succeed(None)
         if cmd == "df -P -k /":
             d.addCallback(lambda ign: protocol.write(
-                          "Filesystem         1024-blocks      Used Available Capacity Mounted on\n"
-                          "tahoe                628318530 314159265 314159265      50% /\n"))
+                          "Filesystem         1024-blocks      Used Available Capacity Mounted on\r\n"
+                          "tahoe                628318530 314159265 314159265      50% /\r\n"))
             d.addCallback(lambda ign: protocol.processEnded(Reason(ProcessDone(None))))
         else:
-            d.addCallback(lambda ign: protocol.processEnded(Reason(ProcessTerminated(exitCode=1))))
+            d.addCallback(lambda ign: self._unsupported(protocol))
+        return d
+
+    def _unsupported(self, protocol):
+        d = defer.succeed(None)
+        d.addCallback(lambda ign: protocol.errReceived(
+                      "This server supports only the SFTP protocol. It does not support SCP,\r\n"
+                      "interactive shell sessions, or commands other than one needed by sshfs.\r\n"))
+        d.addCallback(lambda ign: protocol.processEnded(Reason(ProcessTerminated(exitCode=1))))
         return d
 
     def windowChanged(self, newWindowSize):

@@ -7,7 +7,7 @@
 #
 # This file is part of Tahoe-LAFS.
 #
-# See the docs/about.html file for licensing information.
+# See the docs/about.rst file for licensing information.
 
 import glob, os, stat, subprocess, sys, re
 
@@ -73,11 +73,9 @@ egg = os.path.realpath(glob.glob('setuptools-*.egg')[0])
 sys.path.insert(0, egg)
 egg = os.path.realpath(glob.glob('darcsver-*.egg')[0])
 sys.path.insert(0, egg)
-egg = os.path.realpath(glob.glob('setuptools_darcs-*.egg')[0])
-sys.path.insert(0, egg)
 import setuptools; setuptools.bootstrap_install_from = egg
 
-from setuptools import find_packages, setup
+from setuptools import setup
 from setuptools.command import sdist
 from setuptools import Command
 
@@ -135,32 +133,20 @@ setup_requires = []
 # http://pypi.python.org/pypi/darcsver
 setup_requires.append('darcsver >= 1.7.2')
 
-# Nevow requires Twisted to setup, but prior to Nevow v0.9.33, didn't
-# declare that requirement in a way that enables setuptools to satisfy
-# the requirement before Nevow's setup.py tries to "import twisted".
-# This only matters when Twisted is not already installed.
-# See http://divmod.org/trac/ticket/2629
-# Retire this hack if/when we require Nevow >= 0.9.33.
-setup_requires.append('Twisted >= 2.4.0')
-
-# setuptools_darcs is required to produce complete distributions (such
-# as with "sdist" or "bdist_egg"), unless there is a
-# src/allmydata_tahoe.egg-info/SOURCE.txt file present which contains
-# a complete list of files that should be included.
-
-# http://pypi.python.org/pypi/setuptools_darcs
-
-# However, requiring it runs afoul of a bug in Distribute, which was
-# shipped in Ubuntu Lucid, so for now you have to manually install it
-# before building sdists or eggs:
-# http://bitbucket.org/tarek/distribute/issue/55/revision-control-plugin-automatically-installed-as-a-build-dependency-is-not-present-when-another-build-dependency-is-being
-
-# Note that we explicitly inject setuptools_darcs at the beginning of
-# this setup.py file, so it is still in effect when building dists
-# using this setup.py file even when the following requirement is
-# disabled.
-if False:
-    setup_requires.append('setuptools_darcs >= 1.1.0')
+# Nevow imports itself when building, which causes Twisted and zope.interface
+# to be imported. We need to make sure that the versions of Twisted and
+# zope.interface used at build time satisfy Nevow's requirements. If not
+# then there are two problems:
+#  - prior to Nevow v0.9.33, Nevow didn't declare its dependency on Twisted
+#    in a way that enabled setuptools to satisfy that requirement at
+#    build time.
+#  - some versions of zope.interface, e.g. v3.6.4, are incompatible with
+#    Nevow, and we need to avoid those both at build and run-time.
+#
+# This only matters when compatible versions of Twisted and zope.interface
+# are not already installed. Retire this hack when
+# https://bugs.launchpad.net/nevow/+bug/812537 has been fixed.
+setup_requires += [req for req in install_requires if req.startswith('Twisted') or req.startswith('zope.interface')]
 
 # trialcoverage is required if you want the "trial" unit test runner to have a
 # "--reporter=bwverbose-coverage" option which produces code-coverage results.
@@ -175,84 +161,6 @@ if "sdist_dsc" in sys.argv:
 
 # We no longer have any requirements specific to tests.
 tests_require=[]
-
-
-class ShowSupportLib(Command):
-    user_options = []
-    def initialize_options(self):
-        pass
-    def finalize_options(self):
-        pass
-    def run(self):
-        # TODO: --quiet suppresses the 'running show_supportlib' message.
-        # Find a way to do this all the time.
-        print supportlib # TODO windowsy
-
-class ShowPythonPath(Command):
-    user_options = []
-    def initialize_options(self):
-        pass
-    def finalize_options(self):
-        pass
-    def run(self):
-        # TODO: --quiet suppresses the 'running show_supportlib' message.
-        # Find a way to do this all the time.
-        print "PYTHONPATH=%s" % os.environ.get("PYTHONPATH", '')
-
-class RunWithPythonPath(Command):
-    description = "Run a subcommand with PYTHONPATH set appropriately"
-
-    user_options = [ ("python", "p",
-                      "Treat command string as arguments to a python executable"),
-                     ("command=", "c", "Command to be run"),
-                     ("directory=", "d", "Directory to run the command in"),
-                     ]
-    boolean_options = ["python"]
-
-    def initialize_options(self):
-        self.command = None
-        self.python = False
-        self.directory = None
-    def finalize_options(self):
-        pass
-    def run(self):
-        oldpp = os.environ.get("PYTHONPATH", "").split(os.pathsep)
-        if oldpp == [""]:
-            # grr silly split() behavior
-            oldpp = []
-        os.environ['PYTHONPATH'] = os.pathsep.join(oldpp + [supportlib,])
-
-        # We must require the command to be safe to split on
-        # whitespace, and have --python and --directory to make it
-        # easier to achieve this.
-
-        command = []
-        if self.python:
-            command.append(sys.executable)
-        if self.command:
-            command.extend(self.command.split())
-        if not command:
-            raise RuntimeError("The --command argument is mandatory")
-        if self.directory:
-            os.chdir(self.directory)
-        if self.verbose:
-            print "command =", " ".join(command)
-        rc = subprocess.call(command)
-        sys.exit(rc)
-
-class TestMacDiskImage(Command):
-    description = "test the Mac disk image in dmg format (unmaintained)"
-    user_options = []
-
-    def initialize_options(self):
-        pass
-    def finalize_options(self):
-        pass
-    def run(self):
-        import sys
-        sys.path.append(os.path.join('misc', 'build_helpers'))
-        import test_mac_diskimage
-        return test_mac_diskimage.test_mac_diskimage('Allmydata', version=self.distribution.metadata.version)
 
 
 class Trial(Command):
@@ -323,12 +231,13 @@ class MakeExecutable(Command):
                 f.write(line)
             f.close()
 
-            # chmod +x
-            old_mode = stat.S_IMODE(os.stat(tahoe_script)[stat.ST_MODE])
-            new_mode = old_mode | (stat.S_IXUSR | stat.S_IRUSR |
-                                   stat.S_IXGRP | stat.S_IRGRP |
-                                   stat.S_IXOTH | stat.S_IROTH )
-            os.chmod(tahoe_script, new_mode)
+        # chmod +x
+        unix_script = os.path.join("bin", "tahoe")
+        old_mode = stat.S_IMODE(os.stat(unix_script)[stat.ST_MODE])
+        new_mode = old_mode | (stat.S_IXUSR | stat.S_IRUSR |
+                               stat.S_IXGRP | stat.S_IRGRP |
+                               stat.S_IXOTH | stat.S_IROTH )
+        os.chmod(unix_script, new_mode)
 
         old_tahoe_exe = os.path.join("bin", "tahoe.exe")
         try:
@@ -336,6 +245,138 @@ class MakeExecutable(Command):
         except Exception:
             if os.path.exists(old_tahoe_exe):
                 raise
+
+
+DARCS_VERSION_BODY = '''
+# This _version.py is generated from darcs metadata by the tahoe setup.py
+# and the "darcsver" package.
+
+__pkgname__ = "%(pkgname)s"
+verstr = "%(pkgversion)s"
+__version__ = verstr
+'''
+
+GIT_VERSION_BODY = '''
+# This _version.py is generated from git metadata by the tahoe setup.py.
+
+__pkgname__ = "%(pkgname)s"
+real_version = "%(version)s"
+full_version = "%(full)s"
+verstr = "%(normalized)s"
+__version__ = verstr
+'''
+
+def run_command(args, cwd=None, verbose=False):
+    try:
+        # remember shell=False, so use git.cmd on windows, not just git
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, cwd=cwd)
+    except EnvironmentError, e:
+        if verbose:
+            print "unable to run %s" % args[0]
+            print e
+        return None
+    stdout = p.communicate()[0].strip()
+    if p.returncode != 0:
+        if verbose:
+            print "unable to run %s (error)" % args[0]
+        return None
+    return stdout
+
+
+def versions_from_git(tag_prefix, verbose=False):
+    # this runs 'git' from the directory that contains this file. That either
+    # means someone ran a setup.py command (and this code is in
+    # versioneer.py, thus the containing directory is the root of the source
+    # tree), or someone ran a project-specific entry point (and this code is
+    # in _version.py, thus the containing directory is somewhere deeper in
+    # the source tree). This only gets called if the git-archive 'subst'
+    # variables were *not* expanded, and _version.py hasn't already been
+    # rewritten with a short version string, meaning we're inside a checked
+    # out source tree.
+
+    # versions_from_git (as copied from python-versioneer) returns strings
+    # like "1.9.0-25-gb73aba9-dirty", which means we're in a tree with
+    # uncommited changes (-dirty), the latest checkin is revision b73aba9,
+    # the most recent tag was 1.9.0, and b73aba9 has 25 commits that weren't
+    # in 1.9.0 . The narrow-minded NormalizedVersion parser that takes our
+    # output (meant to enable sorting of version strings) refuses most of
+    # that. Tahoe uses a function named suggest_normalized_version() that can
+    # handle "1.9.0.post25", so dumb down our output to match.
+
+    try:
+        source_dir = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        # some py2exe/bbfreeze/non-CPython implementations don't do __file__
+        return {} # not always correct
+    GIT = "git"
+    if sys.platform == "win32":
+        GIT = "git.cmd"
+    stdout = run_command([GIT, "describe", "--tags", "--dirty", "--always"],
+                         cwd=source_dir)
+    if stdout is None:
+        return {}
+    if not stdout.startswith(tag_prefix):
+        if verbose:
+            print "tag '%s' doesn't start with prefix '%s'" % (stdout, tag_prefix)
+        return {}
+    version = stdout[len(tag_prefix):]
+    pieces = version.split("-")
+    if len(pieces) == 1:
+        normalized_version = pieces[0]
+    else:
+        normalized_version = "%s.post%s" % (pieces[0], pieces[1])
+    stdout = run_command([GIT, "rev-parse", "HEAD"], cwd=source_dir)
+    if stdout is None:
+        return {}
+    full = stdout.strip()
+    if version.endswith("-dirty"):
+        full += "-dirty"
+        normalized_version += ".dev0"
+    return {"version": version, "normalized": normalized_version, "full": full}
+
+
+class UpdateVersion(Command):
+    description = "update _version.py from revision-control metadata"
+    user_options = []
+
+    def initialize_options(self):
+        pass
+    def finalize_options(self):
+        pass
+    def run(self):
+        target = self.distribution.versionfiles[0]
+        if os.path.isdir(os.path.join(basedir, "_darcs")):
+            verstr = self.try_from_darcs(target)
+        elif os.path.isdir(os.path.join(basedir, ".git")):
+            verstr = self.try_from_git(target)
+        else:
+            print "no version-control data found, leaving _version.py alone"
+            return
+        if verstr:
+            self.distribution.metadata.version = verstr
+
+    def try_from_darcs(self, target):
+        from darcsver.darcsvermodule import update
+        (rc, verstr) = update(pkgname=self.distribution.get_name(),
+                              verfilename=self.distribution.versionfiles,
+                              revision_number=True,
+                              version_body=DARCS_VERSION_BODY)
+        if rc == 0:
+            return verstr
+
+    def try_from_git(self, target):
+        versions = versions_from_git("allmydata-tahoe-", verbose=True)
+        if versions:
+            for fn in self.distribution.versionfiles:
+                f = open(fn, "wb")
+                f.write(GIT_VERSION_BODY %
+                        { "pkgname": self.distribution.get_name(),
+                          "version": versions["version"],
+                          "normalized": versions["normalized"],
+                          "full": versions["full"] })
+                f.close()
+                print "git-version: wrote '%s' into '%s'" % (versions["version"], fn)
+        return versions.get("normalized", None)
 
 
 class MySdist(sdist.sdist):
@@ -393,23 +434,33 @@ setup(name=APPNAME,
       long_description=open('README.txt', 'rU').read(),
       author='the Tahoe-LAFS project',
       author_email='tahoe-dev@tahoe-lafs.org',
-      url='http://tahoe-lafs.org/',
+      url='https://tahoe-lafs.org/',
       license='GNU GPL', # see README.txt -- there is an alternative licence
-      cmdclass={"show_supportlib": ShowSupportLib,
-                "show_pythonpath": ShowPythonPath,
-                "run_with_pythonpath": RunWithPythonPath,
-                "test_mac_diskimage": TestMacDiskImage,
-                "trial": Trial,
+      cmdclass={"trial": Trial,
                 "make_executable": MakeExecutable,
+                "update_version": UpdateVersion,
                 "sdist": MySdist,
                 },
       package_dir = {'':'src'},
-      packages=find_packages("src"),
+      packages=['allmydata',
+                'allmydata.frontends',
+                'allmydata.immutable',
+                'allmydata.immutable.downloader',
+                'allmydata.introducer',
+                'allmydata.mutable',
+                'allmydata.scripts',
+                'allmydata.storage',
+                'allmydata.test',
+                'allmydata.util',
+                'allmydata.web',
+                'allmydata.windows',
+                'buildtest'],
       classifiers=trove_classifiers,
       test_suite="allmydata.test",
       install_requires=install_requires,
       tests_require=tests_require,
-      include_package_data=True,
+      package_data={"allmydata.web": ["*.xhtml", "*.js", "*.png", "*.css"],
+                    },
       setup_requires=setup_requires,
       entry_points = { 'console_scripts': [ 'tahoe = allmydata.scripts.runner:run' ] },
       zip_safe=False, # We prefer unzipped for easier access.

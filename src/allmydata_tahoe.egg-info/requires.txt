@@ -1,9 +1,10 @@
 setuptools >= 0.6c6
 zfec >= 1.1.0
 simplejson >= 1.4
-zope.interface
-Twisted >= 2.4.0
-foolscap[secure_connections] >= 0.6.1
+zope.interface <= 3.6.2, >= 3.6.5
+Twisted >= 10.1.0
+foolscap >= 0.6.1
+pyOpenSSL
 Nevow >= 0.6.0
 pycrypto == 2.0.1, == 2.1.0, >= 2.3
 pyasn1 >= 0.0.8a

@@ -54,27 +54,27 @@ def shares_by_server(servermap):
             ret.setdefault(peerid, set()).add(shareid)
     return ret
 
-def merge_peers(servermap, upload_servers=None):
+def merge_servers(servermap, upload_trackers=None):
     """
-    I accept a dict of shareid -> set(peerid) mappings, and optionally a
-    set of PeerTrackers. If no set of PeerTrackers is provided, I return
+    I accept a dict of shareid -> set(serverid) mappings, and optionally a
+    set of ServerTrackers. If no set of ServerTrackers is provided, I return
     my first argument unmodified. Otherwise, I update a copy of my first
-    argument to include the shareid -> peerid mappings implied in the
-    set of PeerTrackers, returning the resulting dict.
+    argument to include the shareid -> serverid mappings implied in the
+    set of ServerTrackers, returning the resulting dict.
     """
     # Since we mutate servermap, and are called outside of a
     # context where it is okay to do that, make a copy of servermap and
     # work with it.
     servermap = deepcopy(servermap)
-    if not upload_servers:
+    if not upload_trackers:
         return servermap
 
     assert(isinstance(servermap, dict))
-    assert(isinstance(upload_servers, set))
+    assert(isinstance(upload_trackers, set))
 
-    for peer in upload_servers:
-        for shnum in peer.buckets:
-            servermap.setdefault(shnum, set()).add(peer.peerid)
+    for tracker in upload_trackers:
+        for shnum in tracker.buckets:
+            servermap.setdefault(shnum, set()).add(tracker.get_serverid())
     return servermap
 
 def servers_of_happiness(sharemap):
@@ -147,7 +147,8 @@ def servers_of_happiness(sharemap):
         # is the amount of unused capacity on that edge. Taking the
         # minimum of a list of those values for each edge in the
         # augmenting path gives us our delta.
-        delta = min(map(lambda (u, v): residual_function[u][v], path))
+        delta = min(map(lambda (u, v), rf=residual_function: rf[u][v],
+                        path))
         for (u, v) in path:
             flow_function[u][v] += delta
             flow_function[v][u] -= delta

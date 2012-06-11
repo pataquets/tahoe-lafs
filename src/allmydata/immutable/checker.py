@@ -7,7 +7,7 @@ from allmydata.hashtree import IncompleteHashTree
 from allmydata.check_results import CheckResults
 from allmydata.uri import CHKFileVerifierURI
 from allmydata.util.assertutil import precondition
-from allmydata.util import base32, idlib, deferredutil, dictutil, log, mathutil
+from allmydata.util import base32, deferredutil, dictutil, log, mathutil
 from allmydata.util.hashutil import file_renewal_secret_hash, \
      file_cancel_secret_hash, bucket_renewal_secret_hash, \
      bucket_cancel_secret_hash, uri_extension_hash, CRYPTO_VAL_SIZE, \
@@ -463,9 +463,6 @@ class Checker(log.PrefixingLogMixin):
     def __init__(self, verifycap, servers, verify, add_lease, secret_holder,
                  monitor):
         assert precondition(isinstance(verifycap, CHKFileVerifierURI), verifycap, type(verifycap))
-        assert precondition(isinstance(servers, (set, frozenset)), servers)
-        for (serverid, serverrref) in servers:
-            assert precondition(isinstance(serverid, str))
 
         prefix = "%s" % base32.b2a_l(verifycap.get_storage_index()[:8], 60)
         log.PrefixingLogMixin.__init__(self, facility="tahoe.immutable.checker", prefix=prefix)
@@ -484,12 +481,12 @@ class Checker(log.PrefixingLogMixin):
                                       self._verifycap.get_storage_index())
         self.file_cancel_secret = fcs
 
-    def _get_renewal_secret(self, peerid):
-        return bucket_renewal_secret_hash(self.file_renewal_secret, peerid)
-    def _get_cancel_secret(self, peerid):
-        return bucket_cancel_secret_hash(self.file_cancel_secret, peerid)
+    def _get_renewal_secret(self, seed):
+        return bucket_renewal_secret_hash(self.file_renewal_secret, seed)
+    def _get_cancel_secret(self, seed):
+        return bucket_cancel_secret_hash(self.file_cancel_secret, seed)
 
-    def _get_buckets(self, server, storageindex, serverid):
+    def _get_buckets(self, s, storageindex):
         """Return a deferred that eventually fires with ({sharenum: bucket},
         serverid, success). In case the server is disconnected or returns a
         Failure then it fires with ({}, serverid, False) (A server
@@ -498,16 +495,18 @@ class Checker(log.PrefixingLogMixin):
         that we want to track and report whether or not each server
         responded.)"""
 
+        rref = s.get_rref()
+        lease_seed = s.get_lease_seed()
         if self._add_lease:
-            renew_secret = self._get_renewal_secret(serverid)
-            cancel_secret = self._get_cancel_secret(serverid)
-            d2 = server.callRemote("add_lease", storageindex,
-                                   renew_secret, cancel_secret)
-            d2.addErrback(self._add_lease_failed, serverid, storageindex)
+            renew_secret = self._get_renewal_secret(lease_seed)
+            cancel_secret = self._get_cancel_secret(lease_seed)
+            d2 = rref.callRemote("add_lease", storageindex,
+                                 renew_secret, cancel_secret)
+            d2.addErrback(self._add_lease_failed, s.get_name(), storageindex)
 
-        d = server.callRemote("get_buckets", storageindex)
+        d = rref.callRemote("get_buckets", storageindex)
         def _wrap_results(res):
-            return (res, serverid, True)
+            return (res, True)
 
         def _trap_errs(f):
             level = log.WEIRD
@@ -516,12 +515,12 @@ class Checker(log.PrefixingLogMixin):
             self.log("failure from server on 'get_buckets' the REMOTE failure was:",
                      facility="tahoe.immutable.checker",
                      failure=f, level=level, umid="AX7wZQ")
-            return ({}, serverid, False)
+            return ({}, False)
 
         d.addCallbacks(_wrap_results, _trap_errs)
         return d
 
-    def _add_lease_failed(self, f, peerid, storage_index):
+    def _add_lease_failed(self, f, server_name, storage_index):
         # Older versions of Tahoe didn't handle the add-lease message very
         # well: <=1.1.0 throws a NameError because it doesn't implement
         # remote_add_lease(), 1.2.0/1.3.0 throw IndexError on unknown buckets
@@ -541,21 +540,21 @@ class Checker(log.PrefixingLogMixin):
                 # this may ignore a bit too much, but that only hurts us
                 # during debugging
                 return
-            self.log(format="error in add_lease from [%(peerid)s]: %(f_value)s",
-                     peerid=idlib.shortnodeid_b2a(peerid),
+            self.log(format="error in add_lease from [%(name)s]: %(f_value)s",
+                     name=server_name,
                      f_value=str(f.value),
                      failure=f,
                      level=log.WEIRD, umid="atbAxw")
             return
         # local errors are cause for alarm
         log.err(f,
-                format="local error in add_lease to [%(peerid)s]: %(f_value)s",
-                peerid=idlib.shortnodeid_b2a(peerid),
+                format="local error in add_lease to [%(name)s]: %(f_value)s",
+                name=server_name,
                 f_value=str(f.value),
                 level=log.WEIRD, umid="hEGuQg")
 
 
-    def _download_and_verify(self, serverid, sharenum, bucket):
+    def _download_and_verify(self, server, sharenum, bucket):
         """Start an attempt to download and verify every block in this bucket
         and return a deferred that will eventually fire once the attempt
         completes.
@@ -575,7 +574,7 @@ class Checker(log.PrefixingLogMixin):
         results."""
 
         vcap = self._verifycap
-        b = layout.ReadBucketProxy(bucket, serverid, vcap.get_storage_index())
+        b = layout.ReadBucketProxy(bucket, server, vcap.get_storage_index())
         veup = ValidatedExtendedURIProxy(b, vcap)
         d = veup.start()
 
@@ -616,15 +615,22 @@ class Checker(log.PrefixingLogMixin):
             assert isinstance(r, str), r
             # to free up the RAM
             return None
+
         def _get_blocks(vrbp):
-            ds = []
-            for blocknum in range(veup.num_segments):
+            def _get_block(ign, blocknum):
                 db = vrbp.get_block(blocknum)
                 db.addCallback(_discard_result)
-                ds.append(db)
-            # this gatherResults will fire once every block of this share has
-            # been downloaded and verified, or else it will errback.
-            return deferredutil.gatherResults(ds)
+                return db
+
+            dbs = defer.succeed(None)
+            for blocknum in range(veup.num_segments):
+                dbs.addCallback(_get_block, blocknum)
+
+            # The Deferred we return will fire after every block of this
+            # share has been downloaded and verified successfully, or else it
+            # will errback as soon as the first error is observed.
+            return dbs
+
         d.addCallback(_get_blocks)
 
         # if none of those errbacked, the blocks (and the hashes above them)
@@ -656,9 +662,9 @@ class Checker(log.PrefixingLogMixin):
 
         return d
 
-    def _verify_server_shares(self, serverid, ss):
+    def _verify_server_shares(self, s):
         """ Return a deferred which eventually fires with a tuple of
-        (set(sharenum), serverid, set(corruptsharenum),
+        (set(sharenum), server, set(corruptsharenum),
         set(incompatiblesharenum), success) showing all the shares verified
         to be served by this server, and all the corrupt shares served by the
         server, and all the incompatible shares served by the server. In case
@@ -679,14 +685,14 @@ class Checker(log.PrefixingLogMixin):
         then disconnected and ceased responding, or returned a failure, it is
         still marked with the True flag for 'success'.
         """
-        d = self._get_buckets(ss, self._verifycap.get_storage_index(), serverid)
+        d = self._get_buckets(s, self._verifycap.get_storage_index())
 
         def _got_buckets(result):
-            bucketdict, serverid, success = result
+            bucketdict, success = result
 
             shareverds = []
             for (sharenum, bucket) in bucketdict.items():
-                d = self._download_and_verify(serverid, sharenum, bucket)
+                d = self._download_and_verify(s, sharenum, bucket)
                 shareverds.append(d)
 
             dl = deferredutil.gatherResults(shareverds)
@@ -703,30 +709,30 @@ class Checker(log.PrefixingLogMixin):
                             corrupt.add(sharenum)
                         elif whynot == 'incompatible':
                             incompatible.add(sharenum)
-                return (verified, serverid, corrupt, incompatible, success)
+                return (verified, s, corrupt, incompatible, success)
 
             dl.addCallback(collect)
             return dl
 
         def _err(f):
             f.trap(RemoteException, DeadReferenceError)
-            return (set(), serverid, set(), set(), False)
+            return (set(), s, set(), set(), False)
 
         d.addCallbacks(_got_buckets, _err)
         return d
 
-    def _check_server_shares(self, serverid, ss):
+    def _check_server_shares(self, s):
         """Return a deferred which eventually fires with a tuple of
-        (set(sharenum), serverid, set(), set(), responded) showing all the
+        (set(sharenum), server, set(), set(), responded) showing all the
         shares claimed to be served by this server. In case the server is
-        disconnected then it fires with (set() serverid, set(), set(), False)
+        disconnected then it fires with (set(), server, set(), set(), False)
         (a server disconnecting when we ask it for buckets is the same, for
         our purposes, as a server that says it has none, except that we want
         to track and report whether or not each server responded.)"""
         def _curry_empty_corrupted(res):
-            buckets, serverid, responded = res
-            return (set(buckets), serverid, set(), set(), responded)
-        d = self._get_buckets(ss, self._verifycap.get_storage_index(), serverid)
+            buckets, responded = res
+            return (set(buckets), s, set(), set(), responded)
+        d = self._get_buckets(s, self._verifycap.get_storage_index())
         d.addCallback(_curry_empty_corrupted)
         return d
 
@@ -741,7 +747,8 @@ class Checker(log.PrefixingLogMixin):
         corruptsharelocators = [] # (serverid, storageindex, sharenum)
         incompatiblesharelocators = [] # (serverid, storageindex, sharenum)
 
-        for theseverifiedshares, thisserverid, thesecorruptshares, theseincompatibleshares, thisresponded in results:
+        for theseverifiedshares, thisserver, thesecorruptshares, theseincompatibleshares, thisresponded in results:
+            thisserverid = thisserver.get_serverid()
             servers.setdefault(thisserverid, set()).update(theseverifiedshares)
             for sharenum in theseverifiedshares:
                 verifiedshares.setdefault(sharenum, set()).add(thisserverid)
@@ -794,10 +801,10 @@ class Checker(log.PrefixingLogMixin):
     def start(self):
         ds = []
         if self._verify:
-            for (serverid, ss) in self._servers:
-                ds.append(self._verify_server_shares(serverid, ss))
+            for s in self._servers:
+                ds.append(self._verify_server_shares(s))
         else:
-            for (serverid, ss) in self._servers:
-                ds.append(self._check_server_shares(serverid, ss))
+            for s in self._servers:
+                ds.append(self._check_server_shares(s))
 
         return deferredutil.gatherResults(ds).addCallback(self._format_results)

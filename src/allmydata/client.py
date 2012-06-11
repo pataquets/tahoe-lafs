@@ -22,8 +22,10 @@ from allmydata.util.abbreviate import parse_abbreviated_size
 from allmydata.util.time_format import parse_duration, parse_date
 from allmydata.stats import StatsProvider
 from allmydata.history import History
-from allmydata.interfaces import IStatsProducer, RIStubClient
+from allmydata.interfaces import IStatsProducer, RIStubClient, \
+                                 SDMF_VERSION, MDMF_VERSION
 from allmydata.nodemaker import NodeMaker
+from allmydata.blacklist import Blacklist
 
 
 KiB=1024
@@ -68,14 +70,14 @@ class KeyGenerator:
         mutable files which don't otherwise specify a size. This will affect
         all subsequent calls to generate() without a keysize= argument. The
         default size is 2048 bits. Test cases should call this method once
-        during setup, to cause me to create smaller (522 bit) keys, so the
-        unit tests run faster."""
+        during setup, to cause me to create smaller keys, so the unit tests
+        run faster."""
         self.default_keysize = keysize
 
     def generate(self, keysize=None):
         """I return a Deferred that fires with a (verifyingkey, signingkey)
-        pair. I accept a keysize in bits (522 bit keys are fast for testing,
-        2048 bit keys are standard). If you do not provide a keysize, I will
+        pair. I accept a keysize in bits (2048 bit keys are standard, smaller
+        keys are used for testing). If you do not provide a keysize, I will
         use my default, which is set by a call to set_default_keysize(). If
         set_default_keysize() has never been called, I will create 2048 bit
         keys."""
@@ -150,6 +152,7 @@ class Client(node.Node, pollmixin.PollMixin):
         # ControlServer and Helper are attached after Tub startup
         self.init_ftp_server()
         self.init_sftp_server()
+        self.init_drop_uploader()
 
         hotline_file = os.path.join(self.basedir,
                                     self.SUICIDE_PREVENTION_HOTLINE_FILE)
@@ -164,22 +167,6 @@ class Client(node.Node, pollmixin.PollMixin):
         webport = self.get_config("node", "web.port", None)
         if webport:
             self.init_web(webport) # strports string
-
-    def read_old_config_files(self):
-        node.Node.read_old_config_files(self)
-        copy = self._copy_config_from_file
-        copy("introducer.furl", "client", "introducer.furl")
-        copy("helper.furl", "client", "helper.furl")
-        copy("key_generator.furl", "client", "key_generator.furl")
-        copy("stats_gatherer.furl", "client", "stats_gatherer.furl")
-        if os.path.exists(os.path.join(self.basedir, "no_storage")):
-            self.set_config("storage", "enabled", "false")
-        if os.path.exists(os.path.join(self.basedir, "readonly_storage")):
-            self.set_config("storage", "readonly", "true")
-        if os.path.exists(os.path.join(self.basedir, "debug_discard_storage")):
-            self.set_config("storage", "debug_discard", "true")
-        if os.path.exists(os.path.join(self.basedir, "run_helper")):
-            self.set_config("helper", "enabled", "true")
 
     def init_introducer_client(self):
         self.introducer_furl = self.get_config("client", "introducer.furl")
@@ -291,8 +278,10 @@ class Client(node.Node, pollmixin.PollMixin):
         self.history = History(self.stats_provider)
         self.terminator = Terminator()
         self.terminator.setServiceParent(self)
-        self.add_service(Uploader(helper_furl, self.stats_provider))
+        self.add_service(Uploader(helper_furl, self.stats_provider,
+                                  self.history))
         self.init_stub_client()
+        self.init_blacklist()
         self.init_nodemaker()
 
     def init_client_storage_broker(self):
@@ -345,14 +334,25 @@ class Client(node.Node, pollmixin.PollMixin):
         d.addErrback(log.err, facility="tahoe.init",
                      level=log.BAD, umid="OEHq3g")
 
+    def init_blacklist(self):
+        fn = os.path.join(self.basedir, "access.blacklist")
+        self.blacklist = Blacklist(fn)
+
     def init_nodemaker(self):
+        default = self.get_config("client", "mutable.format", default="SDMF")
+        if default.upper() == "MDMF":
+            self.mutable_file_default = MDMF_VERSION
+        else:
+            self.mutable_file_default = SDMF_VERSION
         self.nodemaker = NodeMaker(self.storage_broker,
                                    self._secret_holder,
                                    self.get_history(),
                                    self.getServiceNamed("uploader"),
                                    self.terminator,
                                    self.get_encoding_parameters(),
-                                   self._key_generator)
+                                   self.mutable_file_default,
+                                   self._key_generator,
+                                   self.blacklist)
 
     def get_history(self):
         return self.history
@@ -437,6 +437,22 @@ class Client(node.Node, pollmixin.PollMixin):
                                  sftp_portstr, pubkey_file, privkey_file)
             s.setServiceParent(self)
 
+    def init_drop_uploader(self):
+        if self.get_config("drop_upload", "enabled", False, boolean=True):
+            upload_dircap = self.get_config("drop_upload", "upload.dircap", None)
+            local_dir_utf8 = self.get_config("drop_upload", "local.directory", None)
+
+            if upload_dircap and local_dir_utf8:
+                try:
+                    from allmydata.frontends import drop_upload
+                    s = drop_upload.DropUploader(self, upload_dircap, local_dir_utf8)
+                    s.setServiceParent(self)
+                    s.startService()
+                except Exception, e:
+                    self.log("couldn't start drop-uploader: %r", args=(e,))
+            else:
+                self.log("couldn't start drop-uploader: upload.dircap or local.directory not specified")
+
     def _check_hotline(self, hotline_file):
         if os.path.exists(hotline_file):
             mtime = os.stat(hotline_file)[stat.ST_MTIME]
@@ -468,7 +484,7 @@ class Client(node.Node, pollmixin.PollMixin):
         temporary test network and need to know when it is safe to proceed
         with an upload or download."""
         def _check():
-            return len(self.storage_broker.get_all_servers()) >= num_clients
+            return len(self.storage_broker.get_connected_servers()) >= num_clients
         d = self.poll(_check, 0.5)
         d.addCallback(lambda res: None)
         return d
@@ -484,16 +500,17 @@ class Client(node.Node, pollmixin.PollMixin):
         # may get an opaque node if there were any problems.
         return self.nodemaker.create_from_cap(write_uri, read_uri, deep_immutable=deep_immutable, name=name)
 
-    def create_dirnode(self, initial_children={}):
-        d = self.nodemaker.create_new_mutable_directory(initial_children)
+    def create_dirnode(self, initial_children={}, version=None):
+        d = self.nodemaker.create_new_mutable_directory(initial_children, version=version)
         return d
 
     def create_immutable_dirnode(self, children, convergence=None):
         return self.nodemaker.create_immutable_directory(children, convergence)
 
-    def create_mutable_file(self, contents=None, keysize=None):
-        return self.nodemaker.create_mutable_file(contents, keysize)
+    def create_mutable_file(self, contents=None, keysize=None, version=None):
+        return self.nodemaker.create_mutable_file(contents, keysize,
+                                                  version=version)
 
     def upload(self, uploadable):
         uploader = self.getServiceNamed("uploader")
-        return uploader.upload(uploadable, history=self.get_history())
+        return uploader.upload(uploadable)

@@ -68,7 +68,7 @@ def dump_immutable_chk_share(f, out, options):
     from allmydata.util.encodingutil import quote_output, to_str
 
     # use a ReadBucketProxy to parse the bucket and find the uri extension
-    bp = ReadBucketProxy(None, '', '')
+    bp = ReadBucketProxy(None, None, '')
     offsets = bp._parse_offsets(f.read_share_data(0, 0x44))
     print >>out, "%20s: %d" % ("version", bp._version)
     seek = offsets['uri_extension']
@@ -181,9 +181,12 @@ def dump_mutable_share(options):
 
     share_type = "unknown"
     f.seek(m.DATA_OFFSET)
-    if f.read(1) == "\x00":
+    version = f.read(1)
+    if version == "\x00":
         # this slot contains an SMDF share
         share_type = "SDMF"
+    elif version == "\x01":
+        share_type = "MDMF"
     f.close()
 
     print >>out
@@ -210,6 +213,8 @@ def dump_mutable_share(options):
 
     if share_type == "SDMF":
         dump_SDMF_share(m, data_length, options)
+    elif share_type == "MDMF":
+        dump_MDMF_share(m, data_length, options)
 
     return 0
 
@@ -296,6 +301,103 @@ def dump_SDMF_share(m, length, options):
             printoffset(name, offset, 2)
         f = open(options['filename'], "rb")
         printoffset("extra leases", m._read_extra_lease_offset(f) + 4)
+        f.close()
+
+    print >>out
+
+def dump_MDMF_share(m, length, options):
+    from allmydata.mutable.layout import MDMFSlotReadProxy
+    from allmydata.util import base32, hashutil
+    from allmydata.uri import MDMFVerifierURI
+    from allmydata.util.encodingutil import quote_output, to_str
+
+    offset = m.DATA_OFFSET
+    out = options.stdout
+
+    f = open(options['filename'], "rb")
+    storage_index = None; shnum = 0
+
+    class ShareDumper(MDMFSlotReadProxy):
+        def _read(self, readvs, force_remote=False, queue=False):
+            data = []
+            for (where,length) in readvs:
+                f.seek(offset+where)
+                data.append(f.read(length))
+            return defer.succeed({shnum: data})
+
+    p = ShareDumper(None, storage_index, shnum)
+    def extract(func):
+        stash = []
+        # these methods return Deferreds, but we happen to know that they run
+        # synchronously when not actually talking to a remote server
+        d = func()
+        d.addCallback(stash.append)
+        return stash[0]
+
+    verinfo = extract(p.get_verinfo)
+    encprivkey = extract(p.get_encprivkey)
+    signature = extract(p.get_signature)
+    pubkey = extract(p.get_verification_key)
+    block_hash_tree = extract(p.get_blockhashes)
+    share_hash_chain = extract(p.get_sharehashes)
+    f.close()
+
+    (seqnum, root_hash, salt_to_use, segsize, datalen, k, N, prefix,
+     offsets) = verinfo
+
+    print >>out, " MDMF contents:"
+    print >>out, "  seqnum: %d" % seqnum
+    print >>out, "  root_hash: %s" % base32.b2a(root_hash)
+    #print >>out, "  IV: %s" % base32.b2a(IV)
+    print >>out, "  required_shares: %d" % k
+    print >>out, "  total_shares: %d" % N
+    print >>out, "  segsize: %d" % segsize
+    print >>out, "  datalen: %d" % datalen
+    print >>out, "  enc_privkey: %d bytes" % len(encprivkey)
+    print >>out, "  pubkey: %d bytes" % len(pubkey)
+    print >>out, "  signature: %d bytes" % len(signature)
+    share_hash_ids = ",".join([str(hid)
+                               for hid in sorted(share_hash_chain.keys())])
+    print >>out, "  share_hash_chain: %s" % share_hash_ids
+    print >>out, "  block_hash_tree: %d nodes" % len(block_hash_tree)
+
+    # the storage index isn't stored in the share itself, so we depend upon
+    # knowing the parent directory name to get it
+    pieces = options['filename'].split(os.sep)
+    if len(pieces) >= 2:
+        piece = to_str(pieces[-2])
+        if base32.could_be_base32_encoded(piece):
+            storage_index = base32.a2b(piece)
+            fingerprint = hashutil.ssk_pubkey_fingerprint_hash(pubkey)
+            u = MDMFVerifierURI(storage_index, fingerprint)
+            verify_cap = u.to_string()
+            print >>out, "  verify-cap:", quote_output(verify_cap, quotemarks=False)
+
+    if options['offsets']:
+        # NOTE: this offset-calculation code is fragile, and needs to be
+        # merged with MutableShareFile's internals.
+
+        print >>out
+        print >>out, " Section Offsets:"
+        def printoffset(name, value, shift=0):
+            print >>out, "%s%.20s: %s   (0x%x)" % (" "*shift, name, value, value)
+        printoffset("first lease", m.HEADER_SIZE, 2)
+        printoffset("share data", m.DATA_OFFSET, 2)
+        o_seqnum = m.DATA_OFFSET + struct.calcsize(">B")
+        printoffset("seqnum", o_seqnum, 4)
+        o_root_hash = m.DATA_OFFSET + struct.calcsize(">BQ")
+        printoffset("root_hash", o_root_hash, 4)
+        for k in ["enc_privkey", "share_hash_chain", "signature",
+                  "verification_key", "verification_key_end",
+                  "share_data", "block_hash_tree", "EOF"]:
+            name = {"share_data": "block data",
+                    "verification_key": "pubkey",
+                    "verification_key_end": "end of pubkey",
+                    "EOF": "end of share data"}.get(k,k)
+            offset = m.DATA_OFFSET + offsets[k]
+            printoffset(name, offset, 4)
+        f = open(options['filename'], "rb")
+        printoffset("extra leases", m._read_extra_lease_offset(f) + 4, 2)
         f.close()
 
     print >>out
@@ -415,9 +517,9 @@ def dump_uri_instance(u, nodeid, secret, out, show_header=True):
             print >>out, "Literal File URI:"
         print >>out, " data:", quote_output(u.data)
 
-    elif isinstance(u, uri.WriteableSSKFileURI):
+    elif isinstance(u, uri.WriteableSSKFileURI): # SDMF
         if show_header:
-            print >>out, "SSK Writeable URI:"
+            print >>out, "SDMF Writeable URI:"
         print >>out, " writekey:", base32.b2a(u.writekey)
         print >>out, " readkey:", base32.b2a(u.readkey)
         print >>out, " storage index:", si_b2a(u.get_storage_index())
@@ -428,20 +530,54 @@ def dump_uri_instance(u, nodeid, secret, out, show_header=True):
             print >>out, " write_enabler:", base32.b2a(we)
             print >>out
         _dump_secrets(u.get_storage_index(), secret, nodeid, out)
-
     elif isinstance(u, uri.ReadonlySSKFileURI):
         if show_header:
-            print >>out, "SSK Read-only URI:"
+            print >>out, "SDMF Read-only URI:"
         print >>out, " readkey:", base32.b2a(u.readkey)
         print >>out, " storage index:", si_b2a(u.get_storage_index())
         print >>out, " fingerprint:", base32.b2a(u.fingerprint)
     elif isinstance(u, uri.SSKVerifierURI):
         if show_header:
-            print >>out, "SSK Verifier URI:"
+            print >>out, "SDMF Verifier URI:"
         print >>out, " storage index:", si_b2a(u.get_storage_index())
         print >>out, " fingerprint:", base32.b2a(u.fingerprint)
 
-    elif isinstance(u, uri.DirectoryURI):
+    elif isinstance(u, uri.WriteableMDMFFileURI): # MDMF
+        if show_header:
+            print >>out, "MDMF Writeable URI:"
+        print >>out, " writekey:", base32.b2a(u.writekey)
+        print >>out, " readkey:", base32.b2a(u.readkey)
+        print >>out, " storage index:", si_b2a(u.get_storage_index())
+        print >>out, " fingerprint:", base32.b2a(u.fingerprint)
+        print >>out
+        if nodeid:
+            we = hashutil.ssk_write_enabler_hash(u.writekey, nodeid)
+            print >>out, " write_enabler:", base32.b2a(we)
+            print >>out
+        _dump_secrets(u.get_storage_index(), secret, nodeid, out)
+    elif isinstance(u, uri.ReadonlyMDMFFileURI):
+        if show_header:
+            print >>out, "MDMF Read-only URI:"
+        print >>out, " readkey:", base32.b2a(u.readkey)
+        print >>out, " storage index:", si_b2a(u.get_storage_index())
+        print >>out, " fingerprint:", base32.b2a(u.fingerprint)
+    elif isinstance(u, uri.MDMFVerifierURI):
+        if show_header:
+            print >>out, "MDMF Verifier URI:"
+        print >>out, " storage index:", si_b2a(u.get_storage_index())
+        print >>out, " fingerprint:", base32.b2a(u.fingerprint)
+
+
+    elif isinstance(u, uri.ImmutableDirectoryURI): # CHK-based directory
+        if show_header:
+            print >>out, "CHK Directory URI:"
+        dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+    elif isinstance(u, uri.ImmutableDirectoryURIVerifier):
+        if show_header:
+            print >>out, "CHK Directory Verifier URI:"
+        dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+
+    elif isinstance(u, uri.DirectoryURI): # SDMF-based directory
         if show_header:
             print >>out, "Directory Writeable URI:"
         dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
@@ -453,6 +589,20 @@ def dump_uri_instance(u, nodeid, secret, out, show_header=True):
         if show_header:
             print >>out, "Directory Verifier URI:"
         dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+
+    elif isinstance(u, uri.MDMFDirectoryURI): # MDMF-based directory
+        if show_header:
+            print >>out, "Directory Writeable URI:"
+        dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+    elif isinstance(u, uri.ReadonlyMDMFDirectoryURI):
+        if show_header:
+            print >>out, "Directory Read-only URI:"
+        dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+    elif isinstance(u, uri.MDMFDirectoryURIVerifier):
+        if show_header:
+            print >>out, "Directory Verifier URI:"
+        dump_uri_instance(u._filenode_uri, nodeid, secret, out, False)
+
     else:
         print >>out, "unknown cap type"
 
@@ -577,9 +727,12 @@ def describe_share(abs_sharefile, si_s, shnum_s, now, out):
 
         share_type = "unknown"
         f.seek(m.DATA_OFFSET)
-        if f.read(1) == "\x00":
+        version = f.read(1)
+        if version == "\x00":
             # this slot contains an SMDF share
             share_type = "SDMF"
+        elif version == "\x01":
+            share_type = "MDMF"
 
         if share_type == "SDMF":
             f.seek(m.DATA_OFFSET)
@@ -601,6 +754,35 @@ def describe_share(abs_sharefile, si_s, shnum_s, now, out):
                   (si_s, k, N, datalen,
                    seqnum, base32.b2a(root_hash),
                    expiration, quote_output(abs_sharefile))
+        elif share_type == "MDMF":
+            from allmydata.mutable.layout import MDMFSlotReadProxy
+            fake_shnum = 0
+            # TODO: factor this out with dump_MDMF_share()
+            class ShareDumper(MDMFSlotReadProxy):
+                def _read(self, readvs, force_remote=False, queue=False):
+                    data = []
+                    for (where,length) in readvs:
+                        f.seek(m.DATA_OFFSET+where)
+                        data.append(f.read(length))
+                    return defer.succeed({fake_shnum: data})
+
+            p = ShareDumper(None, "fake-si", fake_shnum)
+            def extract(func):
+                stash = []
+                # these methods return Deferreds, but we happen to know that
+                # they run synchronously when not actually talking to a
+                # remote server
+                d = func()
+                d.addCallback(stash.append)
+                return stash[0]
+
+            verinfo = extract(p.get_verinfo)
+            (seqnum, root_hash, salt_to_use, segsize, datalen, k, N, prefix,
+             offsets) = verinfo
+            print >>out, "MDMF %s %d/%d %d #%d:%s %d %s" % \
+                  (si_s, k, N, datalen,
+                   seqnum, base32.b2a(root_hash),
+                   expiration, quote_output(abs_sharefile))
         else:
             print >>out, "UNKNOWN mutable %s" % quote_output(abs_sharefile)
 
@@ -610,7 +792,7 @@ def describe_share(abs_sharefile, si_s, shnum_s, now, out):
         class ImmediateReadBucketProxy(ReadBucketProxy):
             def __init__(self, sf):
                 self.sf = sf
-                ReadBucketProxy.__init__(self, "", "", "")
+                ReadBucketProxy.__init__(self, None, None, "")
             def __repr__(self):
                 return "<ImmediateReadBucketProxy>"
             def _read(self, offset, size):
@@ -768,7 +950,7 @@ def corrupt_share(options):
     else:
         # otherwise assume it's immutable
         f = ShareFile(fn)
-        bp = ReadBucketProxy(None, '', '')
+        bp = ReadBucketProxy(None, None, '')
         offsets = bp._parse_offsets(f.read_share_data(0, 0x24))
         start = f._data_offset + offsets["data"]
         end = f._data_offset + offsets["plaintext_hash_tree"]
@@ -846,7 +1028,18 @@ Subcommands:
 
 Please run e.g. 'tahoe debug dump-share --help' for more details on each
 subcommand.
+"""
+        # See ticket #1441 for why we print different information when
+        # run via /usr/bin/tahoe. Note that argv[0] is the full path.
+        if sys.argv[0] == '/usr/bin/tahoe':
+            t += """
+To get branch coverage for the Tahoe test suite (on the installed copy of
+Tahoe), install the 'python-coverage' package and then use:
 
+    python-coverage run --branch /usr/bin/tahoe debug trial
+"""
+        else:
+            t += """
 Another debugging feature is that bin%stahoe allows executing an arbitrary
 "runner" command (typically an installed Python script, such as 'coverage'),
 with the Tahoe libraries on the PYTHONPATH. The runner command name is

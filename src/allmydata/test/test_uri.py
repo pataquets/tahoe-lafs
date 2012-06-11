@@ -1,4 +1,5 @@
 
+import os, re
 from twisted.trial import unittest
 from allmydata import uri
 from allmydata.util import hashutil, base32
@@ -255,13 +256,16 @@ class Constraint(testutil.ReallyEqualMixin, unittest.TestCase):
         uri.CHKFileURI.init_from_string(fileURI)
 
 class Mutable(testutil.ReallyEqualMixin, unittest.TestCase):
-    def test_pack(self):
-        writekey = "\x01" * 16
-        fingerprint = "\x02" * 32
+    def setUp(self):
+        self.writekey = "\x01" * 16
+        self.fingerprint = "\x02" * 32
+        self.readkey = hashutil.ssk_readkey_hash(self.writekey)
+        self.storage_index = hashutil.ssk_storage_index_hash(self.readkey)
 
-        u = uri.WriteableSSKFileURI(writekey, fingerprint)
-        self.failUnlessReallyEqual(u.writekey, writekey)
-        self.failUnlessReallyEqual(u.fingerprint, fingerprint)
+    def test_pack(self):
+        u = uri.WriteableSSKFileURI(self.writekey, self.fingerprint)
+        self.failUnlessReallyEqual(u.writekey, self.writekey)
+        self.failUnlessReallyEqual(u.fingerprint, self.fingerprint)
         self.failIf(u.is_readonly())
         self.failUnless(u.is_mutable())
         self.failUnless(IURI.providedBy(u))
@@ -274,8 +278,8 @@ class Mutable(testutil.ReallyEqualMixin, unittest.TestCase):
         self.failUnlessReallyEqual(u, u_h)
 
         u2 = uri.from_string(u.to_string())
-        self.failUnlessReallyEqual(u2.writekey, writekey)
-        self.failUnlessReallyEqual(u2.fingerprint, fingerprint)
+        self.failUnlessReallyEqual(u2.writekey, self.writekey)
+        self.failUnlessReallyEqual(u2.fingerprint, self.fingerprint)
         self.failIf(u2.is_readonly())
         self.failUnless(u2.is_mutable())
         self.failUnless(IURI.providedBy(u2))
@@ -290,8 +294,8 @@ class Mutable(testutil.ReallyEqualMixin, unittest.TestCase):
         self.failUnless(isinstance(u2imm, uri.UnknownURI), u2imm)
 
         u3 = u2.get_readonly()
-        readkey = hashutil.ssk_readkey_hash(writekey)
-        self.failUnlessReallyEqual(u3.fingerprint, fingerprint)
+        readkey = hashutil.ssk_readkey_hash(self.writekey)
+        self.failUnlessReallyEqual(u3.fingerprint, self.fingerprint)
         self.failUnlessReallyEqual(u3.readkey, readkey)
         self.failUnless(u3.is_readonly())
         self.failUnless(u3.is_mutable())
@@ -310,8 +314,8 @@ class Mutable(testutil.ReallyEqualMixin, unittest.TestCase):
         u3_h = uri.ReadonlySSKFileURI.init_from_human_encoding(he)
         self.failUnlessReallyEqual(u3, u3_h)
 
-        u4 = uri.ReadonlySSKFileURI(readkey, fingerprint)
-        self.failUnlessReallyEqual(u4.fingerprint, fingerprint)
+        u4 = uri.ReadonlySSKFileURI(readkey, self.fingerprint)
+        self.failUnlessReallyEqual(u4.fingerprint, self.fingerprint)
         self.failUnlessReallyEqual(u4.readkey, readkey)
         self.failUnless(u4.is_readonly())
         self.failUnless(u4.is_mutable())
@@ -341,6 +345,217 @@ class Mutable(testutil.ReallyEqualMixin, unittest.TestCase):
         he = u5.to_human_encoding()
         u5_h = uri.SSKVerifierURI.init_from_human_encoding(he)
         self.failUnlessReallyEqual(u5, u5_h)
+
+
+    def test_writeable_mdmf_cap(self):
+        u1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        cap = u1.to_string()
+        u = uri.WriteableMDMFFileURI.init_from_string(cap)
+
+        self.failUnless(IMutableFileURI.providedBy(u))
+        self.failUnlessReallyEqual(u.fingerprint, self.fingerprint)
+        self.failUnlessReallyEqual(u.writekey, self.writekey)
+        self.failUnless(u.is_mutable())
+        self.failIf(u.is_readonly())
+        self.failUnlessEqual(cap, u.to_string())
+
+        # Now get a readonly cap from the writeable cap, and test that it
+        # degrades gracefully.
+        ru = u.get_readonly()
+        self.failUnlessReallyEqual(self.readkey, ru.readkey)
+        self.failUnlessReallyEqual(self.fingerprint, ru.fingerprint)
+        self.failUnless(ru.is_mutable())
+        self.failUnless(ru.is_readonly())
+
+        # Now get a verifier cap.
+        vu = ru.get_verify_cap()
+        self.failUnlessReallyEqual(self.storage_index, vu.storage_index)
+        self.failUnlessReallyEqual(self.fingerprint, vu.fingerprint)
+        self.failUnless(IVerifierURI.providedBy(vu))
+
+    def test_readonly_mdmf_cap(self):
+        u1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        cap = u1.to_string()
+        u2 = uri.ReadonlyMDMFFileURI.init_from_string(cap)
+
+        self.failUnlessReallyEqual(u2.fingerprint, self.fingerprint)
+        self.failUnlessReallyEqual(u2.readkey, self.readkey)
+        self.failUnless(u2.is_readonly())
+        self.failUnless(u2.is_mutable())
+
+        vu = u2.get_verify_cap()
+        self.failUnlessEqual(vu.storage_index, self.storage_index)
+        self.failUnlessEqual(vu.fingerprint, self.fingerprint)
+
+    def test_create_writeable_mdmf_cap_from_readcap(self):
+        # we shouldn't be able to create a writeable MDMF cap given only a
+        # readcap.
+        u1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnlessRaises(uri.BadURIError,
+                              uri.WriteableMDMFFileURI.init_from_string,
+                              cap)
+
+    def test_create_writeable_mdmf_cap_from_verifycap(self):
+        u1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnlessRaises(uri.BadURIError,
+                              uri.WriteableMDMFFileURI.init_from_string,
+                              cap)
+
+    def test_create_readonly_mdmf_cap_from_verifycap(self):
+        u1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnlessRaises(uri.BadURIError,
+                              uri.ReadonlyMDMFFileURI.init_from_string,
+                              cap)
+
+    def test_mdmf_verifier_cap(self):
+        u1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+        self.failUnless(u1.is_readonly())
+        self.failIf(u1.is_mutable())
+        self.failUnlessReallyEqual(self.storage_index, u1.storage_index)
+        self.failUnlessReallyEqual(self.fingerprint, u1.fingerprint)
+
+        cap = u1.to_string()
+        u2 = uri.MDMFVerifierURI.init_from_string(cap)
+        self.failUnless(u2.is_readonly())
+        self.failIf(u2.is_mutable())
+        self.failUnlessReallyEqual(self.storage_index, u2.storage_index)
+        self.failUnlessReallyEqual(self.fingerprint, u2.fingerprint)
+
+        u3 = u2.get_readonly()
+        self.failUnlessReallyEqual(u3, u2)
+
+        u4 = u2.get_verify_cap()
+        self.failUnlessReallyEqual(u4, u2)
+
+    def test_mdmf_cap_ignore_extensions(self):
+        # MDMF caps can be arbitrarily extended after the fingerprint and
+        # key/storage index fields. tahoe-1.9 is supposed to ignore any
+        # extensions, and not add any itself.
+        u1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        cap = u1.to_string()
+
+        cap2 = cap+":I COME FROM THE FUTURE"
+        u2 = uri.WriteableMDMFFileURI.init_from_string(cap2)
+        self.failUnlessReallyEqual(self.writekey, u2.writekey)
+        self.failUnlessReallyEqual(self.fingerprint, u2.fingerprint)
+        self.failIf(u2.is_readonly())
+        self.failUnless(u2.is_mutable())
+
+        cap3 = cap+":"+os.urandom(40) # parse *that*!
+        u3 = uri.WriteableMDMFFileURI.init_from_string(cap3)
+        self.failUnlessReallyEqual(self.writekey, u3.writekey)
+        self.failUnlessReallyEqual(self.fingerprint, u3.fingerprint)
+        self.failIf(u3.is_readonly())
+        self.failUnless(u3.is_mutable())
+
+        cap4 = u1.get_readonly().to_string()+":ooh scary future stuff"
+        u4 = uri.from_string_mutable_filenode(cap4)
+        self.failUnlessReallyEqual(self.readkey, u4.readkey)
+        self.failUnlessReallyEqual(self.fingerprint, u4.fingerprint)
+        self.failUnless(u4.is_readonly())
+        self.failUnless(u4.is_mutable())
+
+        cap5 = u1.get_verify_cap().to_string()+":spoilers!"
+        u5 = uri.from_string(cap5)
+        self.failUnlessReallyEqual(self.storage_index, u5.storage_index)
+        self.failUnlessReallyEqual(self.fingerprint, u5.fingerprint)
+        self.failUnless(u5.is_readonly())
+        self.failIf(u5.is_mutable())
+
+
+    def test_mdmf_valid_human_encoding(self):
+        # What's a human encoding? Well, it's of the form:
+        base = "https://127.0.0.1:3456/uri/"
+        # With a cap on the end. For each of the cap types, we need to
+        # test that a valid cap (with and without the traditional
+        # separators) is recognized and accepted by the classes.
+        w1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        r1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        v1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+
+        # These will yield three different caps.
+        for o in (w1, r1, v1):
+            url = base + o.to_string()
+            o1 = o.__class__.init_from_human_encoding(url)
+            self.failUnlessReallyEqual(o1, o)
+
+            # Note that our cap will, by default, have : as separators.
+            # But it's expected that users from, e.g., the WUI, will
+            # have %3A as a separator. We need to make sure that the
+            # initialization routine handles that, too.
+            cap = o.to_string()
+            cap = re.sub(":", "%3A", cap)
+            url = base + cap
+            o2 = o.__class__.init_from_human_encoding(url)
+            self.failUnlessReallyEqual(o2, o)
+
+
+    def test_mdmf_human_encoding_invalid_base(self):
+        # What's a human encoding? Well, it's of the form:
+        base = "https://127.0.0.1:3456/foo/bar/bazuri/"
+        # With a cap on the end. For each of the cap types, we need to
+        # test that a valid cap (with and without the traditional
+        # separators) is recognized and accepted by the classes.
+        w1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        r1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        v1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+
+        # These will yield three different caps.
+        for o in (w1, r1, v1):
+            url = base + o.to_string()
+            self.failUnlessRaises(uri.BadURIError,
+                                  o.__class__.init_from_human_encoding,
+                                  url)
+
+    def test_mdmf_human_encoding_invalid_cap(self):
+        base = "https://127.0.0.1:3456/uri/"
+        # With a cap on the end. For each of the cap types, we need to
+        # test that a valid cap (with and without the traditional
+        # separators) is recognized and accepted by the classes.
+        w1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        r1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        v1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+
+        # These will yield three different caps.
+        for o in (w1, r1, v1):
+            # not exhaustive, obviously...
+            url = base + o.to_string() + "foobarbaz"
+            url2 = base + "foobarbaz" + o.to_string()
+            url3 = base + o.to_string()[:25] + "foo" + o.to_string()[:25]
+            for u in (url, url2, url3):
+                self.failUnlessRaises(uri.BadURIError,
+                                      o.__class__.init_from_human_encoding,
+                                      u)
+
+    def test_mdmf_from_string(self):
+        # Make sure that the from_string utility function works with
+        # MDMF caps.
+        u1 = uri.WriteableMDMFFileURI(self.writekey, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnless(uri.is_uri(cap))
+        u2 = uri.from_string(cap)
+        self.failUnlessReallyEqual(u1, u2)
+        u3 = uri.from_string_mutable_filenode(cap)
+        self.failUnlessEqual(u3, u1)
+
+        u1 = uri.ReadonlyMDMFFileURI(self.readkey, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnless(uri.is_uri(cap))
+        u2 = uri.from_string(cap)
+        self.failUnlessReallyEqual(u1, u2)
+        u3 = uri.from_string_mutable_filenode(cap)
+        self.failUnlessEqual(u3, u1)
+
+        u1 = uri.MDMFVerifierURI(self.storage_index, self.fingerprint)
+        cap = u1.to_string()
+        self.failUnless(uri.is_uri(cap))
+        u2 = uri.from_string(cap)
+        self.failUnlessReallyEqual(u1, u2)
+        u3 = uri.from_string_verifier(cap)
+        self.failUnlessEqual(u3, u1)
 
 
 class Dirnode(testutil.ReallyEqualMixin, unittest.TestCase):
@@ -486,3 +701,95 @@ class Dirnode(testutil.ReallyEqualMixin, unittest.TestCase):
         self.failUnlessReallyEqual(u1.get_verify_cap(), None)
         self.failUnlessReallyEqual(u1.get_storage_index(), None)
         self.failUnlessReallyEqual(u1.abbrev_si(), "<LIT>")
+
+    def test_mdmf(self):
+        writekey = "\x01" * 16
+        fingerprint = "\x02" * 32
+        uri1 = uri.WriteableMDMFFileURI(writekey, fingerprint)
+        d1 = uri.MDMFDirectoryURI(uri1)
+        self.failIf(d1.is_readonly())
+        self.failUnless(d1.is_mutable())
+        self.failUnless(IURI.providedBy(d1))
+        self.failUnless(IDirnodeURI.providedBy(d1))
+        d1_uri = d1.to_string()
+
+        d2 = uri.from_string(d1_uri)
+        self.failUnlessIsInstance(d2, uri.MDMFDirectoryURI)
+        self.failIf(d2.is_readonly())
+        self.failUnless(d2.is_mutable())
+        self.failUnless(IURI.providedBy(d2))
+        self.failUnless(IDirnodeURI.providedBy(d2))
+
+        # It doesn't make sense to ask for a deep immutable URI for a
+        # mutable directory, and we should get back a result to that
+        # effect.
+        d3 = uri.from_string(d2.to_string(), deep_immutable=True)
+        self.failUnlessIsInstance(d3, uri.UnknownURI)
+
+    def test_mdmf_attenuation(self):
+        writekey = "\x01" * 16
+        fingerprint = "\x02" * 32
+
+        uri1 = uri.WriteableMDMFFileURI(writekey, fingerprint)
+        d1 = uri.MDMFDirectoryURI(uri1)
+        self.failUnless(d1.is_mutable())
+        self.failIf(d1.is_readonly())
+        self.failUnless(IURI.providedBy(d1))
+        self.failUnless(IDirnodeURI.providedBy(d1))
+
+        d1_uri = d1.to_string()
+        d1_uri_from_fn = uri.MDMFDirectoryURI(d1.get_filenode_cap()).to_string()
+        self.failUnlessEqual(d1_uri_from_fn, d1_uri)
+
+        uri2 = uri.from_string(d1_uri)
+        self.failUnlessIsInstance(uri2, uri.MDMFDirectoryURI)
+        self.failUnless(IURI.providedBy(uri2))
+        self.failUnless(IDirnodeURI.providedBy(uri2))
+        self.failUnless(uri2.is_mutable())
+        self.failIf(uri2.is_readonly())
+
+        ro = uri2.get_readonly()
+        self.failUnlessIsInstance(ro, uri.ReadonlyMDMFDirectoryURI)
+        self.failUnless(ro.is_mutable())
+        self.failUnless(ro.is_readonly())
+        self.failUnless(IURI.providedBy(ro))
+        self.failUnless(IDirnodeURI.providedBy(ro))
+
+        ro_uri = ro.to_string()
+        n = uri.from_string(ro_uri, deep_immutable=True)
+        self.failUnlessIsInstance(n, uri.UnknownURI)
+
+        fn_cap = ro.get_filenode_cap()
+        fn_ro_cap = fn_cap.get_readonly()
+        d3 = uri.ReadonlyMDMFDirectoryURI(fn_ro_cap)
+        self.failUnlessEqual(ro.to_string(), d3.to_string())
+        self.failUnless(ro.is_mutable())
+        self.failUnless(ro.is_readonly())
+
+    def test_mdmf_verifier(self):
+        # I'm not sure what I want to write here yet.
+        writekey = "\x01" * 16
+        fingerprint = "\x02" * 32
+        uri1 = uri.WriteableMDMFFileURI(writekey, fingerprint)
+        d1 = uri.MDMFDirectoryURI(uri1)
+        v1 = d1.get_verify_cap()
+        self.failUnlessIsInstance(v1, uri.MDMFDirectoryURIVerifier)
+        self.failIf(v1.is_mutable())
+
+        d2 = uri.from_string(d1.to_string())
+        v2 = d2.get_verify_cap()
+        self.failUnlessIsInstance(v2, uri.MDMFDirectoryURIVerifier)
+        self.failIf(v2.is_mutable())
+        self.failUnlessEqual(v2.to_string(), v1.to_string())
+
+        # Now attenuate and make sure that works correctly.
+        r3 = d2.get_readonly()
+        v3 = r3.get_verify_cap()
+        self.failUnlessIsInstance(v3, uri.MDMFDirectoryURIVerifier)
+        self.failIf(v3.is_mutable())
+        self.failUnlessEqual(v3.to_string(), v1.to_string())
+        r4 = uri.from_string(r3.to_string())
+        v4 = r4.get_verify_cap()
+        self.failUnlessIsInstance(v4, uri.MDMFDirectoryURIVerifier)
+        self.failIf(v4.is_mutable())
+        self.failUnlessEqual(v4.to_string(), v3.to_string())

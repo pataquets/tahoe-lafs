@@ -17,7 +17,7 @@ from allmydata.util.deferredutil import DeferredListShouldSucceed
 from allmydata.test.no_network import GridTestMixin
 from allmydata.test.common_util import ShouldFailMixin
 from allmydata.util.happinessutil import servers_of_happiness, \
-                                         shares_by_server, merge_peers
+                                         shares_by_server, merge_servers
 from allmydata.storage_client import StorageFarmBroker
 from allmydata.storage.server import storage_index_to_dir
 
@@ -193,12 +193,12 @@ class FakeClient:
         self.num_servers = num_servers
         if type(mode) is str:
             mode = dict([i,mode] for i in range(num_servers))
-        peers = [ ("%20d"%fakeid, FakeStorageServer(mode[fakeid]))
-                  for fakeid in range(self.num_servers) ]
+        servers = [ ("%20d"%fakeid, FakeStorageServer(mode[fakeid]))
+                    for fakeid in range(self.num_servers) ]
         self.storage_broker = StorageFarmBroker(None, permute_peers=True)
-        for (serverid, server) in peers:
-            self.storage_broker.test_add_server(serverid, server)
-        self.last_peers = [p[1] for p in peers]
+        for (serverid, rref) in servers:
+            self.storage_broker.test_add_rref(serverid, rref)
+        self.last_servers = [s[1] for s in servers]
 
     def log(self, *args, **kwargs):
         pass
@@ -411,7 +411,7 @@ class ServerErrors(unittest.TestCase, ShouldFailMixin, SetDEPMixin):
     def test_first_error_all(self):
         self.make_node("first-fail")
         d = self.shouldFail(UploadUnhappinessError, "first_error_all",
-                            "peer selection failed",
+                            "server selection failed",
                             upload_data, self.u, DATA)
         def _check((f,)):
             self.failUnlessIn("placed 0 shares out of 100 total", str(f.value))
@@ -443,7 +443,7 @@ class ServerErrors(unittest.TestCase, ShouldFailMixin, SetDEPMixin):
     def test_second_error_all(self):
         self.make_node("second-fail")
         d = self.shouldFail(UploadUnhappinessError, "second_error_all",
-                            "peer selection failed",
+                            "server selection failed",
                             upload_data, self.u, DATA)
         def _check((f,)):
             self.failUnlessIn("placed 10 shares out of 100 total", str(f.value))
@@ -468,7 +468,7 @@ class FullServer(unittest.TestCase):
         d.addBoth(self._should_fail)
         return d
 
-class PeerSelection(unittest.TestCase):
+class ServerSelection(unittest.TestCase):
 
     def make_client(self, num_servers=50):
         self.node = FakeClient(mode="good", num_servers=num_servers)
@@ -497,8 +497,8 @@ class PeerSelection(unittest.TestCase):
         self.node.DEFAULT_ENCODING_PARAMETERS = p
 
     def test_one_each(self):
-        # if we have 50 shares, and there are 50 peers, and they all accept a
-        # share, we should get exactly one share per peer
+        # if we have 50 shares, and there are 50 servers, and they all accept
+        # a share, we should get exactly one share per server
 
         self.make_client()
         data = self.get_data(SIZE_LARGE)
@@ -507,35 +507,35 @@ class PeerSelection(unittest.TestCase):
         d.addCallback(extract_uri)
         d.addCallback(self._check_large, SIZE_LARGE)
         def _check(res):
-            for p in self.node.last_peers:
-                allocated = p.allocated
+            for s in self.node.last_servers:
+                allocated = s.allocated
                 self.failUnlessEqual(len(allocated), 1)
-                self.failUnlessEqual(p.queries, 1)
+                self.failUnlessEqual(s.queries, 1)
         d.addCallback(_check)
         return d
 
     def test_two_each(self):
-        # if we have 100 shares, and there are 50 peers, and they all accept
-        # all shares, we should get exactly two shares per peer
+        # if we have 100 shares, and there are 50 servers, and they all
+        # accept all shares, we should get exactly two shares per server
 
         self.make_client()
         data = self.get_data(SIZE_LARGE)
-        # if there are 50 peers, then happy needs to be <= 50
+        # if there are 50 servers, then happy needs to be <= 50
         self.set_encoding_parameters(50, 50, 100)
         d = upload_data(self.u, data)
         d.addCallback(extract_uri)
         d.addCallback(self._check_large, SIZE_LARGE)
         def _check(res):
-            for p in self.node.last_peers:
-                allocated = p.allocated
+            for s in self.node.last_servers:
+                allocated = s.allocated
                 self.failUnlessEqual(len(allocated), 2)
-                self.failUnlessEqual(p.queries, 2)
+                self.failUnlessEqual(s.queries, 2)
         d.addCallback(_check)
         return d
 
     def test_one_each_plus_one_extra(self):
-        # if we have 51 shares, and there are 50 peers, then one peer gets
-        # two shares and the rest get just one
+        # if we have 51 shares, and there are 50 servers, then one server
+        # gets two shares and the rest get just one
 
         self.make_client()
         data = self.get_data(SIZE_LARGE)
@@ -546,38 +546,38 @@ class PeerSelection(unittest.TestCase):
         def _check(res):
             got_one = []
             got_two = []
-            for p in self.node.last_peers:
-                allocated = p.allocated
+            for s in self.node.last_servers:
+                allocated = s.allocated
                 self.failUnless(len(allocated) in (1,2), len(allocated))
                 if len(allocated) == 1:
-                    self.failUnlessEqual(p.queries, 1)
-                    got_one.append(p)
+                    self.failUnlessEqual(s.queries, 1)
+                    got_one.append(s)
                 else:
-                    self.failUnlessEqual(p.queries, 2)
-                    got_two.append(p)
+                    self.failUnlessEqual(s.queries, 2)
+                    got_two.append(s)
             self.failUnlessEqual(len(got_one), 49)
             self.failUnlessEqual(len(got_two), 1)
         d.addCallback(_check)
         return d
 
     def test_four_each(self):
-        # if we have 200 shares, and there are 50 peers, then each peer gets
-        # 4 shares. The design goal is to accomplish this with only two
-        # queries per peer.
+        # if we have 200 shares, and there are 50 servers, then each server
+        # gets 4 shares. The design goal is to accomplish this with only two
+        # queries per server.
 
         self.make_client()
         data = self.get_data(SIZE_LARGE)
-        # if there are 50 peers, then happy should be no more than 50 if
-        # we want this to work.
+        # if there are 50 servers, then happy should be no more than 50 if we
+        # want this to work.
         self.set_encoding_parameters(100, 50, 200)
         d = upload_data(self.u, data)
         d.addCallback(extract_uri)
         d.addCallback(self._check_large, SIZE_LARGE)
         def _check(res):
-            for p in self.node.last_peers:
-                allocated = p.allocated
+            for s in self.node.last_servers:
+                allocated = s.allocated
                 self.failUnlessEqual(len(allocated), 4)
-                self.failUnlessEqual(p.queries, 2)
+                self.failUnlessEqual(s.queries, 2)
         d.addCallback(_check)
         return d
 
@@ -593,8 +593,8 @@ class PeerSelection(unittest.TestCase):
         d.addCallback(self._check_large, SIZE_LARGE)
         def _check(res):
             counts = {}
-            for p in self.node.last_peers:
-                allocated = p.allocated
+            for s in self.node.last_servers:
+                allocated = s.allocated
                 counts[len(allocated)] = counts.get(len(allocated), 0) + 1
             histogram = [counts.get(i, 0) for i in range(5)]
             self.failUnlessEqual(histogram, [0,0,0,2,1])
@@ -616,10 +616,10 @@ class PeerSelection(unittest.TestCase):
         d.addCallback(extract_uri)
         d.addCallback(self._check_large, SIZE_LARGE)
         def _check(res):
-            # we should have put one share each on the big peers, and zero
-            # shares on the small peers
+            # we should have put one share each on the big servers, and zero
+            # shares on the small servers
             total_allocated = 0
-            for p in self.node.last_peers:
+            for p in self.node.last_servers:
                 if p.mode == "good":
                     self.failUnlessEqual(len(p.allocated), 1)
                 elif p.mode == "small":
@@ -725,6 +725,13 @@ def is_happy_enough(servertoshnums, h, k):
     # print "HAAPP{Y"
     return True
 
+class FakeServerTracker:
+    def __init__(self, serverid, buckets):
+        self._serverid = serverid
+        self.buckets = buckets
+    def get_serverid(self):
+        return self._serverid
+
 class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
     ShouldFailMixin):
     def find_all_shares(self, unused=None):
@@ -750,8 +757,9 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
     def _do_upload_with_broken_servers(self, servers_to_break):
         """
         I act like a normal upload, but before I send the results of
-        Tahoe2PeerSelector to the Encoder, I break the first servers_to_break
-        PeerTrackers in the upload_servers part of the return result.
+        Tahoe2ServerSelector to the Encoder, I break the first
+        servers_to_break ServerTrackers in the upload_servers part of the
+        return result.
         """
         assert self.g, "I tried to find a grid at self.g, but failed"
         broker = self.g.clients[0].storage_broker
@@ -764,7 +772,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         encoder = encode.Encoder()
         encoder.set_encrypted_uploadable(uploadable)
         status = upload.UploadStatus()
-        selector = upload.Tahoe2PeerSelector("dglev", "test", status)
+        selector = upload.Tahoe2ServerSelector("dglev", "test", status)
         storage_index = encoder.get_param("storage_index")
         share_size = encoder.get_param("share_size")
         block_size = encoder.get_param("block_size")
@@ -772,18 +780,18 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         d = selector.get_shareholders(broker, sh, storage_index,
                                       share_size, block_size, num_segments,
                                       10, 3, 4)
-        def _have_shareholders((upload_servers, already_peers)):
-            assert servers_to_break <= len(upload_servers)
+        def _have_shareholders((upload_trackers, already_servers)):
+            assert servers_to_break <= len(upload_trackers)
             for index in xrange(servers_to_break):
-                server = list(upload_servers)[index]
-                for share in server.buckets.keys():
-                    server.buckets[share].abort()
+                tracker = list(upload_trackers)[index]
+                for share in tracker.buckets.keys():
+                    tracker.buckets[share].abort()
             buckets = {}
-            servermap = already_peers.copy()
-            for peer in upload_servers:
-                buckets.update(peer.buckets)
-                for bucket in peer.buckets:
-                    servermap.setdefault(bucket, set()).add(peer.peerid)
+            servermap = already_servers.copy()
+            for tracker in upload_trackers:
+                buckets.update(tracker.buckets)
+                for bucket in tracker.buckets:
+                    servermap.setdefault(bucket, set()).add(tracker.get_serverid())
             encoder.set_shareholders(buckets, servermap)
             d = encoder.start()
             return d
@@ -951,7 +959,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
             self.basedir = self.mktemp()
         _basedir()
         # This scenario is at
-        # http://allmydata.org/trac/tahoe/ticket/778#comment:52
+        # http://allmydata.org/trac/tahoe-lafs/ticket/778#comment:52
         #
         # The scenario in comment:52 proposes that we have a layout
         # like:
@@ -1043,7 +1051,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
 
     def test_problem_layout_comment_53(self):
         # This scenario is at
-        # http://allmydata.org/trac/tahoe/ticket/778#comment:53
+        # http://allmydata.org/trac/tahoe-lafs/ticket/778#comment:53
         #
         # Set up the grid to have one server
         def _change_basedir(ign):
@@ -1054,7 +1062,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # one share from our initial upload to each of these.
         # The counterintuitive ordering of the share numbers is to deal with
         # the permuting of these servers -- distributing the shares this
-        # way ensures that the Tahoe2PeerSelector sees them in the order
+        # way ensures that the Tahoe2ServerSelector sees them in the order
         # described below.
         d = self._setup_and_upload()
         d.addCallback(lambda ign:
@@ -1069,7 +1077,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # server 2: share 0
         # server 3: share 1
         # We change the 'happy' parameter in the client to 4.
-        # The Tahoe2PeerSelector will see the peers permuted as:
+        # The Tahoe2ServerSelector will see the servers permuted as:
         # 2, 3, 1, 0
         # Ideally, a reupload of our original data should work.
         def _reset_encoding_parameters(ign, happy=4):
@@ -1084,17 +1092,17 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
 
 
         # This scenario is basically comment:53, but changed so that the
-        # Tahoe2PeerSelector sees the server with all of the shares before
+        # Tahoe2ServerSelector sees the server with all of the shares before
         # any of the other servers.
         # The layout is:
         # server 2: shares 0 - 9
         # server 3: share 0
         # server 1: share 1
         # server 4: share 2
-        # The Tahoe2PeerSelector sees the peers permuted as:
+        # The Tahoe2ServerSelector sees the servers permuted as:
         # 2, 3, 1, 4
         # Note that server 0 has been replaced by server 4; this makes it
-        # easier to ensure that the last server seen by Tahoe2PeerSelector
+        # easier to ensure that the last server seen by Tahoe2ServerSelector
         # has only one share.
         d.addCallback(_change_basedir)
         d.addCallback(lambda ign:
@@ -1124,7 +1132,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
 
 
         # Try the same thing, but with empty servers after the first one
-        # We want to make sure that Tahoe2PeerSelector will redistribute
+        # We want to make sure that Tahoe2ServerSelector will redistribute
         # shares as necessary, not simply discover an existing layout.
         # The layout is:
         # server 2: shares 0 - 9
@@ -1184,7 +1192,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         return d
     test_problem_layout_ticket_1124.todo = "Fix this after 1.7.1 release."
 
-    def test_happiness_with_some_readonly_peers(self):
+    def test_happiness_with_some_readonly_servers(self):
         # Try the following layout
         # server 2: shares 0-9
         # server 4: share 0, read-only
@@ -1223,13 +1231,13 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         return d
 
 
-    def test_happiness_with_all_readonly_peers(self):
+    def test_happiness_with_all_readonly_servers(self):
         # server 3: share 1, read-only
         # server 1: share 2, read-only
         # server 2: shares 0-9, read-only
         # server 4: share 0, read-only
         # The idea with this test is to make sure that the survey of
-        # read-only peers doesn't undercount servers of happiness
+        # read-only servers doesn't undercount servers of happiness
         self.basedir = self.mktemp()
         d = self._setup_and_upload()
         d.addCallback(lambda ign:
@@ -1268,7 +1276,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # the layout presented to it satisfies "servers_of_happiness"
         # until a failure occurs)
         #
-        # This test simulates an upload where servers break after peer
+        # This test simulates an upload where servers break after server
         # selection, but before they are written to.
         def _set_basedir(ign=None):
             self.basedir = self.mktemp()
@@ -1283,7 +1291,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
             self._add_server(server_number=5)
         d.addCallback(_do_server_setup)
         # remove the original server
-        # (necessary to ensure that the Tahoe2PeerSelector will distribute
+        # (necessary to ensure that the Tahoe2ServerSelector will distribute
         #  all the shares)
         def _remove_server(ign):
             server = self.g.servers_by_number[0]
@@ -1341,9 +1349,9 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         return d
 
 
-    def test_merge_peers(self):
-        # merge_peers merges a list of upload_servers and a dict of
-        # shareid -> peerid mappings.
+    def test_merge_servers(self):
+        # merge_servers merges a list of upload_servers and a dict of
+        # shareid -> serverid mappings.
         shares = {
                     1 : set(["server1"]),
                     2 : set(["server2"]),
@@ -1353,14 +1361,10 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                  }
         # if not provided with a upload_servers argument, it should just
         # return the first argument unchanged.
-        self.failUnlessEqual(shares, merge_peers(shares, set([])))
-        class FakePeerTracker:
-            pass
+        self.failUnlessEqual(shares, merge_servers(shares, set([])))
         trackers = []
         for (i, server) in [(i, "server%d" % i) for i in xrange(5, 9)]:
-            t = FakePeerTracker()
-            t.peerid = server
-            t.buckets = [i]
+            t = FakeServerTracker(server, [i])
             trackers.append(t)
         expected = {
                     1 : set(["server1"]),
@@ -1372,7 +1376,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                     7 : set(["server7"]),
                     8 : set(["server8"]),
                    }
-        self.failUnlessEqual(expected, merge_peers(shares, set(trackers)))
+        self.failUnlessEqual(expected, merge_servers(shares, set(trackers)))
         shares2 = {}
         expected = {
                     5 : set(["server5"]),
@@ -1380,18 +1384,16 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                     7 : set(["server7"]),
                     8 : set(["server8"]),
                    }
-        self.failUnlessEqual(expected, merge_peers(shares2, set(trackers)))
+        self.failUnlessEqual(expected, merge_servers(shares2, set(trackers)))
         shares3 = {}
         trackers = []
         expected = {}
         for (i, server) in [(i, "server%d" % i) for i in xrange(10)]:
             shares3[i] = set([server])
-            t = FakePeerTracker()
-            t.peerid = server
-            t.buckets = [i]
+            t = FakeServerTracker(server, [i])
             trackers.append(t)
             expected[i] = set([server])
-        self.failUnlessEqual(expected, merge_peers(shares3, set(trackers)))
+        self.failUnlessEqual(expected, merge_servers(shares3, set(trackers)))
 
 
     def test_servers_of_happiness_utility_function(self):
@@ -1403,7 +1405,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # value for given inputs.
 
         # servers_of_happiness expects a dict of
-        # shnum => set(peerids) as a preexisting shares argument.
+        # shnum => set(serverids) as a preexisting shares argument.
         test1 = {
                  1 : set(["server1"]),
                  2 : set(["server2"]),
@@ -1417,34 +1419,28 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # should be 3 instead of 4.
         happy = servers_of_happiness(test1)
         self.failUnlessEqual(3, happy)
-        # The second argument of merge_peers should be a set of
-        # objects with peerid and buckets as attributes. In actual use,
-        # these will be PeerTracker instances, but for testing it is fine
-        # to make a FakePeerTracker whose job is to hold those instance
-        # variables to test that part.
-        class FakePeerTracker:
-            pass
+        # The second argument of merge_servers should be a set of objects with
+        # serverid and buckets as attributes. In actual use, these will be
+        # ServerTracker instances, but for testing it is fine to make a
+        # FakeServerTracker whose job is to hold those instance variables to
+        # test that part.
         trackers = []
         for (i, server) in [(i, "server%d" % i) for i in xrange(5, 9)]:
-            t = FakePeerTracker()
-            t.peerid = server
-            t.buckets = [i]
+            t = FakeServerTracker(server, [i])
             trackers.append(t)
         # Recall that test1 is a server layout with servers_of_happiness
         # = 3.  Since there isn't any overlap between the shnum ->
-        # set([peerid]) correspondences in test1 and those in trackers,
+        # set([serverid]) correspondences in test1 and those in trackers,
         # the result here should be 7.
-        test2 = merge_peers(test1, set(trackers))
+        test2 = merge_servers(test1, set(trackers))
         happy = servers_of_happiness(test2)
         self.failUnlessEqual(7, happy)
         # Now add an overlapping server to trackers. This is redundant,
         # so it should not cause the previously reported happiness value
         # to change.
-        t = FakePeerTracker()
-        t.peerid = "server1"
-        t.buckets = [1]
+        t = FakeServerTracker("server1", [1])
         trackers.append(t)
-        test2 = merge_peers(test1, set(trackers))
+        test2 = merge_servers(test1, set(trackers))
         happy = servers_of_happiness(test2)
         self.failUnlessEqual(7, happy)
         test = {}
@@ -1459,17 +1455,13 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
             4 : set(['server4']),
         }
         trackers = []
-        t = FakePeerTracker()
-        t.peerid = 'server5'
-        t.buckets = [4]
+        t = FakeServerTracker('server5', [4])
         trackers.append(t)
-        t = FakePeerTracker()
-        t.peerid = 'server6'
-        t.buckets = [3, 5]
+        t = FakeServerTracker('server6', [3, 5])
         trackers.append(t)
         # The value returned by servers_of_happiness is the size
         # of a maximum matching in the bipartite graph that
-        # servers_of_happiness() makes between peerids and share
+        # servers_of_happiness() makes between serverids and share
         # numbers. It should find something like this:
         # (server 1, share 1)
         # (server 2, share 2)
@@ -1479,7 +1471,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         #
         # and, since there are 5 edges in this matching, it should
         # return 5.
-        test2 = merge_peers(test, set(trackers))
+        test2 = merge_servers(test, set(trackers))
         happy = servers_of_happiness(test2)
         self.failUnlessEqual(5, happy)
         # Zooko's first puzzle:
@@ -1527,7 +1519,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         sbs = shares_by_server(test1)
         self.failUnlessEqual(set([1, 2, 3]), sbs["server1"])
         self.failUnlessEqual(set([4, 5]), sbs["server2"])
-        # This should fail unless the peerid part of the mapping is a set
+        # This should fail unless the serverid part of the mapping is a set
         test2 = {1: "server1"}
         self.shouldFail(AssertionError,
                        "test_shares_by_server",
@@ -1543,7 +1535,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         # server 2: empty
         # server 3: empty
         # server 4: empty
-        # The purpose of this test is to make sure that the peer selector
+        # The purpose of this test is to make sure that the server selector
         # knows about the shares on server 1, even though it is read-only.
         # It used to simply filter these out, which would cause the test
         # to fail when servers_of_happiness = 4.
@@ -1574,7 +1566,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
 
 
     def test_query_counting(self):
-        # If peer selection fails, Tahoe2PeerSelector prints out a lot
+        # If server selection fails, Tahoe2ServerSelector prints out a lot
         # of helpful diagnostic information, including query stats.
         # This test helps make sure that that information is accurate.
         self.basedir = self.mktemp()
@@ -1597,7 +1589,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                             c.upload, upload.Data("data" * 10000,
                                                   convergence="")))
         # Now try with some readonly servers. We want to make sure that
-        # the readonly peer share discovery phase is counted correctly.
+        # the readonly server share discovery phase is counted correctly.
         def _reset(ign):
             self.basedir = self.mktemp()
             self.g = None
@@ -1668,13 +1660,13 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         d.addCallback(lambda client:
             self.shouldFail(UploadUnhappinessError,
                             "test_upper_limit_on_readonly_queries",
-                            "sent 8 queries to 8 peers",
+                            "sent 8 queries to 8 servers",
                             client.upload,
                             upload.Data('data' * 10000, convergence="")))
         return d
 
 
-    def test_exception_messages_during_peer_selection(self):
+    def test_exception_messages_during_server_selection(self):
         # server 1: read-only, no shares
         # server 2: read-only, no shares
         # server 3: read-only, no shares
@@ -1707,7 +1699,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                             "total (10 homeless), want to place shares on at "
                             "least 4 servers such that any 3 of them have "
                             "enough shares to recover the file, "
-                            "sent 5 queries to 5 peers, 0 queries placed "
+                            "sent 5 queries to 5 servers, 0 queries placed "
                             "some shares, 5 placed none "
                             "(of which 5 placed none due to the server being "
                             "full and 0 placed none due to an error)",
@@ -1730,12 +1722,8 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         d.addCallback(lambda ign:
             self._add_server(server_number=2))
         def _break_server_2(ign):
-            server = self.g.servers_by_number[2].my_nodeid
-            # We have to break the server in servers_by_id,
-            # because the one in servers_by_number isn't wrapped,
-            # and doesn't look at its broken attribute when answering
-            # queries.
-            self.g.servers_by_id[server].broken = True
+            serverid = self.g.servers_by_number[2].my_nodeid
+            self.g.break_server(serverid)
         d.addCallback(_break_server_2)
         d.addCallback(lambda ign:
             self._add_server(server_number=3, readonly=True))
@@ -1752,7 +1740,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
                             "total (10 homeless), want to place shares on at "
                             "least 4 servers such that any 3 of them have "
                             "enough shares to recover the file, "
-                            "sent 5 queries to 5 peers, 0 queries placed "
+                            "sent 5 queries to 5 servers, 0 queries placed "
                             "some shares, 5 placed none "
                             "(of which 4 placed none due to the server being "
                             "full and 1 placed none due to an error)",
@@ -2013,9 +2001,9 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         return d
 
 
-    def test_peer_selector_bucket_abort(self):
-        # If peer selection for an upload fails due to an unhappy
-        # layout, the peer selection process should abort the buckets it
+    def test_server_selector_bucket_abort(self):
+        # If server selection for an upload fails due to an unhappy
+        # layout, the server selection process should abort the buckets it
         # allocates before failing, so that the space can be re-used.
         self.basedir = self.mktemp()
         self.set_up_grid(num_servers=5)
@@ -2028,7 +2016,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         d = defer.succeed(None)
         d.addCallback(lambda ignored:
             self.shouldFail(UploadUnhappinessError,
-                            "test_peer_selection_bucket_abort",
+                            "test_server_selection_bucket_abort",
                             "",
                             client.upload, upload.Data("data" * 10000,
                                                        convergence="")))
@@ -2083,7 +2071,7 @@ class EncodingParameters(GridTestMixin, unittest.TestCase, SetDEPMixin,
         return None
 
 # TODO:
-#  upload with exactly 75 peers (shares_of_happiness)
+#  upload with exactly 75 servers (shares_of_happiness)
 #  have a download fail
 #  cancel a download (need to implement more cancel stuff)
 

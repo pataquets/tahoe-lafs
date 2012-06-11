@@ -17,7 +17,7 @@ class CreateClientOptions(BasedirMixin, BaseOptions):
         ]
 
     def getSynopsis(self):
-        return "Usage:  %s create-client [options] [NODEDIR]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s create-client [options] [NODEDIR]" % (self.command_name,)
 
 
 class CreateNodeOptions(CreateClientOptions):
@@ -26,7 +26,7 @@ class CreateNodeOptions(CreateClientOptions):
         ]
 
     def getSynopsis(self):
-        return "Usage:  %s create-node [options] [NODEDIR]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s create-node [options] [NODEDIR]" % (self.command_name,)
 
 
 class CreateIntroducerOptions(BasedirMixin, BaseOptions):
@@ -37,7 +37,7 @@ class CreateIntroducerOptions(BasedirMixin, BaseOptions):
     ]
 
     def getSynopsis(self):
-        return "Usage:  %s create-introducer [options] NODEDIR" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s create-introducer [options] NODEDIR" % (self.command_name,)
 
 
 client_tac = """
@@ -150,6 +150,14 @@ def create_node(config, out=sys.stdout, err=sys.stderr):
     c.write("[helper]\n")
     c.write("# Shall this node run a helper service that clients can use?\n")
     c.write("enabled = false\n")
+    c.write("\n")
+
+    c.write("[drop_upload]\n")
+    c.write("# Shall this node automatically upload files created or modified in a local directory?\n")
+    c.write("enabled = false\n")
+    c.write("# This must be a mutable directory writecap.\n")
+    c.write("upload.dircap =\n")
+    c.write("local.directory = ~/drop_upload\n")
     c.write("\n")
 
     c.close()

@@ -18,6 +18,7 @@ def put(options):
     from_file = options.from_file
     to_file = options.to_file
     mutable = options['mutable']
+    format = options['format']
     if options['quiet']:
         verbosity = 0
     else:
@@ -42,8 +43,8 @@ def put(options):
         #  DIRCAP:./subdir/foo : DIRCAP/subdir/foo
         #  MUTABLE-FILE-WRITECAP : filecap
 
-        # FIXME: this shouldn't rely on a particular prefix.
-        if to_file.startswith("URI:SSK:"):
+        # FIXME: don't hardcode cap format.
+        if to_file.startswith("URI:MDMF:") or to_file.startswith("URI:SSK:"):
             url = nodeurl + "uri/%s" % urllib.quote(to_file)
         else:
             try:
@@ -62,8 +63,15 @@ def put(options):
     else:
         # unlinked upload
         url = nodeurl + "uri"
+
+    queryargs = []
     if mutable:
-        url += "?mutable=true"
+        queryargs.append("mutable=true")
+    if format:
+        queryargs.append("format=%s" % format)
+    if queryargs:
+        url += "?" + "&".join(queryargs)
+
     if from_file:
         infileobj = open(os.path.expanduser(from_file), "rb")
     else:

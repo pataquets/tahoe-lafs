@@ -29,6 +29,7 @@ from allmydata.mutable.common import NotWriteableError
 
 from allmydata.util.consumer import download_to_data
 from allmydata.immutable import upload
+from allmydata.mutable import publish
 from allmydata.test.no_network import GridTestMixin
 from allmydata.test.common import ShouldFailMixin
 from allmydata.test.common_util import ReallyEqualMixin
@@ -59,10 +60,6 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
         d.addBoth(_done)
         return d
 
-    def failUnlessReallyEqual(self, a, b, msg=None):
-        self.failUnlessEqual(a, b, msg=msg)
-        self.failUnlessEqual(type(a), type(b), msg=msg)
-
     def _set_up(self, basedir, num_clients=1, num_servers=10):
         self.basedir = "sftp/" + basedir
         self.set_up_grid(num_clients=num_clients, num_servers=num_servers)
@@ -80,7 +77,8 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
         return d
 
     def _set_up_tree(self):
-        d = self.client.create_mutable_file("mutable file contents")
+        u = publish.MutableData("mutable file contents")
+        d = self.client.create_mutable_file(u)
         d.addCallback(lambda node: self.root.set_node(u"mutable", node))
         def _created_mutable(n):
             self.mutable = n
@@ -211,7 +209,7 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
 
     def test_convert_error(self):
         self.failUnlessReallyEqual(sftpd._convert_error(None, "request"), None)
-        
+
         d = defer.succeed(None)
         d.addCallback(lambda ign:
             self.shouldFailWithSFTPError(sftp.FX_FAILURE, "_convert_error SFTPError",
@@ -915,6 +913,9 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
                       self.handler.openFile("small", sftp.FXF_READ | sftp.FXF_WRITE, {}))
         def _read_write(rwf):
             d2 = rwf.writeChunk(8, "0123")
+            # test immediate read starting after the old end-of-file
+            d2.addCallback(lambda ign: rwf.readChunk(11, 1))
+            d2.addCallback(lambda data: self.failUnlessReallyEqual(data, "3"))
             d2.addCallback(lambda ign: rwf.readChunk(0, 100))
             d2.addCallback(lambda data: self.failUnlessReallyEqual(data, "012345670123"))
             d2.addCallback(lambda ign: rwf.close())
@@ -1001,7 +1002,7 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
         d.addCallback(lambda ign:
             self.shouldFailWithSFTPError(sftp.FX_NO_SUCH_FILE, "removefile ''",
                                          self.handler.removeFile, ""))
-            
+
         # removing a directory should fail
         d.addCallback(lambda ign:
             self.shouldFailWithSFTPError(sftp.FX_PERMISSION_DENIED, "removeFile tiny_lit_dir",
@@ -1331,49 +1332,69 @@ class Handler(GridTestMixin, ShouldFailMixin, ReallyEqualMixin, unittest.TestCas
         return d
 
     def test_execCommand_and_openShell(self):
-        class FakeProtocol:
+        class MockProtocol:
             def __init__(self):
                 self.output = ""
+                self.error = ""
                 self.reason = None
+
             def write(self, data):
+                return self.outReceived(data)
+
+            def outReceived(self, data):
                 self.output += data
                 return defer.succeed(None)
+
+            def errReceived(self, data):
+                self.error += data
+                return defer.succeed(None)
+
             def processEnded(self, reason):
                 self.reason = reason
                 return defer.succeed(None)
+
+        def _lines_end_in_crlf(s):
+            return s.replace('\r\n', '').find('\n') == -1 and s.endswith('\r\n')
 
         d = self._set_up("execCommand_and_openShell")
 
         d.addCallback(lambda ign: conch_interfaces.ISession(self.handler))
         def _exec_df(session):
-            protocol = FakeProtocol()
+            protocol = MockProtocol()
             d2 = session.execCommand(protocol, "df -P -k /")
             d2.addCallback(lambda ign: self.failUnlessIn("1024-blocks", protocol.output))
+            d2.addCallback(lambda ign: self.failUnless(_lines_end_in_crlf(protocol.output), protocol.output))
+            d2.addCallback(lambda ign: self.failUnlessEqual(protocol.error, ""))
             d2.addCallback(lambda ign: self.failUnless(isinstance(protocol.reason.value, ProcessDone)))
             d2.addCallback(lambda ign: session.eofReceived())
             d2.addCallback(lambda ign: session.closed())
             return d2
         d.addCallback(_exec_df)
 
-        d.addCallback(lambda ign: conch_interfaces.ISession(self.handler))
-        def _exec_error(session):
-            protocol = FakeProtocol()
-            d2 = session.execCommand(protocol, "error")
-            d2.addCallback(lambda ign: session.windowChanged(None))
-            d2.addCallback(lambda ign: self.failUnlessEqual("", protocol.output))
+        def _check_unsupported(protocol):
+            d2 = defer.succeed(None)
+            d2.addCallback(lambda ign: self.failUnlessEqual(protocol.output, ""))
+            d2.addCallback(lambda ign: self.failUnlessIn("only the SFTP protocol", protocol.error))
+            d2.addCallback(lambda ign: self.failUnless(_lines_end_in_crlf(protocol.error), protocol.error))
             d2.addCallback(lambda ign: self.failUnless(isinstance(protocol.reason.value, ProcessTerminated)))
             d2.addCallback(lambda ign: self.failUnlessEqual(protocol.reason.value.exitCode, 1))
+            return d2
+
+        d.addCallback(lambda ign: conch_interfaces.ISession(self.handler))
+        def _exec_error(session):
+            protocol = MockProtocol()
+            d2 = session.execCommand(protocol, "error")
+            d2.addCallback(lambda ign: session.windowChanged(None))
+            d2.addCallback(lambda ign: _check_unsupported(protocol))
             d2.addCallback(lambda ign: session.closed())
             return d2
         d.addCallback(_exec_error)
 
         d.addCallback(lambda ign: conch_interfaces.ISession(self.handler))
         def _openShell(session):
-            protocol = FakeProtocol()
+            protocol = MockProtocol()
             d2 = session.openShell(protocol)
-            d2.addCallback(lambda ign: self.failUnlessIn("only SFTP", protocol.output))
-            d2.addCallback(lambda ign: self.failUnless(isinstance(protocol.reason.value, ProcessTerminated)))
-            d2.addCallback(lambda ign: self.failUnlessEqual(protocol.reason.value.exitCode, 1))
+            d2.addCallback(lambda ign: _check_unsupported(protocol))
             d2.addCallback(lambda ign: session.closed())
             return d2
         d.addCallback(_openShell)

@@ -1,4 +1,3 @@
-
 import os.path, re, urllib, time
 import simplejson
 from StringIO import StringIO
@@ -19,13 +18,14 @@ from allmydata.nodemaker import NodeMaker
 from allmydata.unknown import UnknownNode
 from allmydata.web import status, common
 from allmydata.scripts.debug import CorruptShareOptions, corrupt_share
-from allmydata.util import fileutil, base32
+from allmydata.util import fileutil, base32, hashutil
 from allmydata.util.consumer import download_to_data
 from allmydata.util.netstring import split_netstring
 from allmydata.util.encodingutil import to_str
 from allmydata.test.common import FakeCHKFileNode, FakeMutableFileNode, \
-     create_chk_filenode, WebErrorMixin, ShouldFailMixin, make_mutable_file_uri
-from allmydata.interfaces import IMutableFileNode
+     create_chk_filenode, WebErrorMixin, ShouldFailMixin, \
+     make_mutable_file_uri, create_mutable_filenode
+from allmydata.interfaces import IMutableFileNode, SDMF_VERSION, MDMF_VERSION
 from allmydata.mutable import servermap, publish, retrieve
 import allmydata.test.common_util as testutil
 from allmydata.test.no_network import GridTestMixin
@@ -48,19 +48,28 @@ class FakeStatsProvider:
         return stats
 
 class FakeNodeMaker(NodeMaker):
+    encoding_params = {
+        'k': 3,
+        'n': 10,
+        'happy': 7,
+        'max_segment_size':128*1024 # 1024=KiB
+    }
     def _create_lit(self, cap):
         return FakeCHKFileNode(cap)
     def _create_immutable(self, cap):
         return FakeCHKFileNode(cap)
     def _create_mutable(self, cap):
-        return FakeMutableFileNode(None, None, None, None).init_from_cap(cap)
-    def create_mutable_file(self, contents="", keysize=None):
-        n = FakeMutableFileNode(None, None, None, None)
-        return n.create(contents)
+        return FakeMutableFileNode(None,
+                                   None,
+                                   self.encoding_params, None).init_from_cap(cap)
+    def create_mutable_file(self, contents="", keysize=None,
+                            version=SDMF_VERSION):
+        n = FakeMutableFileNode(None, None, self.encoding_params, None)
+        return n.create(contents, version=version)
 
 class FakeUploader(service.Service):
     name = "uploader"
-    def upload(self, uploadable, history=None):
+    def upload(self, uploadable):
         d = uploadable.get_size()
         d.addCallback(lambda size: uploadable.read(size))
         def _got_data(datav):
@@ -74,38 +83,50 @@ class FakeUploader(service.Service):
     def get_helper_info(self):
         return (None, False)
 
+class FakeIServer:
+    def __init__(self, binaryserverid):
+        self.binaryserverid = binaryserverid
+    def get_name(self): return "short"
+    def get_longname(self): return "long"
+    def get_serverid(self): return self.binaryserverid
+
 def build_one_ds():
     ds = DownloadStatus("storage_index", 1234)
     now = time.time()
 
-    ds.add_segment_request(0, now)
-    # segnum, when, start,len, decodetime
-    ds.add_segment_delivery(0, now+1, 0, 100, 0.5)
-    ds.add_segment_request(1, now+2)
-    ds.add_segment_error(1, now+3)
+    serverA = FakeIServer(hashutil.tagged_hash("foo", "serverid_a")[:20])
+    serverB = FakeIServer(hashutil.tagged_hash("foo", "serverid_b")[:20])
+    storage_index = hashutil.storage_index_hash("SI")
+    e0 = ds.add_segment_request(0, now)
+    e0.activate(now+0.5)
+    e0.deliver(now+1, 0, 100, 0.5) # when, start,len, decodetime
+    e1 = ds.add_segment_request(1, now+2)
+    e1.error(now+3)
     # two outstanding requests
-    ds.add_segment_request(2, now+4)
-    ds.add_segment_request(3, now+5)
+    e2 = ds.add_segment_request(2, now+4)
+    e3 = ds.add_segment_request(3, now+5)
+    del e2,e3 # hush pyflakes
 
     # simulate a segment which gets delivered faster than a system clock tick (ticket #1166)
-    ds.add_segment_request(4, now)
-    ds.add_segment_delivery(4, now, 0, 140, 0.5)
+    e = ds.add_segment_request(4, now)
+    e.activate(now)
+    e.deliver(now, 0, 140, 0.5)
 
-    e = ds.add_dyhb_sent("serverid_a", now)
+    e = ds.add_dyhb_request(serverA, now)
     e.finished([1,2], now+1)
-    e = ds.add_dyhb_sent("serverid_b", now+2) # left unfinished
+    e = ds.add_dyhb_request(serverB, now+2) # left unfinished
 
     e = ds.add_read_event(0, 120, now)
     e.update(60, 0.5, 0.1) # bytes, decrypttime, pausetime
     e.finished(now+1)
     e = ds.add_read_event(120, 30, now+2) # left unfinished
 
-    e = ds.add_request_sent("serverid_a", 1, 100, 20, now)
+    e = ds.add_block_request(serverA, 1, 100, 20, now)
     e.finished(20, now+1)
-    e = ds.add_request_sent("serverid_a", 1, 120, 30, now+1) # left unfinished
+    e = ds.add_block_request(serverB, 1, 120, 30, now+1) # left unfinished
 
     # make sure that add_read_event() can come first too
-    ds1 = DownloadStatus("storage_index", 1234)
+    ds1 = DownloadStatus(storage_index, 1234)
     e = ds1.add_read_event(0, 120, now)
     e.update(60, 0.5, 0.1) # bytes, decrypttime, pausetime
     e.finished(now+1)
@@ -149,9 +170,11 @@ class FakeClient(Client):
         self.history = FakeHistory()
         self.uploader = FakeUploader()
         self.uploader.setServiceParent(self)
+        self.blacklist = None
         self.nodemaker = FakeNodeMaker(None, self._secret_holder, None,
                                        self.uploader, None,
-                                       None, None)
+                                       None, None, None)
+        self.mutable_file_default = SDMF_VERSION
 
     def startService(self):
         return service.MultiService.startService(self)
@@ -196,6 +219,17 @@ class WebMixin(object):
             foo.set_uri(u"bar.txt", self._bar_txt_uri, self._bar_txt_uri)
             self._bar_txt_verifycap = n.get_verify_cap().to_string()
 
+            # sdmf
+            # XXX: Do we ever use this?
+            self.BAZ_CONTENTS, n, self._baz_txt_uri, self._baz_txt_readonly_uri = self.makefile_mutable(0)
+
+            foo.set_uri(u"baz.txt", self._baz_txt_uri, self._baz_txt_readonly_uri)
+
+            # mdmf
+            self.QUUX_CONTENTS, n, self._quux_txt_uri, self._quux_txt_readonly_uri = self.makefile_mutable(0, mdmf=True)
+            assert self._quux_txt_uri.startswith("URI:MDMF")
+            foo.set_uri(u"quux.txt", self._quux_txt_uri, self._quux_txt_readonly_uri)
+
             foo.set_uri(u"empty", res[3][1].get_uri(),
                         res[3][1].get_readonly_uri())
             sub_uri = res[4][1].get_uri()
@@ -227,6 +261,8 @@ class WebMixin(object):
             # public/
             # public/foo/
             # public/foo/bar.txt
+            # public/foo/baz.txt
+            # public/foo/quux.txt
             # public/foo/blockingfile
             # public/foo/empty/
             # public/foo/sub/
@@ -247,11 +283,22 @@ class WebMixin(object):
         n = create_chk_filenode(contents)
         return contents, n, n.get_uri()
 
+    def makefile_mutable(self, number, mdmf=False):
+        contents = "contents of mutable file %s\n" % number
+        n = create_mutable_filenode(contents, mdmf)
+        return contents, n, n.get_uri(), n.get_readonly_uri()
+
     def tearDown(self):
         return self.s.stopService()
 
     def failUnlessIsBarDotTxt(self, res):
         self.failUnlessReallyEqual(res, self.BAR_CONTENTS, res)
+
+    def failUnlessIsQuuxDotTxt(self, res):
+        self.failUnlessReallyEqual(res, self.QUUX_CONTENTS, res)
+
+    def failUnlessIsBazDotTxt(self, res):
+        self.failUnlessReallyEqual(res, self.BAZ_CONTENTS, res)
 
     def failUnlessIsBarJSON(self, res):
         data = simplejson.loads(res)
@@ -263,6 +310,25 @@ class WebMixin(object):
         self.failUnlessReallyEqual(to_str(data[1]["ro_uri"]), self._bar_txt_uri)
         self.failUnlessReallyEqual(to_str(data[1]["verify_uri"]), self._bar_txt_verifycap)
         self.failUnlessReallyEqual(data[1]["size"], len(self.BAR_CONTENTS))
+
+    def failUnlessIsQuuxJSON(self, res, readonly=False):
+        data = simplejson.loads(res)
+        self.failUnless(isinstance(data, list))
+        self.failUnlessEqual(data[0], "filenode")
+        self.failUnless(isinstance(data[1], dict))
+        metadata = data[1]
+        return self.failUnlessIsQuuxDotTxtMetadata(metadata, readonly)
+
+    def failUnlessIsQuuxDotTxtMetadata(self, metadata, readonly):
+        self.failUnless(metadata['mutable'])
+        if readonly:
+            self.failIf("rw_uri" in metadata)
+        else:
+            self.failUnless("rw_uri" in metadata)
+            self.failUnlessEqual(metadata['rw_uri'], self._quux_txt_uri)
+        self.failUnless("ro_uri" in metadata)
+        self.failUnlessEqual(metadata['ro_uri'], self._quux_txt_readonly_uri)
+        self.failUnlessReallyEqual(metadata['size'], len(self.QUUX_CONTENTS))
 
     def failUnlessIsFooJSON(self, res):
         data = simplejson.loads(res)
@@ -277,8 +343,8 @@ class WebMixin(object):
 
         kidnames = sorted([unicode(n) for n in data[1]["children"]])
         self.failUnlessEqual(kidnames,
-                             [u"bar.txt", u"blockingfile", u"empty",
-                              u"n\u00fc.txt", u"sub"])
+                             [u"bar.txt", u"baz.txt", u"blockingfile",
+                              u"empty", u"n\u00fc.txt", u"quux.txt", u"sub"])
         kids = dict( [(unicode(name),value)
                       for (name,value)
                       in data[1]["children"].iteritems()] )
@@ -299,6 +365,11 @@ class WebMixin(object):
                                    self._bar_txt_metadata["tahoe"]["linkcrtime"])
         self.failUnlessReallyEqual(to_str(kids[u"n\u00fc.txt"][1]["ro_uri"]),
                                    self._bar_txt_uri)
+        self.failUnlessIn("quux.txt", kids)
+        self.failUnlessReallyEqual(to_str(kids[u"quux.txt"][1]["rw_uri"]),
+                                   self._quux_txt_uri)
+        self.failUnlessReallyEqual(to_str(kids[u"quux.txt"][1]["ro_uri"]),
+                                   self._quux_txt_readonly_uri)
 
     def GET(self, urlpath, followRedirect=False, return_response=False,
             **kwargs):
@@ -556,10 +627,25 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         def _check_dl(res):
             self.failUnless("File Download Status" in res, res)
         d.addCallback(_check_dl)
-        d.addCallback(lambda res: self.GET("/status/down-%d?t=json" % dl_num))
+        d.addCallback(lambda res: self.GET("/status/down-%d/event_json" % dl_num))
         def _check_dl_json(res):
             data = simplejson.loads(res)
             self.failUnless(isinstance(data, dict))
+            self.failUnless("read" in data)
+            self.failUnlessEqual(data["read"][0]["length"], 120)
+            self.failUnlessEqual(data["segment"][0]["segment_length"], 100)
+            self.failUnlessEqual(data["segment"][2]["segment_number"], 2)
+            self.failUnlessEqual(data["segment"][2]["finish_time"], None)
+            phwr_id = base32.b2a(hashutil.tagged_hash("foo", "serverid_a")[:20])
+            cmpu_id = base32.b2a(hashutil.tagged_hash("foo", "serverid_b")[:20])
+            # serverids[] keys are strings, since that's what JSON does, but
+            # we'd really like them to be ints
+            self.failUnlessEqual(data["serverids"]["0"], "phwr")
+            self.failUnless(data["serverids"].has_key("1"), data["serverids"])
+            self.failUnlessEqual(data["serverids"]["1"], "cmpu", data["serverids"])
+            self.failUnlessEqual(data["server_info"][phwr_id]["short"], "phwr")
+            self.failUnlessEqual(data["server_info"][cmpu_id]["short"], "cmpu")
+            self.failUnless("dyhb" in data)
         d.addCallback(_check_dl_json)
         d.addCallback(lambda res: self.GET("/status/up-%d" % ul_num))
         def _check_ul(res):
@@ -756,6 +842,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                              self.PUT, base + "/@@name=/blah.txt", "")
         return d
 
+
     def test_GET_DIRURL_named_bad(self):
         base = "/file/%s" % urllib.quote(self._foo_uri)
         d = self.shouldFail2(error.Error, "test_PUT_DIRURL_named_bad",
@@ -798,6 +885,24 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessIsBarDotTxt)
         return d
 
+    def test_GET_FILE_URI_mdmf(self):
+        base = "/uri/%s" % urllib.quote(self._quux_txt_uri)
+        d = self.GET(base)
+        d.addCallback(self.failUnlessIsQuuxDotTxt)
+        return d
+
+    def test_GET_FILE_URI_mdmf_extensions(self):
+        base = "/uri/%s" % urllib.quote("%s:RANDOMSTUFF" % self._quux_txt_uri)
+        d = self.GET(base)
+        d.addCallback(self.failUnlessIsQuuxDotTxt)
+        return d
+
+    def test_GET_FILE_URI_mdmf_readonly(self):
+        base = "/uri/%s" % urllib.quote(self._quux_txt_readonly_uri)
+        d = self.GET(base)
+        d.addCallback(self.failUnlessIsQuuxDotTxt)
+        return d
+
     def test_GET_FILE_URI_badchild(self):
         base = "/uri/%s/boguschild" % urllib.quote(self._bar_txt_uri)
         errmsg = "Files have no children, certainly not named 'boguschild'"
@@ -814,6 +919,56 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                              self.PUT, base, "")
         return d
 
+    def test_PUT_FILE_URI_mdmf(self):
+        base = "/uri/%s" % urllib.quote(self._quux_txt_uri)
+        self._quux_new_contents = "new_contents"
+        d = self.GET(base)
+        d.addCallback(lambda res:
+            self.failUnlessIsQuuxDotTxt(res))
+        d.addCallback(lambda ignored:
+            self.PUT(base, self._quux_new_contents))
+        d.addCallback(lambda ignored:
+            self.GET(base))
+        d.addCallback(lambda res:
+            self.failUnlessReallyEqual(res, self._quux_new_contents))
+        return d
+
+    def test_PUT_FILE_URI_mdmf_extensions(self):
+        base = "/uri/%s" % urllib.quote("%s:EXTENSIONSTUFF" % self._quux_txt_uri)
+        self._quux_new_contents = "new_contents"
+        d = self.GET(base)
+        d.addCallback(lambda res: self.failUnlessIsQuuxDotTxt(res))
+        d.addCallback(lambda ignored: self.PUT(base, self._quux_new_contents))
+        d.addCallback(lambda ignored: self.GET(base))
+        d.addCallback(lambda res: self.failUnlessEqual(self._quux_new_contents,
+                                                       res))
+        return d
+
+    def test_PUT_FILE_URI_mdmf_readonly(self):
+        # We're not allowed to PUT things to a readonly cap.
+        base = "/uri/%s" % self._quux_txt_readonly_uri
+        d = self.GET(base)
+        d.addCallback(lambda res:
+            self.failUnlessIsQuuxDotTxt(res))
+        # What should we get here? We get a 500 error now; that's not right.
+        d.addCallback(lambda ignored:
+            self.shouldFail2(error.Error, "test_PUT_FILE_URI_mdmf_readonly",
+                             "400 Bad Request", "read-only cap",
+                             self.PUT, base, "new data"))
+        return d
+
+    def test_PUT_FILE_URI_sdmf_readonly(self):
+        # We're not allowed to put things to a readonly cap.
+        base = "/uri/%s" % self._baz_txt_readonly_uri
+        d = self.GET(base)
+        d.addCallback(lambda res:
+            self.failUnlessIsBazDotTxt(res))
+        d.addCallback(lambda ignored:
+            self.shouldFail2(error.Error, "test_PUT_FILE_URI_sdmf_readonly",
+                             "400 Bad Request", "read-only cap",
+                             self.PUT, base, "new_data"))
+        return d
+
     # TODO: version of this with a Unicode filename
     def test_GET_FILEURL_save(self):
         d = self.GET(self.public_url + "/foo/bar.txt?filename=bar.txt&save=true",
@@ -828,6 +983,41 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
     def test_GET_FILEURL_missing(self):
         d = self.GET(self.public_url + "/foo/missing")
         d.addBoth(self.should404, "test_GET_FILEURL_missing")
+        return d
+
+    def test_GET_FILEURL_info_mdmf(self):
+        d = self.GET("/uri/%s?t=info" % self._quux_txt_uri)
+        def _got(res):
+            self.failUnlessIn("mutable file (mdmf)", res)
+            self.failUnlessIn(self._quux_txt_uri, res)
+            self.failUnlessIn(self._quux_txt_readonly_uri, res)
+        d.addCallback(_got)
+        return d
+
+    def test_GET_FILEURL_info_mdmf_readonly(self):
+        d = self.GET("/uri/%s?t=info" % self._quux_txt_readonly_uri)
+        def _got(res):
+            self.failUnlessIn("mutable file (mdmf)", res)
+            self.failIfIn(self._quux_txt_uri, res)
+            self.failUnlessIn(self._quux_txt_readonly_uri, res)
+        d.addCallback(_got)
+        return d
+
+    def test_GET_FILEURL_info_sdmf(self):
+        d = self.GET("/uri/%s?t=info" % self._baz_txt_uri)
+        def _got(res):
+            self.failUnlessIn("mutable file (sdmf)", res)
+            self.failUnlessIn(self._baz_txt_uri, res)
+        d.addCallback(_got)
+        return d
+
+    def test_GET_FILEURL_info_mdmf_extensions(self):
+        d = self.GET("/uri/%s:STUFF?t=info" % self._quux_txt_uri)
+        def _got(res):
+            self.failUnlessIn("mutable file (mdmf)", res)
+            self.failUnlessIn(self._quux_txt_uri, res)
+            self.failUnlessIn(self._quux_txt_readonly_uri, res)
+        d.addCallback(_got)
         return d
 
     def test_PUT_overwrite_only_files(self):
@@ -871,6 +1061,35 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                                       self.NEWFILE_CONTENTS))
         return d
 
+    def test_PUT_NEWFILEURL_unlinked_mdmf(self):
+        # this should get us a few segments of an MDMF mutable file,
+        # which we can then test for.
+        contents = self.NEWFILE_CONTENTS * 300000
+        d = self.PUT("/uri?format=mdmf",
+                     contents)
+        def _got_filecap(filecap):
+            self.failUnless(filecap.startswith("URI:MDMF"))
+            return filecap
+        d.addCallback(_got_filecap)
+        d.addCallback(lambda filecap: self.GET("/uri/%s?t=json" % filecap))
+        d.addCallback(lambda json: self.failUnlessIn("MDMF", json))
+        return d
+
+    def test_PUT_NEWFILEURL_unlinked_sdmf(self):
+        contents = self.NEWFILE_CONTENTS * 300000
+        d = self.PUT("/uri?format=sdmf",
+                     contents)
+        d.addCallback(lambda filecap: self.GET("/uri/%s?t=json" % filecap))
+        d.addCallback(lambda json: self.failUnlessIn("SDMF", json))
+        return d
+
+    def test_PUT_NEWFILEURL_unlinked_bad_format(self):
+        contents = self.NEWFILE_CONTENTS * 300000
+        return self.shouldHTTPError("PUT_NEWFILEURL_unlinked_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.PUT, "/uri?format=foo",
+                                    contents)
+
     def test_PUT_NEWFILEURL_range_bad(self):
         headers = {"content-range": "bytes 1-10/%d" % len(self.NEWFILE_CONTENTS)}
         target = self.public_url + "/foo/new.txt"
@@ -903,12 +1122,10 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         return d
 
     def test_PUT_NEWFILEURL_mutable_toobig(self):
-        d = self.shouldFail2(error.Error, "test_PUT_NEWFILEURL_mutable_toobig",
-                             "413 Request Entity Too Large",
-                             "SDMF is limited to one segment, and 10001 > 10000",
-                             self.PUT,
-                             self.public_url + "/foo/new.txt?mutable=true",
-                             "b" * (self.s.MUTABLE_SIZELIMIT+1))
+        # It is okay to upload large mutable files, so we should be able
+        # to do that.
+        d = self.PUT(self.public_url + "/foo/new.txt?mutable=true",
+                     "b" * (self.s.MUTABLE_SIZELIMIT + 1))
         return d
 
     def test_PUT_NEWFILEURL_replace(self):
@@ -1003,6 +1220,35 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(_check1)
         return d
 
+    def test_GET_FILEURL_json_mutable_type(self):
+        # The JSON should include format, which says whether the
+        # file is SDMF or MDMF
+        d = self.PUT("/uri?format=mdmf",
+                     self.NEWFILE_CONTENTS * 300000)
+        d.addCallback(lambda filecap: self.GET("/uri/%s?t=json" % filecap))
+        def _got_json(json, version):
+            data = simplejson.loads(json)
+            assert "filenode" == data[0]
+            data = data[1]
+            assert isinstance(data, dict)
+
+            self.failUnlessIn("format", data)
+            self.failUnlessEqual(data["format"], version)
+
+        d.addCallback(_got_json, "MDMF")
+        # Now make an SDMF file and check that it is reported correctly.
+        d.addCallback(lambda ignored:
+            self.PUT("/uri?format=sdmf",
+                      self.NEWFILE_CONTENTS * 300000))
+        d.addCallback(lambda filecap: self.GET("/uri/%s?t=json" % filecap))
+        d.addCallback(_got_json, "SDMF")
+        return d
+
+    def test_GET_FILEURL_json_mdmf(self):
+        d = self.GET("/uri/%s?t=json" % urllib.quote(self._quux_txt_uri))
+        d.addCallback(self.failUnlessIsQuuxJSON)
+        return d
+
     def test_GET_FILEURL_json_missing(self):
         d = self.GET(self.public_url + "/foo/missing?json")
         d.addBoth(self.should404, "test_GET_FILEURL_json_missing")
@@ -1035,17 +1281,39 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnless(CSS_STYLE.search(res), res)
         d.addCallback(_check)
         return d
-    
+
     def test_GET_FILEURL_uri_missing(self):
         d = self.GET(self.public_url + "/foo/missing?t=uri")
         d.addBoth(self.should404, "test_GET_FILEURL_uri_missing")
         return d
 
-    def test_GET_DIRECTORY_html_banner(self):
+    def _check_upload_and_mkdir_forms(self, html):
+        # We should have a form to create a file, with radio buttons that allow
+        # the user to toggle whether it is a CHK/LIT (default), SDMF, or MDMF file.
+        self.failUnlessIn('name="t" value="upload"', html)
+        self.failUnlessIn('input checked="checked" type="radio" id="upload-chk" value="chk" name="format"', html)
+        self.failUnlessIn('input type="radio" id="upload-sdmf" value="sdmf" name="format"', html)
+        self.failUnlessIn('input type="radio" id="upload-mdmf" value="mdmf" name="format"', html)
+
+        # We should also have the ability to create a mutable directory, with
+        # radio buttons that allow the user to toggle whether it is an SDMF (default)
+        # or MDMF directory.
+        self.failUnlessIn('name="t" value="mkdir"', html)
+        self.failUnlessIn('input checked="checked" type="radio" id="mkdir-sdmf" value="sdmf" name="format"', html)
+        self.failUnlessIn('input type="radio" id="mkdir-mdmf" value="mdmf" name="format"', html)
+
+    def test_GET_DIRECTORY_html(self):
         d = self.GET(self.public_url + "/foo", followRedirect=True)
-        def _check(res):
-            self.failUnlessIn('<div class="toolbar-item"><a href="../../..">Return to Welcome page</a></div>',res)
+        def _check(html):
+            self.failUnlessIn('<div class="toolbar-item"><a href="../../..">Return to Welcome page</a></div>', html)
+            self._check_upload_and_mkdir_forms(html)
+            self.failUnlessIn("quux", html)
         d.addCallback(_check)
+        return d
+
+    def test_GET_root_html(self):
+        d = self.GET("/")
+        d.addCallback(self._check_upload_and_mkdir_forms)
         return d
 
     def test_GET_DIRURL(self):
@@ -1063,24 +1331,28 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                r'\s+<td>',
                                r'<a href="%s">bar.txt</a>' % bar_url,
                                r'</td>',
-                               r'\s+<td>%d</td>' % len(self.BAR_CONTENTS),
+                               r'\s+<td align="right">%d</td>' % len(self.BAR_CONTENTS),
                                ])
             self.failUnless(re.search(get_bar, res), res)
-            for line in res.split("\n"):
-                # find the line that contains the delete button for bar.txt
-                if ("form action" in line and
-                    'value="delete"' in line and
-                    'value="bar.txt"' in line):
-                    # the form target should use a relative URL
-                    foo_url = urllib.quote("%s/uri/%s/" % (ROOT, self._foo_uri))
-                    self.failUnless(('action="%s"' % foo_url) in line, line)
-                    # and the when_done= should too
-                    #done_url = urllib.quote(???)
-                    #self.failUnless(('name="when_done" value="%s"' % done_url)
-                    #                in line, line)
-                    break
-            else:
-                self.fail("unable to find delete-bar.txt line", res)
+            for label in ['unlink', 'rename']:
+                for line in res.split("\n"):
+                    # find the line that contains the relevant button for bar.txt
+                    if ("form action" in line and
+                        ('value="%s"' % (label,)) in line and
+                        'value="bar.txt"' in line):
+                        # the form target should use a relative URL
+                        foo_url = urllib.quote("%s/uri/%s/" % (ROOT, self._foo_uri))
+                        self.failUnlessIn('action="%s"' % foo_url, line)
+                        # and the when_done= should too
+                        #done_url = urllib.quote(???)
+                        #self.failUnlessIn('name="when_done" value="%s"' % done_url, line)
+
+                        # 'unlink' needs to use POST because it directly has a side effect
+                        if label == 'unlink':
+                            self.failUnlessIn('method="post"', line)
+                        break
+                else:
+                    self.fail("unable to find '%s bar.txt' line" % (label,), res)
 
             # the DIR reference just points to a URI
             sub_url = ("%s/uri/%s/" % (ROOT, urllib.quote(self._sub_uri)))
@@ -1089,7 +1361,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnless(re.search(get_sub, res), res)
         d.addCallback(_check)
 
-        # look at a readonly directory 
+        # look at a readonly directory
         d.addCallback(lambda res:
                       self.GET(self.public_url + "/reedownlee", followRedirect=True))
         def _check2(res):
@@ -1135,6 +1407,35 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
     def test_GET_DIRURL_json(self):
         d = self.GET(self.public_url + "/foo?t=json")
         d.addCallback(self.failUnlessIsFooJSON)
+        return d
+
+    def test_GET_DIRURL_json_format(self):
+        d = self.PUT(self.public_url + \
+                     "/foo/sdmf.txt?format=sdmf",
+                     self.NEWFILE_CONTENTS * 300000)
+        d.addCallback(lambda ignored:
+            self.PUT(self.public_url + \
+                     "/foo/mdmf.txt?format=mdmf",
+                     self.NEWFILE_CONTENTS * 300000))
+        # Now we have an MDMF and SDMF file in the directory. If we GET
+        # its JSON, we should see their encodings.
+        d.addCallback(lambda ignored:
+            self.GET(self.public_url + "/foo?t=json"))
+        def _got_json(json):
+            data = simplejson.loads(json)
+            assert data[0] == "dirnode"
+
+            data = data[1]
+            kids = data['children']
+
+            mdmf_data = kids['mdmf.txt'][1]
+            self.failUnlessIn("format", mdmf_data)
+            self.failUnlessEqual(mdmf_data["format"], "MDMF")
+
+            sdmf_data = kids['sdmf.txt'][1]
+            self.failUnlessIn("format", sdmf_data)
+            self.failUnlessEqual(sdmf_data["format"], "SDMF")
+        d.addCallback(_got_json)
         return d
 
 
@@ -1232,15 +1533,15 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.get_operation_results, "127", "json")
         def _got_json(stats):
             expected = {"count-immutable-files": 3,
-                        "count-mutable-files": 0,
+                        "count-mutable-files": 2,
                         "count-literal-files": 0,
-                        "count-files": 3,
+                        "count-files": 5,
                         "count-directories": 3,
                         "size-immutable-files": 57,
                         "size-literal-files": 0,
                         #"size-directories": 1912, # varies
                         #"largest-directory": 1590,
-                        "largest-directory-children": 5,
+                        "largest-directory-children": 7,
                         "largest-immutable-file": 19,
                         }
             for k,v in expected.iteritems():
@@ -1257,7 +1558,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         def _check(res):
             self.failUnless(res.endswith("\n"))
             units = [simplejson.loads(t) for t in res[:-1].split("\n")]
-            self.failUnlessReallyEqual(len(units), 7)
+            self.failUnlessReallyEqual(len(units), 9)
             self.failUnlessEqual(units[-1]["type"], "stats")
             first = units[0]
             self.failUnlessEqual(first["path"], [])
@@ -1268,6 +1569,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failIfEqual(baz["storage-index"], None)
             self.failIfEqual(baz["verifycap"], None)
             self.failIfEqual(baz["repaircap"], None)
+            # XXX: Add quux and baz to this test.
             return
         d.addCallback(_check)
         return d
@@ -1294,6 +1596,31 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessNodeKeysAre, [])
         return d
 
+    def test_PUT_NEWDIRURL_mdmf(self):
+        d = self.PUT(self.public_url + "/foo/newdir?t=mkdir&format=mdmf", "")
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), MDMF_VERSION))
+        return d
+
+    def test_PUT_NEWDIRURL_sdmf(self):
+        d = self.PUT(self.public_url + "/foo/newdir?t=mkdir&format=sdmf",
+                     "")
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), SDMF_VERSION))
+        return d
+
+    def test_PUT_NEWDIRURL_bad_format(self):
+        return self.shouldHTTPError("PUT_NEWDIRURL_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.PUT, self.public_url +
+                                    "/foo/newdir=?t=mkdir&format=foo", "")
+
     def test_POST_NEWDIRURL(self):
         d = self.POST2(self.public_url + "/foo/newdir?t=mkdir", "")
         d.addCallback(lambda res:
@@ -1302,21 +1629,53 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessNodeKeysAre, [])
         return d
 
+    def test_POST_NEWDIRURL_mdmf(self):
+        d = self.POST2(self.public_url + "/foo/newdir?t=mkdir&format=mdmf", "")
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), MDMF_VERSION))
+        return d
+
+    def test_POST_NEWDIRURL_sdmf(self):
+        d = self.POST2(self.public_url + "/foo/newdir?t=mkdir&format=sdmf", "")
+        d.addCallback(lambda res:
+            self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), SDMF_VERSION))
+        return d
+
+    def test_POST_NEWDIRURL_bad_format(self):
+        return self.shouldHTTPError("POST_NEWDIRURL_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST2, self.public_url + \
+                                    "/foo/newdir?t=mkdir&format=foo", "")
+
     def test_POST_NEWDIRURL_emptyname(self):
         # an empty pathname component (i.e. a double-slash) is disallowed
-        d = self.shouldFail2(error.Error, "test_POST_NEWDIRURL_emptyname",
+        d = self.shouldFail2(error.Error, "POST_NEWDIRURL_emptyname",
                              "400 Bad Request",
                              "The webapi does not allow empty pathname components, i.e. a double slash",
                              self.POST, self.public_url + "//?t=mkdir")
         return d
 
-    def test_POST_NEWDIRURL_initial_children(self):
+    def _do_POST_NEWDIRURL_initial_children_test(self, version=None):
         (newkids, caps) = self._create_initial_children()
-        d = self.POST2(self.public_url + "/foo/newdir?t=mkdir-with-children",
+        query = "/foo/newdir?t=mkdir-with-children"
+        if version == MDMF_VERSION:
+            query += "&format=mdmf"
+        elif version == SDMF_VERSION:
+            query += "&format=sdmf"
+        else:
+            version = SDMF_VERSION # for later
+        d = self.POST2(self.public_url + query,
                        simplejson.dumps(newkids))
         def _check(uri):
             n = self.s.create_node_from_uri(uri.strip())
             d2 = self.failUnlessNodeKeysAre(n, newkids.keys())
+            self.failUnlessEqual(n._node.get_version(), version)
             d2.addCallback(lambda ign:
                            self.failUnlessROChildURIIs(n, u"child-imm",
                                                        caps['filecap1']))
@@ -1353,6 +1712,23 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(lambda res: self._foo_node.get(u"newdir"))
         d.addCallback(self.failUnlessROChildURIIs, u"child-imm", caps['filecap1'])
         return d
+
+    def test_POST_NEWDIRURL_initial_children(self):
+        return self._do_POST_NEWDIRURL_initial_children_test()
+
+    def test_POST_NEWDIRURL_initial_children_mdmf(self):
+        return self._do_POST_NEWDIRURL_initial_children_test(MDMF_VERSION)
+
+    def test_POST_NEWDIRURL_initial_children_sdmf(self):
+        return self._do_POST_NEWDIRURL_initial_children_test(SDMF_VERSION)
+
+    def test_POST_NEWDIRURL_initial_children_bad_format(self):
+        (newkids, caps) = self._create_initial_children()
+        return self.shouldHTTPError("POST_NEWDIRURL_initial_children_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST2, self.public_url + \
+                                    "/foo/newdir?t=mkdir-with-children&format=foo",
+                                    simplejson.dumps(newkids))
 
     def test_POST_NEWDIRURL_immutable(self):
         (newkids, caps) = self._create_immutable_children()
@@ -1453,6 +1829,49 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                       self._foo_node.get_child_at_path(u"subdir/newdir"))
         d.addCallback(self.failUnlessNodeKeysAre, [])
         return d
+
+    def test_PUT_NEWDIRURL_mkdirs_mdmf(self):
+        d = self.PUT(self.public_url + "/foo/subdir/newdir?t=mkdir&format=mdmf", "")
+        d.addCallback(lambda ignored:
+            self.failUnlessNodeHasChild(self._foo_node, u"subdir"))
+        d.addCallback(lambda ignored:
+            self.failIfNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda ignored:
+            self._foo_node.get_child_at_path(u"subdir"))
+        def _got_subdir(subdir):
+            # XXX: What we want?
+            #self.failUnlessEqual(subdir._node.get_version(), MDMF_VERSION)
+            self.failUnlessNodeHasChild(subdir, u"newdir")
+            return subdir.get_child_at_path(u"newdir")
+        d.addCallback(_got_subdir)
+        d.addCallback(lambda newdir:
+            self.failUnlessEqual(newdir._node.get_version(), MDMF_VERSION))
+        return d
+
+    def test_PUT_NEWDIRURL_mkdirs_sdmf(self):
+        d = self.PUT(self.public_url + "/foo/subdir/newdir?t=mkdir&format=sdmf", "")
+        d.addCallback(lambda ignored:
+            self.failUnlessNodeHasChild(self._foo_node, u"subdir"))
+        d.addCallback(lambda ignored:
+            self.failIfNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda ignored:
+            self._foo_node.get_child_at_path(u"subdir"))
+        def _got_subdir(subdir):
+            # XXX: What we want?
+            #self.failUnlessEqual(subdir._node.get_version(), MDMF_VERSION)
+            self.failUnlessNodeHasChild(subdir, u"newdir")
+            return subdir.get_child_at_path(u"newdir")
+        d.addCallback(_got_subdir)
+        d.addCallback(lambda newdir:
+            self.failUnlessEqual(newdir._node.get_version(), SDMF_VERSION))
+        return d
+
+    def test_PUT_NEWDIRURL_mkdirs_bad_format(self):
+        return self.shouldHTTPError("PUT_NEWDIRURL_mkdirs_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.PUT, self.public_url + \
+                                    "/foo/subdir/newdir?t=mkdir&format=foo",
+                                    "")
 
     def test_DELETE_DIRURL(self):
         d = self.DELETE(self.public_url + "/foo")
@@ -1691,15 +2110,88 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         return d
 
     def test_POST_upload_no_link_mutable_toobig(self):
-        d = self.shouldFail2(error.Error,
-                             "test_POST_upload_no_link_mutable_toobig",
-                             "413 Request Entity Too Large",
-                             "SDMF is limited to one segment, and 10001 > 10000",
-                             self.POST,
-                             "/uri", t="upload", mutable="true",
-                             file=("new.txt",
-                                   "b" * (self.s.MUTABLE_SIZELIMIT+1)) )
+        # The SDMF size limit is no longer in place, so we should be
+        # able to upload mutable files that are as large as we want them
+        # to be.
+        d = self.POST("/uri", t="upload", mutable="true",
+                      file=("new.txt", "b" * (self.s.MUTABLE_SIZELIMIT + 1)))
         return d
+
+
+    def test_POST_upload_format_unlinked(self):
+        def _check_upload_unlinked(ign, format, uri_prefix):
+            filename = format + ".txt"
+            d = self.POST("/uri?t=upload&format=" + format,
+                          file=(filename, self.NEWFILE_CONTENTS * 300000))
+            def _got_results(results):
+                if format.upper() in ("SDMF", "MDMF"):
+                    # webapi.rst says this returns a filecap
+                    filecap = results
+                else:
+                    # for immutable, it returns an "upload results page", and
+                    # the filecap is buried inside
+                    line = [l for l in results.split("\n") if "URI: " in l][0]
+                    mo = re.search(r'<span>([^<]+)</span>', line)
+                    filecap = mo.group(1)
+                self.failUnless(filecap.startswith(uri_prefix),
+                                (uri_prefix, filecap))
+                return self.GET("/uri/%s?t=json" % filecap)
+            d.addCallback(_got_results)
+            def _got_json(json):
+                data = simplejson.loads(json)
+                data = data[1]
+                self.failUnlessIn("format", data)
+                self.failUnlessEqual(data["format"], format.upper())
+            d.addCallback(_got_json)
+            return d
+        d = defer.succeed(None)
+        d.addCallback(_check_upload_unlinked, "chk", "URI:CHK")
+        d.addCallback(_check_upload_unlinked, "CHK", "URI:CHK")
+        d.addCallback(_check_upload_unlinked, "sdmf", "URI:SSK")
+        d.addCallback(_check_upload_unlinked, "mdmf", "URI:MDMF")
+        return d
+
+    def test_POST_upload_bad_format_unlinked(self):
+        return self.shouldHTTPError("POST_upload_bad_format_unlinked",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST,
+                                    "/uri?t=upload&format=foo",
+                                    file=("foo.txt", self.NEWFILE_CONTENTS * 300000))
+
+    def test_POST_upload_format(self):
+        def _check_upload(ign, format, uri_prefix, fn=None):
+            filename = format + ".txt"
+            d = self.POST(self.public_url +
+                          "/foo?t=upload&format=" + format,
+                          file=(filename, self.NEWFILE_CONTENTS * 300000))
+            def _got_filecap(filecap):
+                if fn is not None:
+                    filenameu = unicode(filename)
+                    self.failUnlessURIMatchesRWChild(filecap, fn, filenameu)
+                self.failUnless(filecap.startswith(uri_prefix))
+                return self.GET(self.public_url + "/foo/%s?t=json" % filename)
+            d.addCallback(_got_filecap)
+            def _got_json(json):
+                data = simplejson.loads(json)
+                data = data[1]
+                self.failUnlessIn("format", data)
+                self.failUnlessEqual(data["format"], format.upper())
+            d.addCallback(_got_json)
+            return d
+
+        d = defer.succeed(None)
+        d.addCallback(_check_upload, "chk", "URI:CHK")
+        d.addCallback(_check_upload, "sdmf", "URI:SSK", self._foo_node)
+        d.addCallback(_check_upload, "mdmf", "URI:MDMF")
+        d.addCallback(_check_upload, "MDMF", "URI:MDMF")
+        return d
+
+    def test_POST_upload_bad_format(self):
+        return self.shouldHTTPError("POST_upload_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST, self.public_url + \
+                                    "/foo?t=upload&format=foo",
+                                    file=("foo.txt", self.NEWFILE_CONTENTS * 300000))
 
     def test_POST_upload_mutable(self):
         # this creates a mutable file
@@ -1825,32 +2317,24 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnlessReallyEqual(headers["content-type"], ["text/plain"])
         d.addCallback(_got_headers)
 
-        # make sure that size errors are displayed correctly for overwrite
-        d.addCallback(lambda res:
-                      self.shouldFail2(error.Error,
-                                       "test_POST_upload_mutable-toobig",
-                                       "413 Request Entity Too Large",
-                                       "SDMF is limited to one segment, and 10001 > 10000",
-                                       self.POST,
-                                       self.public_url + "/foo", t="upload",
-                                       mutable="true",
-                                       file=("new.txt",
-                                             "b" * (self.s.MUTABLE_SIZELIMIT+1)),
-                                       ))
-
+        # make sure that outdated size limits aren't enforced anymore.
+        d.addCallback(lambda ignored:
+            self.POST(self.public_url + "/foo", t="upload",
+                      mutable="true",
+                      file=("new.txt",
+                            "b" * (self.s.MUTABLE_SIZELIMIT+1))))
         d.addErrback(self.dump_error)
         return d
 
     def test_POST_upload_mutable_toobig(self):
-        d = self.shouldFail2(error.Error,
-                             "test_POST_upload_mutable_toobig",
-                             "413 Request Entity Too Large",
-                             "SDMF is limited to one segment, and 10001 > 10000",
-                             self.POST,
-                             self.public_url + "/foo",
-                             t="upload", mutable="true",
-                             file=("new.txt",
-                                   "b" * (self.s.MUTABLE_SIZELIMIT+1)) )
+        # SDMF had a size limti that was removed a while ago. MDMF has
+        # never had a size limit. Test to make sure that we do not
+        # encounter errors when trying to upload large mutable files,
+        # since there should be no coded prohibitions regarding large
+        # mutable files.
+        d = self.POST(self.public_url + "/foo",
+                      t="upload", mutable="true",
+                      file=("new.txt", "b" * (self.s.MUTABLE_SIZELIMIT + 1)))
         return d
 
     def dump_error(self, f):
@@ -1938,8 +2422,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         # make sure that nothing was added
         d.addCallback(lambda res:
                       self.failUnlessNodeKeysAre(self._foo_node,
-                                                 [u"bar.txt", u"blockingfile",
-                                                  u"empty", u"n\u00fc.txt",
+                                                 [u"bar.txt", u"baz.txt", u"blockingfile",
+                                                  u"empty", u"n\u00fc.txt", u"quux.txt",
                                                   u"sub"]))
         return d
 
@@ -2061,6 +2545,31 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(_check3)
         return d
 
+    def test_POST_FILEURL_mdmf_check(self):
+        quux_url = "/uri/%s" % urllib.quote(self._quux_txt_uri)
+        d = self.POST(quux_url, t="check")
+        def _check(res):
+            self.failUnlessIn("Healthy", res)
+        d.addCallback(_check)
+        quux_extension_url = "/uri/%s" % urllib.quote("%s:3:131073" % self._quux_txt_uri)
+        d.addCallback(lambda ignored:
+            self.POST(quux_extension_url, t="check"))
+        d.addCallback(_check)
+        return d
+
+    def test_POST_FILEURL_mdmf_check_and_repair(self):
+        quux_url = "/uri/%s" % urllib.quote(self._quux_txt_uri)
+        d = self.POST(quux_url, t="check", repair="true")
+        def _check(res):
+            self.failUnlessIn("Healthy", res)
+        d.addCallback(_check)
+        quux_extension_url = "/uri/%s" %\
+            urllib.quote("%s:3:131073" % self._quux_txt_uri)
+        d.addCallback(lambda ignored:
+            self.POST(quux_extension_url, t="check", repair="true"))
+        d.addCallback(_check)
+        return d
+
     def wait_for_operation(self, ignored, ophandle):
         url = "/operations/" + ophandle
         url += "?t=status&output=JSON"
@@ -2106,13 +2615,13 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.wait_for_operation, "123")
         def _check_json(data):
             self.failUnlessReallyEqual(data["finished"], True)
-            self.failUnlessReallyEqual(data["count-objects-checked"], 8)
-            self.failUnlessReallyEqual(data["count-objects-healthy"], 8)
+            self.failUnlessReallyEqual(data["count-objects-checked"], 10)
+            self.failUnlessReallyEqual(data["count-objects-healthy"], 10)
         d.addCallback(_check_json)
         d.addCallback(self.get_operation_results, "123", "html")
         def _check_html(res):
-            self.failUnless("Objects Checked: <span>8</span>" in res)
-            self.failUnless("Objects Healthy: <span>8</span>" in res)
+            self.failUnless("Objects Checked: <span>10</span>" in res)
+            self.failUnless("Objects Healthy: <span>10</span>" in res)
         d.addCallback(_check_html)
 
         d.addCallback(lambda res:
@@ -2141,22 +2650,22 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.wait_for_operation, "124")
         def _check_json(data):
             self.failUnlessReallyEqual(data["finished"], True)
-            self.failUnlessReallyEqual(data["count-objects-checked"], 8)
-            self.failUnlessReallyEqual(data["count-objects-healthy-pre-repair"], 8)
+            self.failUnlessReallyEqual(data["count-objects-checked"], 10)
+            self.failUnlessReallyEqual(data["count-objects-healthy-pre-repair"], 10)
             self.failUnlessReallyEqual(data["count-objects-unhealthy-pre-repair"], 0)
             self.failUnlessReallyEqual(data["count-corrupt-shares-pre-repair"], 0)
             self.failUnlessReallyEqual(data["count-repairs-attempted"], 0)
             self.failUnlessReallyEqual(data["count-repairs-successful"], 0)
             self.failUnlessReallyEqual(data["count-repairs-unsuccessful"], 0)
-            self.failUnlessReallyEqual(data["count-objects-healthy-post-repair"], 8)
+            self.failUnlessReallyEqual(data["count-objects-healthy-post-repair"], 10)
             self.failUnlessReallyEqual(data["count-objects-unhealthy-post-repair"], 0)
             self.failUnlessReallyEqual(data["count-corrupt-shares-post-repair"], 0)
         d.addCallback(_check_json)
         d.addCallback(self.get_operation_results, "124", "html")
         def _check_html(res):
-            self.failUnless("Objects Checked: <span>8</span>" in res)
+            self.failUnless("Objects Checked: <span>10</span>" in res)
 
-            self.failUnless("Objects Healthy (before repair): <span>8</span>" in res)
+            self.failUnless("Objects Healthy (before repair): <span>10</span>" in res)
             self.failUnless("Objects Unhealthy (before repair): <span>0</span>" in res)
             self.failUnless("Corrupt Shares (before repair): <span>0</span>" in res)
 
@@ -2164,7 +2673,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnless("Repairs Successful: <span>0</span>" in res)
             self.failUnless("Repairs Unsuccessful: <span>0</span>" in res)
 
-            self.failUnless("Objects Healthy (after repair): <span>8</span>" in res)
+            self.failUnless("Objects Healthy (after repair): <span>10</span>" in res)
             self.failUnless("Objects Unhealthy (after repair): <span>0</span>" in res)
             self.failUnless("Corrupt Shares (after repair): <span>0</span>" in res)
         d.addCallback(_check_html)
@@ -2183,6 +2692,26 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessNodeKeysAre, [])
         return d
 
+    def test_POST_mkdir_mdmf(self):
+        d = self.POST(self.public_url + "/foo?t=mkdir&name=newdir&format=mdmf")
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), MDMF_VERSION))
+        return d
+
+    def test_POST_mkdir_sdmf(self):
+        d = self.POST(self.public_url + "/foo?t=mkdir&name=newdir&format=sdmf")
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), SDMF_VERSION))
+        return d
+
+    def test_POST_mkdir_bad_format(self):
+        return self.shouldHTTPError("POST_mkdir_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST, self.public_url +
+                                    "/foo?t=mkdir&name=newdir&format=foo")
+
     def test_POST_mkdir_initial_children(self):
         (newkids, caps) = self._create_initial_children()
         d = self.POST2(self.public_url +
@@ -2195,6 +2724,45 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(lambda res: self._foo_node.get(u"newdir"))
         d.addCallback(self.failUnlessROChildURIIs, u"child-imm", caps['filecap1'])
         return d
+
+    def test_POST_mkdir_initial_children_mdmf(self):
+        (newkids, caps) = self._create_initial_children()
+        d = self.POST2(self.public_url +
+                       "/foo?t=mkdir-with-children&name=newdir&format=mdmf",
+                       simplejson.dumps(newkids))
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), MDMF_VERSION))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(self.failUnlessROChildURIIs, u"child-imm",
+                       caps['filecap1'])
+        return d
+
+    # XXX: Duplication.
+    def test_POST_mkdir_initial_children_sdmf(self):
+        (newkids, caps) = self._create_initial_children()
+        d = self.POST2(self.public_url +
+                       "/foo?t=mkdir-with-children&name=newdir&format=sdmf",
+                       simplejson.dumps(newkids))
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"newdir"))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(lambda node:
+            self.failUnlessEqual(node._node.get_version(), SDMF_VERSION))
+        d.addCallback(lambda res: self._foo_node.get(u"newdir"))
+        d.addCallback(self.failUnlessROChildURIIs, u"child-imm",
+                       caps['filecap1'])
+        return d
+
+    def test_POST_mkdir_initial_children_bad_format(self):
+        (newkids, caps) = self._create_initial_children()
+        return self.shouldHTTPError("POST_mkdir_initial_children_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST, self.public_url + \
+                                    "/foo?t=mkdir-with-children&name=newdir&format=foo",
+                                    simplejson.dumps(newkids))
 
     def test_POST_mkdir_immutable(self):
         (newkids, caps) = self._create_immutable_children()
@@ -2219,7 +2787,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
 
     def test_POST_mkdir_immutable_bad(self):
         (newkids, caps) = self._create_initial_children()
-        d = self.shouldFail2(error.Error, "test_POST_mkdir_immutable_bad",
+        d = self.shouldFail2(error.Error, "POST_mkdir_immutable_bad",
                              "400 Bad Request",
                              "needed to be immutable but was not",
                              self.POST2,
@@ -2251,6 +2819,29 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             uri.DirectoryURI.init_from_string(res)
         d.addCallback(_after_mkdir)
         return d
+
+    def test_POST_mkdir_no_parentdir_noredirect_mdmf(self):
+        d = self.POST("/uri?t=mkdir&format=mdmf")
+        def _after_mkdir(res):
+            u = uri.from_string(res)
+            # Check that this is an MDMF writecap
+            self.failUnlessIsInstance(u, uri.MDMFDirectoryURI)
+        d.addCallback(_after_mkdir)
+        return d
+
+    def test_POST_mkdir_no_parentdir_noredirect_sdmf(self):
+        d = self.POST("/uri?t=mkdir&format=sdmf")
+        def _after_mkdir(res):
+            u = uri.from_string(res)
+            self.failUnlessIsInstance(u, uri.DirectoryURI)
+        d.addCallback(_after_mkdir)
+        return d
+
+    def test_POST_mkdir_no_parentdir_noredirect_bad_format(self):
+        return self.shouldHTTPError("POST_mkdir_no_parentdir_noredirect_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.POST, self.public_url +
+                                    "/uri?t=mkdir&format=foo")
 
     def test_POST_mkdir_no_parentdir_noredirect2(self):
         # make sure form-based arguments (as on the welcome page) still work
@@ -2294,6 +2885,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         filecap3 = node3.get_readonly_uri()
         node4 = self.s.create_node_from_uri(make_mutable_file_uri())
         dircap = DirectoryNode(node4, None, None).get_uri()
+        mdmfcap = make_mutable_file_uri(mdmf=True)
         litdircap = "URI:DIR2-LIT:ge3dumj2mewdcotyfqydulbshj5x2lbm"
         emptydircap = "URI:DIR2-LIT:"
         newkids = {u"child-imm":        ["filenode", {"rw_uri": filecap1,
@@ -2310,6 +2902,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                                       "ro_uri": self._make_readonly(dircap)}],
                    u"dirchild-lit":     ["dirnode",  {"ro_uri": litdircap}],
                    u"dirchild-empty":   ["dirnode",  {"ro_uri": emptydircap}],
+                   u"child-mutable-mdmf": ["filenode", {"rw_uri": mdmfcap,
+                                                        "ro_uri": self._make_readonly(mdmfcap)}],
                    }
         return newkids, {'filecap1': filecap1,
                          'filecap2': filecap2,
@@ -2319,7 +2913,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                          'unknown_immcap': unknown_immcap,
                          'dircap': dircap,
                          'litdircap': litdircap,
-                         'emptydircap': emptydircap}
+                         'emptydircap': emptydircap,
+                         'mdmfcap': mdmfcap}
 
     def _create_immutable_children(self):
         contents, n, filecap1 = self.makefile(12)
@@ -2379,7 +2974,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         # the regular /uri?t=mkdir operation is specified to ignore its body.
         # Only t=mkdir-with-children pays attention to it.
         (newkids, caps) = self._create_initial_children()
-        d = self.shouldHTTPError("POST t=mkdir unexpected children",
+        d = self.shouldHTTPError("POST_mkdir_no_parentdir_unexpected_children",
                                  400, "Bad Request",
                                  "t=mkdir does not accept children=, "
                                  "try t=mkdir-with-children instead",
@@ -2388,7 +2983,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         return d
 
     def test_POST_noparent_bad(self):
-        d = self.shouldHTTPError("POST /uri?t=bogus", 400, "Bad Request",
+        d = self.shouldHTTPError("POST_noparent_bad",
+                                 400, "Bad Request",
                                  "/uri accepts only PUT, PUT?t=mkdir, "
                                  "POST?t=upload, and POST?t=mkdir",
                                  self.POST, "/uri?t=bogus")
@@ -2500,7 +3096,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         return d
 
     def test_POST_bad_t(self):
-        d = self.shouldFail2(error.Error, "POST_bad_t", "400 Bad Request",
+        d = self.shouldFail2(error.Error, "POST_bad_t",
+                             "400 Bad Request",
                              "POST to a directory with bad t=BOGUS",
                              self.POST, self.public_url + "/foo", t="BOGUS")
         return d
@@ -2611,13 +3208,20 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessIsBarDotTxt)
         return d
 
-    def test_POST_delete(self):
-        d = self.POST(self.public_url + "/foo", t="delete", name="bar.txt")
+    def test_POST_delete(self, command_name='delete'):
+        d = self._foo_node.list()
+        def _check_before(children):
+            self.failUnless(u"bar.txt" in children)
+        d.addCallback(_check_before)
+        d.addCallback(lambda res: self.POST(self.public_url + "/foo", t=command_name, name="bar.txt"))
         d.addCallback(lambda res: self._foo_node.list())
-        def _check(children):
+        def _check_after(children):
             self.failIf(u"bar.txt" in children)
-        d.addCallback(_check)
+        d.addCallback(_check_after)
         return d
+
+    def test_POST_unlink(self):
+        return self.test_POST_delete(command_name='unlink')
 
     def test_POST_rename_file(self):
         d = self.POST(self.public_url + "/foo", t="rename",
@@ -2836,8 +3440,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
 
     def test_PUT_DIRURL_bad_t(self):
         d = self.shouldFail2(error.Error, "test_PUT_DIRURL_bad_t",
-                                 "400 Bad Request", "PUT to a directory",
-                                 self.PUT, self.public_url + "/foo?t=BOGUS", "")
+                             "400 Bad Request", "PUT to a directory",
+                             self.PUT, self.public_url + "/foo?t=BOGUS", "")
         d.addCallback(lambda res:
                       self.failUnlessRWChildURIIs(self.public_root,
                                                   u"foo",
@@ -2853,6 +3457,46 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                                       contents))
         return d
 
+    def test_PUT_NEWFILEURL_mdmf(self):
+        new_contents = self.NEWFILE_CONTENTS * 300000
+        d = self.PUT(self.public_url + \
+                     "/foo/mdmf.txt?format=mdmf",
+                     new_contents)
+        d.addCallback(lambda ignored:
+            self.GET(self.public_url + "/foo/mdmf.txt?t=json"))
+        def _got_json(json):
+            data = simplejson.loads(json)
+            data = data[1]
+            self.failUnlessIn("format", data)
+            self.failUnlessEqual(data["format"], "MDMF")
+            self.failUnless(data['rw_uri'].startswith("URI:MDMF"))
+            self.failUnless(data['ro_uri'].startswith("URI:MDMF"))
+        d.addCallback(_got_json)
+        return d
+
+    def test_PUT_NEWFILEURL_sdmf(self):
+        new_contents = self.NEWFILE_CONTENTS * 300000
+        d = self.PUT(self.public_url + \
+                     "/foo/sdmf.txt?format=sdmf",
+                     new_contents)
+        d.addCallback(lambda ignored:
+            self.GET(self.public_url + "/foo/sdmf.txt?t=json"))
+        def _got_json(json):
+            data = simplejson.loads(json)
+            data = data[1]
+            self.failUnlessIn("format", data)
+            self.failUnlessEqual(data["format"], "SDMF")
+        d.addCallback(_got_json)
+        return d
+
+    def test_PUT_NEWFILEURL_bad_format(self):
+       new_contents = self.NEWFILE_CONTENTS * 300000
+       return self.shouldHTTPError("PUT_NEWFILEURL_bad_format",
+                                   400, "Bad Request", "Unknown format: foo",
+                                   self.PUT, self.public_url + \
+                                   "/foo/foo.txt?format=foo",
+                                   new_contents)
+
     def test_PUT_NEWFILEURL_uri_replace(self):
         contents, n, new_uri = self.makefile(8)
         d = self.PUT(self.public_url + "/foo/bar.txt?t=uri", new_uri)
@@ -2865,7 +3509,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
     def test_PUT_NEWFILEURL_uri_no_replace(self):
         contents, n, new_uri = self.makefile(8)
         d = self.PUT(self.public_url + "/foo/bar.txt?t=uri&replace=false", new_uri)
-        d.addBoth(self.shouldFail, error.Error, "PUT_NEWFILEURL_uri_no_replace",
+        d.addBoth(self.shouldFail, error.Error,
+                  "PUT_NEWFILEURL_uri_no_replace",
                   "409 Conflict",
                   "There was already a child by that name, and you asked me "
                   "to not replace it")
@@ -2962,6 +3607,29 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessIsEmptyJSON)
         return d
 
+    def test_PUT_mkdir_mdmf(self):
+        d = self.PUT("/uri?t=mkdir&format=mdmf", "")
+        def _got(res):
+            u = uri.from_string(res)
+            # Check that this is an MDMF writecap
+            self.failUnlessIsInstance(u, uri.MDMFDirectoryURI)
+        d.addCallback(_got)
+        return d
+
+    def test_PUT_mkdir_sdmf(self):
+        d = self.PUT("/uri?t=mkdir&format=sdmf", "")
+        def _got(res):
+            u = uri.from_string(res)
+            self.failUnlessIsInstance(u, uri.DirectoryURI)
+        d.addCallback(_got)
+        return d
+
+    def test_PUT_mkdir_bad_format(self):
+        return self.shouldHTTPError("PUT_mkdir_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.PUT, "/uri?t=mkdir&format=foo",
+                                    "")
+
     def test_POST_check(self):
         d = self.POST(self.public_url + "/foo", t="check", name="bar.txt")
         def _done(res):
@@ -2974,9 +3642,78 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(_done)
         return d
 
+
+    def test_PUT_update_at_offset(self):
+        file_contents = "test file" * 100000 # about 900 KiB
+        d = self.PUT("/uri?mutable=true", file_contents)
+        def _then(filecap):
+            self.filecap = filecap
+            new_data = file_contents[:100]
+            new = "replaced and so on"
+            new_data += new
+            new_data += file_contents[len(new_data):]
+            assert len(new_data) == len(file_contents)
+            self.new_data = new_data
+        d.addCallback(_then)
+        d.addCallback(lambda ignored:
+            self.PUT("/uri/%s?replace=True&offset=100" % self.filecap,
+                     "replaced and so on"))
+        def _get_data(filecap):
+            n = self.s.create_node_from_uri(filecap)
+            return n.download_best_version()
+        d.addCallback(_get_data)
+        d.addCallback(lambda results:
+            self.failUnlessEqual(results, self.new_data))
+        # Now try appending things to the file
+        d.addCallback(lambda ignored:
+            self.PUT("/uri/%s?offset=%d" % (self.filecap, len(self.new_data)),
+                     "puppies" * 100))
+        d.addCallback(_get_data)
+        d.addCallback(lambda results:
+            self.failUnlessEqual(results, self.new_data + ("puppies" * 100)))
+        # and try replacing the beginning of the file
+        d.addCallback(lambda ignored:
+            self.PUT("/uri/%s?offset=0" % self.filecap, "begin"))
+        d.addCallback(_get_data)
+        d.addCallback(lambda results:
+            self.failUnlessEqual(results, "begin"+self.new_data[len("begin"):]+("puppies"*100)))
+        return d
+
+    def test_PUT_update_at_invalid_offset(self):
+        file_contents = "test file" * 100000 # about 900 KiB
+        d = self.PUT("/uri?mutable=true", file_contents)
+        def _then(filecap):
+            self.filecap = filecap
+        d.addCallback(_then)
+        # Negative offsets should cause an error.
+        d.addCallback(lambda ignored:
+            self.shouldHTTPError("PUT_update_at_invalid_offset",
+                                 400, "Bad Request",
+                                 "Invalid offset",
+                                 self.PUT,
+                                 "/uri/%s?offset=-1" % self.filecap,
+                                 "foo"))
+        return d
+
+    def test_PUT_update_at_offset_immutable(self):
+        file_contents = "Test file" * 100000
+        d = self.PUT("/uri", file_contents)
+        def _then(filecap):
+            self.filecap = filecap
+        d.addCallback(_then)
+        d.addCallback(lambda ignored:
+            self.shouldHTTPError("PUT_update_at_offset_immutable",
+                                 400, "Bad Request",
+                                 "immutable",
+                                 self.PUT,
+                                 "/uri/%s?offset=50" % self.filecap,
+                                 "foo"))
+        return d
+
+
     def test_bad_method(self):
         url = self.webish_url + self.public_url + "/foo/bar.txt"
-        d = self.shouldHTTPError("test_bad_method",
+        d = self.shouldHTTPError("bad_method",
                                  501, "Not Implemented",
                                  "I don't know how to treat a BOGUS request.",
                                  client.getPage, url, method="BOGUS")
@@ -2984,14 +3721,14 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
 
     def test_short_url(self):
         url = self.webish_url + "/uri"
-        d = self.shouldHTTPError("test_short_url", 501, "Not Implemented",
+        d = self.shouldHTTPError("short_url", 501, "Not Implemented",
                                  "I don't know how to treat a DELETE request.",
                                  client.getPage, url, method="DELETE")
         return d
 
     def test_ophandle_bad(self):
         url = self.webish_url + "/operations/bogus?t=status"
-        d = self.shouldHTTPError("test_ophandle_bad", 404, "404 Not Found",
+        d = self.shouldHTTPError("ophandle_bad", 404, "404 Not Found",
                                  "unknown/expired handle 'bogus'",
                                  client.getPage, url)
         return d
@@ -3015,7 +3752,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             return d
         d.addCallback(_check1)
         d.addCallback(lambda ignored:
-                      self.shouldHTTPError("test_ophandle_cancel",
+                      self.shouldHTTPError("ophandle_cancel",
                                            404, "404 Not Found",
                                            "unknown/expired handle '128'",
                                            self.GET,
@@ -3035,7 +3772,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(lambda ign:
             self.clock.advance(2.0))
         d.addCallback(lambda ignored:
-                      self.shouldHTTPError("test_ophandle_retainfor",
+                      self.shouldHTTPError("ophandle_retainfor",
                                            404, "404 Not Found",
                                            "unknown/expired handle '129'",
                                            self.GET,
@@ -3050,7 +3787,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                       self.GET("/operations/130?t=status&output=JSON&release-after-complete=true"))
         # the release-after-complete=true will cause the handle to be expired
         d.addCallback(lambda ignored:
-                      self.shouldHTTPError("test_ophandle_release_after_complete",
+                      self.shouldHTTPError("ophandle_release_after_complete",
                                            404, "404 Not Found",
                                            "unknown/expired handle '130'",
                                            self.GET,
@@ -3092,7 +3829,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(lambda ign:
             self.clock.advance(96*60*60))
         d.addCallback(lambda ign:
-            self.shouldHTTPError("test_uncollected_ophandle_expired_after_100_hours",
+            self.shouldHTTPError("uncollected_ophandle_expired_after_100_hours",
                                  404, "404 Not Found",
                                  "unknown/expired handle '132'",
                                  self.GET,
@@ -3105,10 +3842,10 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             d = self.POST(self.public_url +
                           "/foo/?t=start-manifest&ophandle=%d" % ophandle,
                           followRedirect=True)
-            # By following the initial redirect, we collect the ophandle 
+            # By following the initial redirect, we collect the ophandle
             # we've just created.
             return d
-        # Create a collected ophandle, then collect it after 23 hours 
+        # Create a collected ophandle, then collect it after 23 hours
         # and 59 seconds to make sure that it is still there.
         d = _make_collected_ophandle(133)
         d.addCallback(lambda ign:
@@ -3126,7 +3863,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(lambda ign:
             self.clock.advance(24*60*60))
         d.addCallback(lambda ign:
-            self.shouldHTTPError("test_collected_ophandle_expired_after_1000_minutes",
+            self.shouldHTTPError("collected_ophandle_expired_after_1_day",
                                  404, "404 Not Found",
                                  "unknown/expired handle '134'",
                                  self.GET,
@@ -3243,7 +3980,8 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         def _stash_mutable_uri(n, which):
             self.uris[which] = n.get_uri()
             assert isinstance(self.uris[which], str)
-        d.addCallback(lambda ign: c0.create_mutable_file(DATA+"3"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(publish.MutableData(DATA+"3")))
         d.addCallback(_stash_mutable_uri, "corrupt")
         d.addCallback(lambda ign:
                       c0.upload(upload.Data("literal", convergence="")))
@@ -3389,7 +4127,8 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         def _stash_mutable_uri(n, which):
             self.uris[which] = n.get_uri()
             assert isinstance(self.uris[which], str)
-        d.addCallback(lambda ign: c0.create_mutable_file(DATA+"3"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(publish.MutableData(DATA+"3")))
         d.addCallback(_stash_mutable_uri, "corrupt")
 
         def _compute_fileurls(ignored):
@@ -3613,7 +4352,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d.addCallback(lambda ign: self.GET("%s%s?t=json" % (self.rourl, str(name))))
         d.addCallback(_check_json, expect_rw_uri=False)
-        
+
         # TODO: check that getting t=info from the Info link in the ro directory
         # works, and does not include the writecap URI.
         return d
@@ -3633,12 +4372,12 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         lonely_uri = "URI:LIT:n5xgk" # LIT for "one"
         mut_write_uri = "URI:SSK:vfvcbdfbszyrsaxchgevhmmlii:euw4iw7bbnkrrwpzuburbhppuxhc3gwxv26f6imekhz7zyw2ojnq"
         mut_read_uri = "URI:SSK-RO:e3mdrzfwhoq42hy5ubcz6rp3o4:ybyibhnp3vvwuq2vaw2ckjmesgkklfs6ghxleztqidihjyofgw7q"
-        
+
         # This method tests mainly dirnode, but we'd have to duplicate code in order to
         # test the dirnode and web layers separately.
-        
+
         # 'lonely' is a valid LIT child, 'ro' is a mutant child with an SSK-RO readcap,
-        # and 'write-in-ro' is a mutant child with an SSK writecap in the ro_uri field. 
+        # and 'write-in-ro' is a mutant child with an SSK writecap in the ro_uri field.
         # When the directory is read, the mutants should be silently disposed of, leaving
         # their lonely sibling.
         # We don't test the case of a retrieving a cap from the encrypted rw_uri field,
@@ -3665,7 +4404,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
                 u"write-in-ro": (mutant_write_in_ro_child, {}),
                 }
         d = c.create_immutable_dirnode(kids)
-        
+
         def _created(dn):
             self.failUnless(isinstance(dn, dirnode.DirectoryNode))
             self.failIf(dn.is_mutable())
@@ -3703,7 +4442,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
             self.failUnlessReallyEqual(numkids, 3)
             return self.rootnode.list()
         d.addCallback(_check_data)
-        
+
         # Now when we use the real directory listing code, the mutants should be absent.
         def _check_kids(children):
             self.failUnlessReallyEqual(sorted(children.keys()), [u"lonely"])
@@ -3725,7 +4464,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
                                   r'\s+<td>',
                                   r'<a href="[^"]+%s[^"]+">lonely</a>' % (urllib.quote(lonely_uri),),
                                   r'</td>',
-                                  r'\s+<td>%d</td>' % len("one"),
+                                  r'\s+<td align="right">%d</td>' % len("one"),
                                   ])
             self.failUnless(re.search(get_lonely, res), res)
 
@@ -4026,7 +4765,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         for shnum, serverid, fn in shares:
             sf = get_share_file(fn)
             num_leases = len(list(sf.get_leases()))
-        lease_counts.append( (fn, num_leases) )
+            lease_counts.append( (fn, num_leases) )
         return lease_counts
 
     def _assert_leasecount(self, lease_counts, expected):
@@ -4051,7 +4790,8 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         def _stash_mutable_uri(n, which):
             self.uris[which] = n.get_uri()
             assert isinstance(self.uris[which], str)
-        d.addCallback(lambda ign: c0.create_mutable_file(DATA+"2"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(publish.MutableData(DATA+"2")))
         d.addCallback(_stash_mutable_uri, "mutable")
 
         def _compute_fileurls(ignored):
@@ -4150,7 +4890,8 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
                                                         convergence="")))
         d.addCallback(_stash_uri, "small")
 
-        d.addCallback(lambda ign: c0.create_mutable_file("mutable"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(publish.MutableData("mutable")))
         d.addCallback(lambda fn: self.rootnode.set_node(u"mutable", fn))
         d.addCallback(_stash_uri, "mutable")
 
@@ -4411,6 +5152,146 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addBoth(_flush_errors)
 
         return d
+
+    def test_blacklist(self):
+        # download from a blacklisted URI, get an error
+        self.basedir = "web/Grid/blacklist"
+        self.set_up_grid()
+        c0 = self.g.clients[0]
+        c0_basedir = c0.basedir
+        fn = os.path.join(c0_basedir, "access.blacklist")
+        self.uris = {}
+        DATA = "off-limits " * 50
+
+        d = c0.upload(upload.Data(DATA, convergence=""))
+        def _stash_uri_and_create_dir(ur):
+            self.uri = ur.uri
+            self.url = "uri/"+self.uri
+            u = uri.from_string_filenode(self.uri)
+            self.si = u.get_storage_index()
+            childnode = c0.create_node_from_uri(self.uri, None)
+            return c0.create_dirnode({u"blacklisted.txt": (childnode,{}) })
+        d.addCallback(_stash_uri_and_create_dir)
+        def _stash_dir(node):
+            self.dir_node = node
+            self.dir_uri = node.get_uri()
+            self.dir_url = "uri/"+self.dir_uri
+        d.addCallback(_stash_dir)
+        d.addCallback(lambda ign: self.GET(self.dir_url, followRedirect=True))
+        def _check_dir_html(body):
+            self.failUnlessIn("<html>", body)
+            self.failUnlessIn("blacklisted.txt</a>", body)
+        d.addCallback(_check_dir_html)
+        d.addCallback(lambda ign: self.GET(self.url))
+        d.addCallback(lambda body: self.failUnlessEqual(DATA, body))
+
+        def _blacklist(ign):
+            f = open(fn, "w")
+            f.write(" # this is a comment\n")
+            f.write(" \n")
+            f.write("\n") # also exercise blank lines
+            f.write("%s %s\n" % (base32.b2a(self.si), "off-limits to you"))
+            f.close()
+            # clients should be checking the blacklist each time, so we don't
+            # need to restart the client
+        d.addCallback(_blacklist)
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_uri",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: off-limits",
+                                                       self.GET, self.url))
+
+        # We should still be able to list the parent directory, in HTML...
+        d.addCallback(lambda ign: self.GET(self.dir_url, followRedirect=True))
+        def _check_dir_html2(body):
+            self.failUnlessIn("<html>", body)
+            self.failUnlessIn("blacklisted.txt</strike>", body)
+        d.addCallback(_check_dir_html2)
+
+        # ... and in JSON (used by CLI).
+        d.addCallback(lambda ign: self.GET(self.dir_url+"?t=json", followRedirect=True))
+        def _check_dir_json(res):
+            data = simplejson.loads(res)
+            self.failUnless(isinstance(data, list), data)
+            self.failUnlessEqual(data[0], "dirnode")
+            self.failUnless(isinstance(data[1], dict), data)
+            self.failUnlessIn("children", data[1])
+            self.failUnlessIn("blacklisted.txt", data[1]["children"])
+            childdata = data[1]["children"]["blacklisted.txt"]
+            self.failUnless(isinstance(childdata, list), data)
+            self.failUnlessEqual(childdata[0], "filenode")
+            self.failUnless(isinstance(childdata[1], dict), data)
+        d.addCallback(_check_dir_json)
+
+        def _unblacklist(ign):
+            open(fn, "w").close()
+            # the Blacklist object watches mtime to tell when the file has
+            # changed, but on windows this test will run faster than the
+            # filesystem's mtime resolution. So we edit Blacklist.last_mtime
+            # to force a reload.
+            self.g.clients[0].blacklist.last_mtime -= 2.0
+        d.addCallback(_unblacklist)
+
+        # now a read should work
+        d.addCallback(lambda ign: self.GET(self.url))
+        d.addCallback(lambda body: self.failUnlessEqual(DATA, body))
+
+        # read again to exercise the blacklist-is-unchanged logic
+        d.addCallback(lambda ign: self.GET(self.url))
+        d.addCallback(lambda body: self.failUnlessEqual(DATA, body))
+
+        # now add a blacklisted directory, and make sure files under it are
+        # refused too
+        def _add_dir(ign):
+            childnode = c0.create_node_from_uri(self.uri, None)
+            return c0.create_dirnode({u"child": (childnode,{}) })
+        d.addCallback(_add_dir)
+        def _get_dircap(dn):
+            self.dir_si_b32 = base32.b2a(dn.get_storage_index())
+            self.dir_url_base = "uri/"+dn.get_write_uri()
+            self.dir_url_json1 = "uri/"+dn.get_write_uri()+"?t=json"
+            self.dir_url_json2 = "uri/"+dn.get_write_uri()+"/?t=json"
+            self.dir_url_json_ro = "uri/"+dn.get_readonly_uri()+"/?t=json"
+            self.child_url = "uri/"+dn.get_readonly_uri()+"/child"
+        d.addCallback(_get_dircap)
+        d.addCallback(lambda ign: self.GET(self.dir_url_base, followRedirect=True))
+        d.addCallback(lambda body: self.failUnlessIn("<html>", body))
+        d.addCallback(lambda ign: self.GET(self.dir_url_json1))
+        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda ign: self.GET(self.dir_url_json2))
+        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda ign: self.GET(self.dir_url_json_ro))
+        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda ign: self.GET(self.child_url))
+        d.addCallback(lambda body: self.failUnlessEqual(DATA, body))
+
+        def _block_dir(ign):
+            f = open(fn, "w")
+            f.write("%s %s\n" % (self.dir_si_b32, "dir-off-limits to you"))
+            f.close()
+            self.g.clients[0].blacklist.last_mtime -= 2.0
+        d.addCallback(_block_dir)
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_dir base",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: dir-off-limits",
+                                                       self.GET, self.dir_url_base))
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_dir json1",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: dir-off-limits",
+                                                       self.GET, self.dir_url_json1))
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_dir json2",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: dir-off-limits",
+                                                       self.GET, self.dir_url_json2))
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_dir json_ro",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: dir-off-limits",
+                                                       self.GET, self.dir_url_json_ro))
+        d.addCallback(lambda ign: self.shouldHTTPError("get_from_blacklisted_dir child",
+                                                       403, "Forbidden",
+                                                       "Access Prohibited: dir-off-limits",
+                                                       self.GET, self.child_url))
+        return d
+
 
 class CompletelyUnhandledError(Exception):
     pass

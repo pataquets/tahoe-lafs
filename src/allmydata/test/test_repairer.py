@@ -239,6 +239,11 @@ class Verifier(GridTestMixin, unittest.TestCase, RepairTestMixin):
         return self._help_test_verify(common._corrupt_share_data,
                                       self.judge_invisible_corruption)
 
+    def test_corrupt_sharedata_last_byte(self):
+        self.basedir = "repairer/Verifier/corrupt_sharedata_last_byte"
+        return self._help_test_verify(common._corrupt_share_data_last_byte,
+                                      self.judge_invisible_corruption)
+
     def test_corrupt_ueb_length(self):
         self.basedir = "repairer/Verifier/corrupt_ueb_length"
         return self._help_test_verify(common._corrupt_length_of_uri_extension,
@@ -553,7 +558,7 @@ class Repairer(GridTestMixin, unittest.TestCase, RepairTestMixin,
 
     # why is test_repair_from_corruption_of_1 disabled? Read on:
     #
-    # As recently documented in NEWS for the 1.3.0 release, the current
+    # As recently documented in NEWS.rst for the 1.3.0 release, the current
     # immutable repairer suffers from several limitations:
     #
     #  * minimalistic verifier: it's just download without decryption, so we

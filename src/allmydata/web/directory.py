@@ -16,14 +16,16 @@ from allmydata.util import base32, time_format
 from allmydata.uri import from_string_dirnode
 from allmydata.interfaces import IDirectoryNode, IFileNode, IFilesystemNode, \
      IImmutableFileNode, IMutableFileNode, ExistingChildError, \
-     NoSuchChildError, EmptyPathnameComponentError
+     NoSuchChildError, EmptyPathnameComponentError, SDMF_VERSION, MDMF_VERSION
+from allmydata.blacklist import ProhibitedNode
 from allmydata.monitor import Monitor, OperationCancelledError
 from allmydata import dirnode
 from allmydata.web.common import text_plain, WebError, \
      IOpHandleTable, NeedOperationHandleError, \
      boolean_of_arg, get_arg, get_root, parse_replace_arg, \
      should_create_intermediate_directories, \
-     getxmlfile, RenderMixin, humanize_failure, convert_children_json
+     getxmlfile, RenderMixin, humanize_failure, convert_children_json, \
+     get_format, get_mutable_type
 from allmydata.web.filenode import ReplaceMeMixin, \
      FileNodeHandler, PlaceHolderNodeHandler
 from allmydata.web.check_results import CheckResults, \
@@ -105,11 +107,15 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
                         kids_json = req.content.read()
                         kids = convert_children_json(self.client.nodemaker,
                                                      kids_json)
+                    file_format = get_format(req, None)
                     mutable = True
+                    mt = get_mutable_type(file_format)
                     if t == "mkdir-immutable":
                         mutable = False
+
                     d = self.node.create_subdirectory(name, kids,
-                                                      mutable=mutable)
+                                                      mutable=mutable,
+                                                      mutable_version=mt)
                     d.addCallback(make_handler_for,
                                   self.client, self.node, name)
                     return d
@@ -150,7 +156,8 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         if not t:
             # render the directory as HTML, using the docFactory and Nevow's
             # whole templating thing.
-            return DirectoryAsHTML(self.node)
+            return DirectoryAsHTML(self.node,
+                                   self.client.mutable_file_default)
 
         if t == "json":
             return DirectoryJSONMetadata(ctx, self.node)
@@ -202,8 +209,8 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
             d = self._POST_upload(ctx) # this one needs the context
         elif t == "uri":
             d = self._POST_uri(req)
-        elif t == "delete":
-            d = self._POST_delete(req)
+        elif t == "delete" or t == "unlink":
+            d = self._POST_unlink(req)
         elif t == "rename":
             d = self._POST_rename(req)
         elif t == "check":
@@ -239,7 +246,9 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         name = name.decode("utf-8")
         replace = boolean_of_arg(get_arg(req, "replace", "true"))
         kids = {}
-        d = self.node.create_subdirectory(name, kids, overwrite=replace)
+        mt = get_mutable_type(get_format(req, None))
+        d = self.node.create_subdirectory(name, kids, overwrite=replace,
+                                          mutable_version=mt)
         d.addCallback(lambda child: child.get_uri()) # TODO: urlencode
         return d
 
@@ -255,7 +264,9 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         req.content.seek(0)
         kids_json = req.content.read()
         kids = convert_children_json(self.client.nodemaker, kids_json)
-        d = self.node.create_subdirectory(name, kids, overwrite=False)
+        mt = get_mutable_type(get_format(req, None))
+        d = self.node.create_subdirectory(name, kids, overwrite=False,
+                                          mutable_version=mt)
         d.addCallback(lambda child: child.get_uri()) # TODO: urlencode
         return d
 
@@ -352,7 +363,7 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         charset = get_arg(req, "_charset", "utf-8")
         name = name.decode(charset)
         replace = boolean_of_arg(get_arg(req, "replace", "true"))
-        
+
         # We mustn't pass childcap for the readcap argument because we don't
         # know whether it is a read cap. Passing a read cap as the writecap
         # argument will work (it ends up calling NodeMaker.create_from_cap,
@@ -361,22 +372,22 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         d.addCallback(lambda res: childcap)
         return d
 
-    def _POST_delete(self, req):
+    def _POST_unlink(self, req):
         name = get_arg(req, "name")
         if name is None:
             # apparently an <input type="hidden" name="name" value="">
             # won't show up in the resulting encoded form.. the 'name'
-            # field is completely missing. So to allow deletion of an
-            # empty file, we have to pretend that None means ''. The only
-            # downside of this is a slightly confusing error message if
-            # someone does a POST without a name= field. For our own HTML
-            # this isn't a big deal, because we create the 'delete' POST
-            # buttons ourselves.
+            # field is completely missing. So to allow unlinking of a
+            # child with a name that is the empty string, we have to
+            # pretend that None means ''. The only downside of this is
+            # a slightly confusing error message if someone does a POST
+            # without a name= field. For our own HTML this isn't a big
+            # deal, because we create the 'unlink' POST buttons ourselves.
             name = ''
         charset = get_arg(req, "_charset", "utf-8")
         name = name.decode(charset)
         d = self.node.delete(name)
-        d.addCallback(lambda res: "thing deleted")
+        d.addCallback(lambda res: "thing unlinked")
         return d
 
     def _POST_rename(self, req):
@@ -546,15 +557,20 @@ def abbreviated_dirnode(dirnode):
     u = from_string_dirnode(dirnode.get_uri())
     return u.abbrev_si()
 
+SPACE = u"\u00A0"*2
+
 class DirectoryAsHTML(rend.Page):
     # The remainder of this class is to render the directory into
     # human+browser -oriented HTML.
     docFactory = getxmlfile("directory.xhtml")
     addSlash = True
 
-    def __init__(self, node):
+    def __init__(self, node, default_mutable_format):
         rend.Page.__init__(self)
         self.node = node
+
+        assert default_mutable_format in (MDMF_VERSION, SDMF_VERSION)
+        self.default_mutable_format = default_mutable_format
 
     def beforeRender(self, ctx):
         # attempt to get the dirnode's children, stashing them (or the
@@ -644,17 +660,17 @@ class DirectoryAsHTML(rend.Page):
         root = get_root(ctx)
         here = "%s/uri/%s/" % (root, urllib.quote(self.node.get_uri()))
         if self.node.is_unknown() or self.node.is_readonly():
-            delete = "-"
+            unlink = "-"
             rename = "-"
         else:
-            # this creates a button which will cause our child__delete method
-            # to be invoked, which deletes the file and then redirects the
+            # this creates a button which will cause our _POST_unlink method
+            # to be invoked, which unlinks the file and then redirects the
             # browser back to this directory
-            delete = T.form(action=here, method="post")[
-                T.input(type='hidden', name='t', value='delete'),
+            unlink = T.form(action=here, method="post")[
+                T.input(type='hidden', name='t', value='unlink'),
                 T.input(type='hidden', name='name', value=name),
                 T.input(type='hidden', name='when_done', value="."),
-                T.input(type='submit', value='del', name="del"),
+                T.input(type='submit', value='unlink', name="unlink"),
                 ]
 
             rename = T.form(action=here, method="get")[
@@ -664,7 +680,7 @@ class DirectoryAsHTML(rend.Page):
                 T.input(type='submit', value='rename', name="rename"),
                 ]
 
-        ctx.fillSlots("delete", delete)
+        ctx.fillSlots("unlink", unlink)
         ctx.fillSlots("rename", rename)
 
         times = []
@@ -734,6 +750,17 @@ class DirectoryAsHTML(rend.Page):
             ctx.fillSlots("size", "-")
             info_link = "%s/uri/%s/?t=info" % (root, quoted_uri)
 
+        elif isinstance(target, ProhibitedNode):
+            ctx.fillSlots("filename", T.strike[name])
+            if IDirectoryNode.providedBy(target.wrapped_node):
+                blacklisted_type = "DIR-BLACKLISTED"
+            else:
+                blacklisted_type = "BLACKLISTED"
+            ctx.fillSlots("type", blacklisted_type)
+            ctx.fillSlots("size", "-")
+            info_link = None
+            ctx.fillSlots("info", ["Access Prohibited:", T.br, target.reason])
+
         else:
             # unknown
             ctx.fillSlots("filename", html.escape(name))
@@ -749,10 +776,12 @@ class DirectoryAsHTML(rend.Page):
             # writecap and the readcap
             info_link = "%s?t=info" % urllib.quote(name)
 
-        ctx.fillSlots("info", T.a(href=info_link)["More Info"])
+        if info_link:
+            ctx.fillSlots("info", T.a(href=info_link)["More Info"])
 
         return ctx.tag
 
+    # XXX: similar to render_upload_form and render_mkdir_form in root.py.
     def render_forms(self, ctx, data):
         forms = []
 
@@ -761,46 +790,62 @@ class DirectoryAsHTML(rend.Page):
         if self.dirnode_children is None:
             return T.div["No upload forms: directory is unreadable"]
 
-        mkdir = T.form(action=".", method="post",
-                       enctype="multipart/form-data")[
+        mkdir_sdmf = T.input(type='radio', name='format',
+                             value='sdmf', id='mkdir-sdmf',
+                             checked='checked')
+        mkdir_mdmf = T.input(type='radio', name='format',
+                             value='mdmf', id='mkdir-mdmf')
+
+        mkdir_form = T.form(action=".", method="post",
+                            enctype="multipart/form-data")[
             T.fieldset[
             T.input(type="hidden", name="t", value="mkdir"),
             T.input(type="hidden", name="when_done", value="."),
             T.legend(class_="freeform-form-label")["Create a new directory in this directory"],
-            "New directory name: ",
-            T.input(type="text", name="name"), " ",
-            T.input(type="submit", value="Create"),
+            "New directory name:"+SPACE,
+            T.input(type="text", name="name"), SPACE,
+            T.input(type="submit", value="Create"), SPACE*2,
+            mkdir_sdmf, T.label(for_='mutable-directory-sdmf')[" SDMF"], SPACE,
+            mkdir_mdmf, T.label(for_='mutable-directory-mdmf')[" MDMF (experimental)"],
             ]]
-        forms.append(T.div(class_="freeform-form")[mkdir])
+        forms.append(T.div(class_="freeform-form")[mkdir_form])
 
-        upload = T.form(action=".", method="post",
-                        enctype="multipart/form-data")[
+        upload_chk  = T.input(type='radio', name='format',
+                              value='chk', id='upload-chk',
+                              checked='checked')
+        upload_sdmf = T.input(type='radio', name='format',
+                              value='sdmf', id='upload-sdmf')
+        upload_mdmf = T.input(type='radio', name='format',
+                              value='mdmf', id='upload-mdmf')
+
+        upload_form = T.form(action=".", method="post",
+                             enctype="multipart/form-data")[
             T.fieldset[
             T.input(type="hidden", name="t", value="upload"),
             T.input(type="hidden", name="when_done", value="."),
             T.legend(class_="freeform-form-label")["Upload a file to this directory"],
-            "Choose a file to upload: ",
-            T.input(type="file", name="file", class_="freeform-input-file"),
-            " ",
-            T.input(type="submit", value="Upload"),
-            " Mutable?:",
-            T.input(type="checkbox", name="mutable"),
+            "Choose a file to upload:"+SPACE,
+            T.input(type="file", name="file", class_="freeform-input-file"), SPACE,
+            T.input(type="submit", value="Upload"),                          SPACE*2,
+            upload_chk,  T.label(for_="upload-chk") [" Immutable"],          SPACE,
+            upload_sdmf, T.label(for_="upload-sdmf")[" SDMF"],               SPACE,
+            upload_mdmf, T.label(for_="upload-mdmf")[" MDMF (experimental)"],
             ]]
-        forms.append(T.div(class_="freeform-form")[upload])
+        forms.append(T.div(class_="freeform-form")[upload_form])
 
-        mount = T.form(action=".", method="post",
-                        enctype="multipart/form-data")[
+        attach_form = T.form(action=".", method="post",
+                             enctype="multipart/form-data")[
             T.fieldset[
             T.input(type="hidden", name="t", value="uri"),
             T.input(type="hidden", name="when_done", value="."),
             T.legend(class_="freeform-form-label")["Add a link to a file or directory which is already in Tahoe-LAFS."],
-            "New child name: ",
-            T.input(type="text", name="name"), " ",
-            "URI of new child: ",
-            T.input(type="text", name="uri"), " ",
+            "New child name:"+SPACE,
+            T.input(type="text", name="name"), SPACE*2,
+            "URI of new child:"+SPACE,
+            T.input(type="text", name="uri"), SPACE,
             T.input(type="submit", value="Attach"),
             ]]
-        forms.append(T.div(class_="freeform-form")[mount])
+        forms.append(T.div(class_="freeform-form")[attach_form])
         return forms
 
     def render_results(self, ctx, data):
@@ -820,6 +865,17 @@ def DirectoryJSONMetadata(ctx, dirnode):
                 kiddata = ("filenode", {'size': childnode.get_size(),
                                         'mutable': childnode.is_mutable(),
                                         })
+                if childnode.is_mutable():
+                    mutable_type = childnode.get_version()
+                    assert mutable_type in (SDMF_VERSION, MDMF_VERSION)
+                    if mutable_type == MDMF_VERSION:
+                        file_format = "MDMF"
+                    else:
+                        file_format = "SDMF"
+                else:
+                    file_format = "CHK"
+                kiddata[1]['format'] = file_format
+
             elif IDirectoryNode.providedBy(childnode):
                 kiddata = ("dirnode", {'mutable': childnode.is_mutable()})
             else:

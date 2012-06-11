@@ -10,15 +10,17 @@ from mock import patch
 from allmydata.util import fileutil, hashutil, base32
 from allmydata import uri
 from allmydata.immutable import upload
+from allmydata.interfaces import MDMF_VERSION, SDMF_VERSION
+from allmydata.mutable.publish import MutableData
 from allmydata.dirnode import normalize
 
 # Test that the scripts can be imported.
 from allmydata.scripts import create_node, debug, keygen, startstop_node, \
     tahoe_add_alias, tahoe_backup, tahoe_check, tahoe_cp, tahoe_get, tahoe_ls, \
-    tahoe_manifest, tahoe_mkdir, tahoe_mv, tahoe_put, tahoe_rm, tahoe_webopen
+    tahoe_manifest, tahoe_mkdir, tahoe_mv, tahoe_put, tahoe_unlink, tahoe_webopen
 _hush_pyflakes = [create_node, debug, keygen, startstop_node,
     tahoe_add_alias, tahoe_backup, tahoe_check, tahoe_cp, tahoe_get, tahoe_ls,
-    tahoe_manifest, tahoe_mkdir, tahoe_mv, tahoe_put, tahoe_rm, tahoe_webopen]
+    tahoe_manifest, tahoe_mkdir, tahoe_mv, tahoe_put, tahoe_unlink, tahoe_webopen]
 
 from allmydata.scripts import common
 from allmydata.scripts.common import DEFAULT_ALIAS, get_aliases, get_alias, \
@@ -28,11 +30,12 @@ from allmydata.scripts import cli, debug, runner, backupdb
 from allmydata.test.common_util import StallMixin, ReallyEqualMixin
 from allmydata.test.no_network import GridTestMixin
 from twisted.internet import threads # CLI tests use deferToThread
+from twisted.internet import defer # List uses a DeferredList in one place.
 from twisted.python import usage
 
 from allmydata.util.assertutil import precondition
 from allmydata.util.encodingutil import listdir_unicode, unicode_platform, \
-    quote_output, get_output_encoding, get_argv_encoding, get_filesystem_encoding, \
+    quote_output, get_io_encoding, get_filesystem_encoding, \
     unicode_to_output, unicode_to_argv, to_str
 from allmydata.util.fileutil import abspath_expanduser_unicode
 
@@ -184,13 +187,13 @@ class CLI(CLITestMixin, unittest.TestCase):
         self.failUnless("Literal File URI:" in output, output)
         self.failUnless("data: 'this is some data'" in output, output)
 
-    def test_dump_cap_ssk(self):
+    def test_dump_cap_sdmf(self):
         writekey = "\x01" * 16
         fingerprint = "\xfe" * 32
         u = uri.WriteableSSKFileURI(writekey, fingerprint)
 
         output = self._dump_cap(u.to_string())
-        self.failUnless("SSK Writeable URI:" in output, output)
+        self.failUnless("SDMF Writeable URI:" in output, output)
         self.failUnless("writekey: aeaqcaibaeaqcaibaeaqcaibae" in output, output)
         self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
         self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
@@ -224,18 +227,104 @@ class CLI(CLITestMixin, unittest.TestCase):
 
         u = u.get_readonly()
         output = self._dump_cap(u.to_string())
-        self.failUnless("SSK Read-only URI:" in output, output)
+        self.failUnless("SDMF Read-only URI:" in output, output)
         self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
         self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
         self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
 
         u = u.get_verify_cap()
         output = self._dump_cap(u.to_string())
-        self.failUnless("SSK Verifier URI:" in output, output)
+        self.failUnless("SDMF Verifier URI:" in output, output)
         self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
         self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
 
-    def test_dump_cap_directory(self):
+    def test_dump_cap_mdmf(self):
+        writekey = "\x01" * 16
+        fingerprint = "\xfe" * 32
+        u = uri.WriteableMDMFFileURI(writekey, fingerprint)
+
+        output = self._dump_cap(u.to_string())
+        self.failUnless("MDMF Writeable URI:" in output, output)
+        self.failUnless("writekey: aeaqcaibaeaqcaibaeaqcaibae" in output, output)
+        self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+        output = self._dump_cap("--client-secret", "5s33nk3qpvnj2fw3z4mnm2y6fa",
+                                u.to_string())
+        self.failUnless("file renewal secret: arpszxzc2t6kb4okkg7sp765xgkni5z7caavj7lta73vmtymjlxq" in output, output)
+
+        fileutil.make_dirs("cli/test_dump_cap/private")
+        fileutil.write("cli/test_dump_cap/private/secret", "5s33nk3qpvnj2fw3z4mnm2y6fa\n")
+        output = self._dump_cap("--client-dir", "cli/test_dump_cap",
+                                u.to_string())
+        self.failUnless("file renewal secret: arpszxzc2t6kb4okkg7sp765xgkni5z7caavj7lta73vmtymjlxq" in output, output)
+
+        output = self._dump_cap("--client-dir", "cli/test_dump_cap_BOGUS",
+                                u.to_string())
+        self.failIf("file renewal secret:" in output, output)
+
+        output = self._dump_cap("--nodeid", "tqc35esocrvejvg4mablt6aowg6tl43j",
+                                u.to_string())
+        self.failUnless("write_enabler: mgcavriox2wlb5eer26unwy5cw56elh3sjweffckkmivvsxtaknq" in output, output)
+        self.failIf("file renewal secret:" in output, output)
+
+        output = self._dump_cap("--nodeid", "tqc35esocrvejvg4mablt6aowg6tl43j",
+                                "--client-secret", "5s33nk3qpvnj2fw3z4mnm2y6fa",
+                                u.to_string())
+        self.failUnless("write_enabler: mgcavriox2wlb5eer26unwy5cw56elh3sjweffckkmivvsxtaknq" in output, output)
+        self.failUnless("file renewal secret: arpszxzc2t6kb4okkg7sp765xgkni5z7caavj7lta73vmtymjlxq" in output, output)
+        self.failUnless("lease renewal secret: 7pjtaumrb7znzkkbvekkmuwpqfjyfyamznfz4bwwvmh4nw33lorq" in output, output)
+
+        u = u.get_readonly()
+        output = self._dump_cap(u.to_string())
+        self.failUnless("MDMF Read-only URI:" in output, output)
+        self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+        u = u.get_verify_cap()
+        output = self._dump_cap(u.to_string())
+        self.failUnless("MDMF Verifier URI:" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+
+    def test_dump_cap_chk_directory(self):
+        key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+        uri_extension_hash = hashutil.uri_extension_hash("stuff")
+        needed_shares = 25
+        total_shares = 100
+        size = 1234
+        u1 = uri.CHKFileURI(key=key,
+                            uri_extension_hash=uri_extension_hash,
+                            needed_shares=needed_shares,
+                            total_shares=total_shares,
+                            size=size)
+        u = uri.ImmutableDirectoryURI(u1)
+
+        output = self._dump_cap(u.to_string())
+        self.failUnless("CHK Directory URI:" in output, output)
+        self.failUnless("key: aaaqeayeaudaocajbifqydiob4" in output, output)
+        self.failUnless("UEB hash: nf3nimquen7aeqm36ekgxomalstenpkvsdmf6fplj7swdatbv5oa" in output, output)
+        self.failUnless("size: 1234" in output, output)
+        self.failUnless("k/N: 25/100" in output, output)
+        self.failUnless("storage index: hdis5iaveku6lnlaiccydyid7q" in output, output)
+
+        output = self._dump_cap("--client-secret", "5s33nk3qpvnj2fw3z4mnm2y6fa",
+                                u.to_string())
+        self.failUnless("file renewal secret: csrvkjgomkyyyil5yo4yk5np37p6oa2ve2hg6xmk2dy7kaxsu6xq" in output, output)
+
+        u = u.get_verify_cap()
+        output = self._dump_cap(u.to_string())
+        self.failUnless("CHK Directory Verifier URI:" in output, output)
+        self.failIf("key: " in output, output)
+        self.failUnless("UEB hash: nf3nimquen7aeqm36ekgxomalstenpkvsdmf6fplj7swdatbv5oa" in output, output)
+        self.failUnless("size: 1234" in output, output)
+        self.failUnless("k/N: 25/100" in output, output)
+        self.failUnless("storage index: hdis5iaveku6lnlaiccydyid7q" in output, output)
+
+    def test_dump_cap_sdmf_directory(self):
         writekey = "\x01" * 16
         fingerprint = "\xfe" * 32
         u1 = uri.WriteableSSKFileURI(writekey, fingerprint)
@@ -278,6 +367,51 @@ class CLI(CLITestMixin, unittest.TestCase):
         self.failUnless("Directory Verifier URI:" in output, output)
         self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
         self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+    def test_dump_cap_mdmf_directory(self):
+        writekey = "\x01" * 16
+        fingerprint = "\xfe" * 32
+        u1 = uri.WriteableMDMFFileURI(writekey, fingerprint)
+        u = uri.MDMFDirectoryURI(u1)
+
+        output = self._dump_cap(u.to_string())
+        self.failUnless("Directory Writeable URI:" in output, output)
+        self.failUnless("writekey: aeaqcaibaeaqcaibaeaqcaibae" in output,
+                        output)
+        self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output,
+                        output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+        output = self._dump_cap("--client-secret", "5s33nk3qpvnj2fw3z4mnm2y6fa",
+                                u.to_string())
+        self.failUnless("file renewal secret: arpszxzc2t6kb4okkg7sp765xgkni5z7caavj7lta73vmtymjlxq" in output, output)
+
+        output = self._dump_cap("--nodeid", "tqc35esocrvejvg4mablt6aowg6tl43j",
+                                u.to_string())
+        self.failUnless("write_enabler: mgcavriox2wlb5eer26unwy5cw56elh3sjweffckkmivvsxtaknq" in output, output)
+        self.failIf("file renewal secret:" in output, output)
+
+        output = self._dump_cap("--nodeid", "tqc35esocrvejvg4mablt6aowg6tl43j",
+                                "--client-secret", "5s33nk3qpvnj2fw3z4mnm2y6fa",
+                                u.to_string())
+        self.failUnless("write_enabler: mgcavriox2wlb5eer26unwy5cw56elh3sjweffckkmivvsxtaknq" in output, output)
+        self.failUnless("file renewal secret: arpszxzc2t6kb4okkg7sp765xgkni5z7caavj7lta73vmtymjlxq" in output, output)
+        self.failUnless("lease renewal secret: 7pjtaumrb7znzkkbvekkmuwpqfjyfyamznfz4bwwvmh4nw33lorq" in output, output)
+
+        u = u.get_readonly()
+        output = self._dump_cap(u.to_string())
+        self.failUnless("Directory Read-only URI:" in output, output)
+        self.failUnless("readkey: nvgh5vj2ekzzkim5fgtb4gey5y" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
+        u = u.get_verify_cap()
+        output = self._dump_cap(u.to_string())
+        self.failUnless("Directory Verifier URI:" in output, output)
+        self.failUnless("storage index: nt4fwemuw7flestsezvo2eveke" in output, output)
+        self.failUnless("fingerprint: 737p57x6737p57x6737p57x6737p57x6737p57x6737p57x6737a" in output, output)
+
 
     def _catalog_shares(self, *basedirs):
         o = debug.CatalogSharesOptions()
@@ -447,67 +581,112 @@ class CLI(CLITestMixin, unittest.TestCase):
 
 
 class Help(unittest.TestCase):
-
     def test_get(self):
         help = str(cli.GetOptions())
-        self.failUnless("get REMOTE_FILE LOCAL_FILE" in help, help)
-        self.failUnless("% tahoe get FOO |less" in help, help)
+        self.failUnlessIn(" get [options] REMOTE_FILE LOCAL_FILE", help)
+        self.failUnlessIn("% tahoe get FOO |less", help)
 
     def test_put(self):
         help = str(cli.PutOptions())
-        self.failUnless("put LOCAL_FILE REMOTE_FILE" in help, help)
-        self.failUnless("% cat FILE | tahoe put" in help, help)
+        self.failUnlessIn(" put [options] LOCAL_FILE REMOTE_FILE", help)
+        self.failUnlessIn("% cat FILE | tahoe put", help)
+
+    def test_unlink(self):
+        help = str(cli.UnlinkOptions())
+        self.failUnlessIn(" unlink [options] REMOTE_FILE", help)
 
     def test_rm(self):
         help = str(cli.RmOptions())
-        self.failUnless("rm REMOTE_FILE" in help, help)
+        self.failUnlessIn(" rm [options] REMOTE_FILE", help)
 
     def test_mv(self):
         help = str(cli.MvOptions())
-        self.failUnless("mv FROM TO" in help, help)
-        self.failUnless("Use 'tahoe mv' to move files" in help)
+        self.failUnlessIn(" mv [options] FROM TO", help)
+        self.failUnlessIn("Use 'tahoe mv' to move files", help)
+
+    def test_cp(self):
+        help = str(cli.CpOptions())
+        self.failUnlessIn(" cp [options] FROM.. TO", help)
+        self.failUnlessIn("Use 'tahoe cp' to copy files", help)
 
     def test_ln(self):
         help = str(cli.LnOptions())
-        self.failUnless("ln FROM_LINK TO_LINK" in help, help)
-        self.failUnless("Use 'tahoe ln' to duplicate a link" in help)
+        self.failUnlessIn(" ln [options] FROM_LINK TO_LINK", help)
+        self.failUnlessIn("Use 'tahoe ln' to duplicate a link", help)
+
+    def test_mkdir(self):
+        help = str(cli.MakeDirectoryOptions())
+        self.failUnlessIn(" mkdir [options] [REMOTE_DIR]", help)
+        self.failUnlessIn("Create a new directory", help)
 
     def test_backup(self):
         help = str(cli.BackupOptions())
-        self.failUnless("backup FROM ALIAS:TO" in help, help)
+        self.failUnlessIn(" backup [options] FROM ALIAS:TO", help)
 
     def test_webopen(self):
         help = str(cli.WebopenOptions())
-        self.failUnless("webopen [ALIAS:PATH]" in help, help)
+        self.failUnlessIn(" webopen [options] [ALIAS:PATH]", help)
 
     def test_manifest(self):
         help = str(cli.ManifestOptions())
-        self.failUnless("manifest [ALIAS:PATH]" in help, help)
+        self.failUnlessIn(" manifest [options] [ALIAS:PATH]", help)
 
     def test_stats(self):
         help = str(cli.StatsOptions())
-        self.failUnless("stats [ALIAS:PATH]" in help, help)
+        self.failUnlessIn(" stats [options] [ALIAS:PATH]", help)
 
     def test_check(self):
         help = str(cli.CheckOptions())
-        self.failUnless("check [ALIAS:PATH]" in help, help)
+        self.failUnlessIn(" check [options] [ALIAS:PATH]", help)
 
     def test_deep_check(self):
         help = str(cli.DeepCheckOptions())
-        self.failUnless("deep-check [ALIAS:PATH]" in help, help)
+        self.failUnlessIn(" deep-check [options] [ALIAS:PATH]", help)
 
     def test_create_alias(self):
         help = str(cli.CreateAliasOptions())
-        self.failUnless("create-alias ALIAS[:]" in help, help)
+        self.failUnlessIn(" create-alias [options] ALIAS[:]", help)
 
-    def test_add_aliases(self):
+    def test_add_alias(self):
         help = str(cli.AddAliasOptions())
-        self.failUnless("add-alias ALIAS[:] DIRCAP" in help, help)
+        self.failUnlessIn(" add-alias [options] ALIAS[:] DIRCAP", help)
+
+    def test_list_aliases(self):
+        help = str(cli.ListAliasesOptions())
+        self.failUnlessIn(" list-aliases [options]", help)
+
+    def test_start(self):
+        help = str(startstop_node.StartOptions())
+        self.failUnlessIn(" start [options] [NODEDIR]", help)
+
+    def test_stop(self):
+        help = str(startstop_node.StopOptions())
+        self.failUnlessIn(" stop [options] [NODEDIR]", help)
+
+    def test_restart(self):
+        help = str(startstop_node.RestartOptions())
+        self.failUnlessIn(" restart [options] [NODEDIR]", help)
+
+    def test_run(self):
+        help = str(startstop_node.RunOptions())
+        self.failUnlessIn(" run [options] [NODEDIR]", help)
+
+    def test_create_client(self):
+        help = str(create_node.CreateClientOptions())
+        self.failUnlessIn(" create-client [options] [NODEDIR]", help)
+
+    def test_create_node(self):
+        help = str(create_node.CreateNodeOptions())
+        self.failUnlessIn(" create-node [options] [NODEDIR]", help)
+
+    def test_create_introducer(self):
+        help = str(create_node.CreateIntroducerOptions())
+        self.failUnlessIn(" create-introducer [options] NODEDIR", help)
 
     def test_debug_trial(self):
         help = str(debug.TrialOptions())
-        self.failUnless("debug trial [options] [[file|package|module|TestCase|testmethod]...]" in help, help)
-        self.failUnless("The 'tahoe debug trial' command uses the correct imports" in help, help)
+        self.failUnlessIn(" debug trial [options] [[file|package|module|TestCase|testmethod]...]", help)
+        self.failUnlessIn("The 'tahoe debug trial' command uses the correct imports", help)
 
 
 class CreateAlias(GridTestMixin, CLITestMixin, unittest.TestCase):
@@ -578,9 +757,9 @@ class CreateAlias(GridTestMixin, CLITestMixin, unittest.TestCase):
             self.failUnlessIn("cannot contain", stderr)
 
         for invalid in ['foo:bar', 'foo bar', 'foobar::']:
-            d.addCallback(lambda res: self.do_cli("create-alias", invalid))
+            d.addCallback(lambda res, invalid=invalid: self.do_cli("create-alias", invalid))
             d.addCallback(_check_invalid)
-            d.addCallback(lambda res: self.do_cli("add-alias", invalid, self.two_uri))
+            d.addCallback(lambda res, invalid=invalid: self.do_cli("add-alias", invalid, self.two_uri))
             d.addCallback(_check_invalid)
 
         def _test_urls(junk):
@@ -651,8 +830,8 @@ class CreateAlias(GridTestMixin, CLITestMixin, unittest.TestCase):
         self.set_up_grid()
 
         try:
-            etudes_arg = u"\u00E9tudes".encode(get_argv_encoding())
-            lumiere_arg = u"lumi\u00E8re.txt".encode(get_argv_encoding())
+            etudes_arg = u"\u00E9tudes".encode(get_io_encoding())
+            lumiere_arg = u"lumi\u00E8re.txt".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -963,6 +1142,181 @@ class Put(GridTestMixin, CLITestMixin, unittest.TestCase):
         d.addCallback(lambda (rc,out,err): self.failUnlessReallyEqual(out, DATA2))
         return d
 
+    def _check_mdmf_json(self, (rc, json, err)):
+         self.failUnlessEqual(rc, 0)
+         self.failUnlessEqual(err, "")
+         self.failUnlessIn('"format": "MDMF"', json)
+         # We also want a valid MDMF cap to be in the json.
+         self.failUnlessIn("URI:MDMF", json)
+         self.failUnlessIn("URI:MDMF-RO", json)
+         self.failUnlessIn("URI:MDMF-Verifier", json)
+
+    def _check_sdmf_json(self, (rc, json, err)):
+        self.failUnlessEqual(rc, 0)
+        self.failUnlessEqual(err, "")
+        self.failUnlessIn('"format": "SDMF"', json)
+        # We also want to see the appropriate SDMF caps.
+        self.failUnlessIn("URI:SSK", json)
+        self.failUnlessIn("URI:SSK-RO", json)
+        self.failUnlessIn("URI:SSK-Verifier", json)
+
+    def _check_chk_json(self, (rc, json, err)):
+        self.failUnlessEqual(rc, 0)
+        self.failUnlessEqual(err, "")
+        self.failUnlessIn('"format": "CHK"', json)
+        # We also want to see the appropriate CHK caps.
+        self.failUnlessIn("URI:CHK", json)
+        self.failUnlessIn("URI:CHK-Verifier", json)
+
+    def test_format(self):
+        self.basedir = "cli/Put/format"
+        self.set_up_grid()
+        data = "data" * 40000 # 160kB total, two segments
+        fn1 = os.path.join(self.basedir, "data")
+        fileutil.write(fn1, data)
+        d = self.do_cli("create-alias", "tahoe")
+
+        def _put_and_ls(ign, cmdargs, expected, filename=None):
+            if filename:
+                args = ["put"] + cmdargs + [fn1, filename]
+            else:
+                # unlinked
+                args = ["put"] + cmdargs + [fn1]
+            d2 = self.do_cli(*args)
+            def _list((rc, out, err)):
+                self.failUnlessEqual(rc, 0) # don't allow failure
+                if filename:
+                    return self.do_cli("ls", "--json", filename)
+                else:
+                    cap = out.strip()
+                    return self.do_cli("ls", "--json", cap)
+            d2.addCallback(_list)
+            return d2
+
+        # 'tahoe put' to a directory
+        d.addCallback(_put_and_ls, ["--mutable"], "SDMF", "tahoe:s1.txt")
+        d.addCallback(self._check_sdmf_json) # backwards-compatibility
+        d.addCallback(_put_and_ls, ["--format=SDMF"], "SDMF", "tahoe:s2.txt")
+        d.addCallback(self._check_sdmf_json)
+        d.addCallback(_put_and_ls, ["--format=sdmf"], "SDMF", "tahoe:s3.txt")
+        d.addCallback(self._check_sdmf_json)
+        d.addCallback(_put_and_ls, ["--mutable", "--format=SDMF"], "SDMF", "tahoe:s4.txt")
+        d.addCallback(self._check_sdmf_json)
+
+        d.addCallback(_put_and_ls, ["--format=MDMF"], "MDMF", "tahoe:m1.txt")
+        d.addCallback(self._check_mdmf_json)
+        d.addCallback(_put_and_ls, ["--mutable", "--format=MDMF"], "MDMF", "tahoe:m2.txt")
+        d.addCallback(self._check_mdmf_json)
+
+        d.addCallback(_put_and_ls, ["--format=CHK"], "CHK", "tahoe:c1.txt")
+        d.addCallback(self._check_chk_json)
+        d.addCallback(_put_and_ls, [], "CHK", "tahoe:c1.txt")
+        d.addCallback(self._check_chk_json)
+
+        # 'tahoe put' unlinked
+        d.addCallback(_put_and_ls, ["--mutable"], "SDMF")
+        d.addCallback(self._check_sdmf_json) # backwards-compatibility
+        d.addCallback(_put_and_ls, ["--format=SDMF"], "SDMF")
+        d.addCallback(self._check_sdmf_json)
+        d.addCallback(_put_and_ls, ["--format=sdmf"], "SDMF")
+        d.addCallback(self._check_sdmf_json)
+        d.addCallback(_put_and_ls, ["--mutable", "--format=SDMF"], "SDMF")
+        d.addCallback(self._check_sdmf_json)
+
+        d.addCallback(_put_and_ls, ["--format=MDMF"], "MDMF")
+        d.addCallback(self._check_mdmf_json)
+        d.addCallback(_put_and_ls, ["--mutable", "--format=MDMF"], "MDMF")
+        d.addCallback(self._check_mdmf_json)
+
+        d.addCallback(_put_and_ls, ["--format=CHK"], "CHK")
+        d.addCallback(self._check_chk_json)
+        d.addCallback(_put_and_ls, [], "CHK")
+        d.addCallback(self._check_chk_json)
+
+        return d
+
+    def test_put_to_mdmf_cap(self):
+        self.basedir = "cli/Put/put_to_mdmf_cap"
+        self.set_up_grid()
+        data = "data" * 100000
+        fn1 = os.path.join(self.basedir, "data")
+        fileutil.write(fn1, data)
+        d = self.do_cli("put", "--format=MDMF", fn1)
+        def _got_cap((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.cap = out.strip()
+        d.addCallback(_got_cap)
+        # Now try to write something to the cap using put.
+        data2 = "data2" * 100000
+        fn2 = os.path.join(self.basedir, "data2")
+        fileutil.write(fn2, data2)
+        d.addCallback(lambda ignored:
+            self.do_cli("put", fn2, self.cap))
+        def _got_put((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessIn(self.cap, out)
+        d.addCallback(_got_put)
+        # Now get the cap. We should see the data we just put there.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self.cap))
+        def _got_data((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(out, data2)
+        d.addCallback(_got_data)
+        # add some extension information to the cap and try to put something
+        # to it.
+        def _make_extended_cap(ignored):
+            self.cap = self.cap + ":Extension-Stuff"
+        d.addCallback(_make_extended_cap)
+        data3 = "data3" * 100000
+        fn3 = os.path.join(self.basedir, "data3")
+        fileutil.write(fn3, data3)
+        d.addCallback(lambda ignored:
+            self.do_cli("put", fn3, self.cap))
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self.cap))
+        def _got_data3((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(out, data3)
+        d.addCallback(_got_data3)
+        return d
+
+    def test_put_to_sdmf_cap(self):
+        self.basedir = "cli/Put/put_to_sdmf_cap"
+        self.set_up_grid()
+        data = "data" * 100000
+        fn1 = os.path.join(self.basedir, "data")
+        fileutil.write(fn1, data)
+        d = self.do_cli("put", "--format=SDMF", fn1)
+        def _got_cap((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.cap = out.strip()
+        d.addCallback(_got_cap)
+        # Now try to write something to the cap using put.
+        data2 = "data2" * 100000
+        fn2 = os.path.join(self.basedir, "data2")
+        fileutil.write(fn2, data2)
+        d.addCallback(lambda ignored:
+            self.do_cli("put", fn2, self.cap))
+        def _got_put((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessIn(self.cap, out)
+        d.addCallback(_got_put)
+        # Now get the cap. We should see the data we just put there.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self.cap))
+        def _got_data((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(out, data2)
+        d.addCallback(_got_data)
+        return d
+
+    def test_mutable_type_invalid_format(self):
+        o = cli.PutOptions()
+        self.failUnlessRaises(usage.UsageError,
+                              o.parseOptions,
+                              ["--format=LDMF"])
+
     def test_put_with_nonexistent_alias(self):
         # when invoked with an alias that doesn't exist, 'tahoe put'
         # should output a useful error message, not a stack trace
@@ -980,7 +1334,7 @@ class Put(GridTestMixin, CLITestMixin, unittest.TestCase):
         # tahoe put "\u00E0 trier.txt" "\u00E0 trier.txt"
 
         try:
-            a_trier_arg = u"\u00E0 trier.txt".encode(get_argv_encoding())
+            a_trier_arg = u"\u00E0 trier.txt".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -997,7 +1351,7 @@ class Put(GridTestMixin, CLITestMixin, unittest.TestCase):
         d = self.do_cli("create-alias", "tahoe")
 
         d.addCallback(lambda res:
-                      self.do_cli("put", rel_fn.encode(get_argv_encoding()), a_trier_arg))
+                      self.do_cli("put", rel_fn.encode(get_io_encoding()), a_trier_arg))
         def _uploaded((rc, out, err)):
             readcap = out.strip()
             self.failUnless(readcap.startswith("URI:LIT:"), readcap)
@@ -1022,12 +1376,12 @@ class List(GridTestMixin, CLITestMixin, unittest.TestCase):
         # u"g\u00F6\u00F6d" might not be representable in the argv and/or output encodings.
         # It is initially included in the directory in any case.
         try:
-            good_arg = u"g\u00F6\u00F6d".encode(get_argv_encoding())
+            good_arg = u"g\u00F6\u00F6d".encode(get_io_encoding())
         except UnicodeEncodeError:
             good_arg = None
 
         try:
-            good_out = u"g\u00F6\u00F6d".encode(get_output_encoding())
+            good_out = u"g\u00F6\u00F6d".encode(get_io_encoding())
         except UnicodeEncodeError:
             good_out = None
 
@@ -1188,6 +1542,97 @@ class List(GridTestMixin, CLITestMixin, unittest.TestCase):
             self.failUnlessIn("nonexistent", err)
             self.failUnlessReallyEqual(out, "")
         d.addCallback(_check)
+        return d
+
+    def _create_directory_structure(self):
+        # Create a simple directory structure that we can use for MDMF,
+        # SDMF, and immutable testing.
+        assert self.g
+
+        client = self.g.clients[0]
+        # Create a dirnode
+        d = client.create_dirnode()
+        def _got_rootnode(n):
+            # Add a few nodes.
+            self._dircap = n.get_uri()
+            nm = n._nodemaker
+            # The uploaders may run at the same time, so we need two
+            # MutableData instances or they'll fight over offsets &c and
+            # break.
+            mutable_data = MutableData("data" * 100000)
+            mutable_data2 = MutableData("data" * 100000)
+            # Add both kinds of mutable node.
+            d1 = nm.create_mutable_file(mutable_data,
+                                        version=MDMF_VERSION)
+            d2 = nm.create_mutable_file(mutable_data2,
+                                        version=SDMF_VERSION)
+            # Add an immutable node. We do this through the directory,
+            # with add_file.
+            immutable_data = upload.Data("immutable data" * 100000,
+                                         convergence="")
+            d3 = n.add_file(u"immutable", immutable_data)
+            ds = [d1, d2, d3]
+            dl = defer.DeferredList(ds)
+            def _made_files((r1, r2, r3)):
+                self.failUnless(r1[0])
+                self.failUnless(r2[0])
+                self.failUnless(r3[0])
+
+                # r1, r2, and r3 contain nodes.
+                mdmf_node = r1[1]
+                sdmf_node = r2[1]
+                imm_node = r3[1]
+
+                self._mdmf_uri = mdmf_node.get_uri()
+                self._mdmf_readonly_uri = mdmf_node.get_readonly_uri()
+                self._sdmf_uri = mdmf_node.get_uri()
+                self._sdmf_readonly_uri = sdmf_node.get_readonly_uri()
+                self._imm_uri = imm_node.get_uri()
+
+                d1 = n.set_node(u"mdmf", mdmf_node)
+                d2 = n.set_node(u"sdmf", sdmf_node)
+                return defer.DeferredList([d1, d2])
+            # We can now list the directory by listing self._dircap.
+            dl.addCallback(_made_files)
+            return dl
+        d.addCallback(_got_rootnode)
+        return d
+
+    def test_list_mdmf(self):
+        # 'tahoe ls' should include MDMF files.
+        self.basedir = "cli/List/list_mdmf"
+        self.set_up_grid()
+        d = self._create_directory_structure()
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", self._dircap))
+        def _got_ls((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(err, "")
+            self.failUnlessIn("immutable", out)
+            self.failUnlessIn("mdmf", out)
+            self.failUnlessIn("sdmf", out)
+        d.addCallback(_got_ls)
+        return d
+
+    def test_list_mdmf_json(self):
+        # 'tahoe ls' should include MDMF caps when invoked with MDMF
+        # caps.
+        self.basedir = "cli/List/list_mdmf_json"
+        self.set_up_grid()
+        d = self._create_directory_structure()
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", self._dircap))
+        def _got_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(err, "")
+            self.failUnlessIn(self._mdmf_uri, out)
+            self.failUnlessIn(self._mdmf_readonly_uri, out)
+            self.failUnlessIn(self._sdmf_uri, out)
+            self.failUnlessIn(self._sdmf_readonly_uri, out)
+            self.failUnlessIn(self._imm_uri, out)
+            self.failUnlessIn('"format": "SDMF"', out)
+            self.failUnlessIn('"format": "MDMF"', out)
+        d.addCallback(_got_json)
         return d
 
 
@@ -1393,8 +1838,8 @@ class Cp(GridTestMixin, CLITestMixin, unittest.TestCase):
 
         fn1 = os.path.join(unicode(self.basedir), u"\u00C4rtonwall")
         try:
-            fn1_arg = fn1.encode(get_argv_encoding())
-            artonwall_arg = u"\u00C4rtonwall".encode(get_argv_encoding())
+            fn1_arg = fn1.encode(get_io_encoding())
+            artonwall_arg = u"\u00C4rtonwall".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -1432,7 +1877,7 @@ class Cp(GridTestMixin, CLITestMixin, unittest.TestCase):
                 self.failUnlessIn("files whose names could not be converted", err)
             else:
                 self.failUnlessReallyEqual(rc, 0)
-                self.failUnlessReallyEqual(out.decode(get_output_encoding()), u"Metallica\n\u00C4rtonwall\n")
+                self.failUnlessReallyEqual(out.decode(get_io_encoding()), u"Metallica\n\u00C4rtonwall\n")
                 self.failUnlessReallyEqual(err, "")
         d.addCallback(_check)
 
@@ -1550,9 +1995,9 @@ class Cp(GridTestMixin, CLITestMixin, unittest.TestCase):
 
         fn1 = os.path.join(unicode(self.basedir), u"\u00C4rtonwall")
         try:
-            fn1_arg = fn1.encode(get_argv_encoding())
+            fn1_arg = fn1.encode(get_io_encoding())
             del fn1_arg # hush pyflakes
-            artonwall_arg = u"\u00C4rtonwall".encode(get_argv_encoding())
+            artonwall_arg = u"\u00C4rtonwall".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -1574,11 +2019,362 @@ class Cp(GridTestMixin, CLITestMixin, unittest.TestCase):
                 self.failUnlessIn("files whose names could not be converted", err)
             else:
                 self.failUnlessReallyEqual(rc, 0)
-                self.failUnlessReallyEqual(out.decode(get_output_encoding()), u"\u00C4rtonwall\n")
+                self.failUnlessReallyEqual(out.decode(get_io_encoding()), u"\u00C4rtonwall\n")
                 self.failUnlessReallyEqual(err, "")
         d.addCallback(_check)
 
         return d
+
+    def test_cp_replaces_mutable_file_contents(self):
+        self.basedir = "cli/Cp/cp_replaces_mutable_file_contents"
+        self.set_up_grid()
+
+        # Write a test file, which we'll copy to the grid.
+        test_txt_path = os.path.join(self.basedir, "test.txt")
+        test_txt_contents = "foo bar baz"
+        f = open(test_txt_path, "w")
+        f.write(test_txt_contents)
+        f.close()
+
+        d = self.do_cli("create-alias", "tahoe")
+        d.addCallback(lambda ignored:
+            self.do_cli("mkdir", "tahoe:test"))
+        # We have to use 'tahoe put' here because 'tahoe cp' doesn't
+        # know how to make mutable files at the destination.
+        d.addCallback(lambda ignored:
+            self.do_cli("put", "--mutable", test_txt_path, "tahoe:test/test.txt"))
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test/test.txt"))
+        def _check((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            self.failUnlessEqual(out, test_txt_contents)
+        d.addCallback(_check)
+
+        # We'll do ls --json to get the read uri and write uri for the
+        # file we've just uploaded.
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test/test.txt"))
+        def _get_test_txt_uris((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            filetype, data = simplejson.loads(out)
+
+            self.failUnlessEqual(filetype, "filenode")
+            self.failUnless(data['mutable'])
+
+            self.failUnlessIn("rw_uri", data)
+            self.rw_uri = to_str(data["rw_uri"])
+            self.failUnlessIn("ro_uri", data)
+            self.ro_uri = to_str(data["ro_uri"])
+        d.addCallback(_get_test_txt_uris)
+
+        # Now make a new file to copy in place of test.txt.
+        new_txt_path = os.path.join(self.basedir, "new.txt")
+        new_txt_contents = "baz bar foo" * 100000
+        f = open(new_txt_path, "w")
+        f.write(new_txt_contents)
+        f.close()
+
+        # Copy the new file on top of the old file.
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", new_txt_path, "tahoe:test/test.txt"))
+
+        # If we get test.txt now, we should see the new data.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test/test.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, new_txt_contents))
+        # If we get the json of the new file, we should see that the old
+        # uri is there
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test/test.txt"))
+        def _check_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            filetype, data = simplejson.loads(out)
+
+            self.failUnlessEqual(filetype, "filenode")
+            self.failUnless(data['mutable'])
+
+            self.failUnlessIn("ro_uri", data)
+            self.failUnlessEqual(to_str(data["ro_uri"]), self.ro_uri)
+            self.failUnlessIn("rw_uri", data)
+            self.failUnlessEqual(to_str(data["rw_uri"]), self.rw_uri)
+        d.addCallback(_check_json)
+
+        # and, finally, doing a GET directly on one of the old uris
+        # should give us the new contents.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self.rw_uri))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, new_txt_contents))
+        # Now copy the old test.txt without an explicit destination
+        # file. tahoe cp will match it to the existing file and
+        # overwrite it appropriately.
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", test_txt_path, "tahoe:test"))
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test/test.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_txt_contents))
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test/test.txt"))
+        d.addCallback(_check_json)
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self.rw_uri))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_txt_contents))
+
+        # Now we'll make a more complicated directory structure.
+        # test2/
+        # test2/mutable1
+        # test2/mutable2
+        # test2/imm1
+        # test2/imm2
+        imm_test_txt_path = os.path.join(self.basedir, "imm_test.txt")
+        imm_test_txt_contents = test_txt_contents * 10000
+        fileutil.write(imm_test_txt_path, imm_test_txt_contents)
+        d.addCallback(lambda ignored:
+            self.do_cli("mkdir", "tahoe:test2"))
+        d.addCallback(lambda ignored:
+            self.do_cli("put", "--mutable", new_txt_path,
+                        "tahoe:test2/mutable1"))
+        d.addCallback(lambda ignored:
+            self.do_cli("put", "--mutable", new_txt_path,
+                        "tahoe:test2/mutable2"))
+        d.addCallback(lambda ignored:
+            self.do_cli('put', new_txt_path, "tahoe:test2/imm1"))
+        d.addCallback(lambda ignored:
+            self.do_cli("put", imm_test_txt_path, "tahoe:test2/imm2"))
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test2"))
+        def _process_directory_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+
+            filetype, data = simplejson.loads(out)
+            self.failUnlessEqual(filetype, "dirnode")
+            self.failUnless(data['mutable'])
+            self.failUnlessIn("children", data)
+            children = data['children']
+
+            # Store the URIs for later use.
+            self.childuris = {}
+            for k in ["mutable1", "mutable2", "imm1", "imm2"]:
+                self.failUnlessIn(k, children)
+                childtype, childdata = children[k]
+                self.failUnlessEqual(childtype, "filenode")
+                if "mutable" in k:
+                    self.failUnless(childdata['mutable'])
+                    self.failUnlessIn("rw_uri", childdata)
+                    uri_key = "rw_uri"
+                else:
+                    self.failIf(childdata['mutable'])
+                    self.failUnlessIn("ro_uri", childdata)
+                    uri_key = "ro_uri"
+                self.childuris[k] = to_str(childdata[uri_key])
+        d.addCallback(_process_directory_json)
+        # Now build a local directory to copy into place, like the following:
+        # source1/
+        # source1/mutable1
+        # source1/mutable2
+        # source1/imm1
+        # source1/imm3
+        def _build_local_directory(ignored):
+            source1_path = os.path.join(self.basedir, "source1")
+            fileutil.make_dirs(source1_path)
+            for fn in ("mutable1", "mutable2", "imm1", "imm3"):
+                fileutil.write(os.path.join(source1_path, fn), fn * 1000)
+            self.source1_path = source1_path
+        d.addCallback(_build_local_directory)
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", "-r", self.source1_path, "tahoe:test2"))
+
+        # We expect that mutable1 and mutable2 are overwritten in-place,
+        # so they'll retain their URIs but have different content.
+        def _process_file_json((rc, out, err), fn):
+            self.failUnlessEqual(rc, 0)
+            filetype, data = simplejson.loads(out)
+            self.failUnlessEqual(filetype, "filenode")
+
+            if "mutable" in fn:
+                self.failUnless(data['mutable'])
+                self.failUnlessIn("rw_uri", data)
+                self.failUnlessEqual(to_str(data["rw_uri"]), self.childuris[fn])
+            else:
+                self.failIf(data['mutable'])
+                self.failUnlessIn("ro_uri", data)
+                self.failIfEqual(to_str(data["ro_uri"]), self.childuris[fn])
+
+        for fn in ("mutable1", "mutable2"):
+            d.addCallback(lambda ignored, fn=fn:
+                self.do_cli("get", "tahoe:test2/%s" % fn))
+            d.addCallback(lambda (rc, out, err), fn=fn:
+                self.failUnlessEqual(out, fn * 1000))
+            d.addCallback(lambda ignored, fn=fn:
+                self.do_cli("ls", "--json", "tahoe:test2/%s" % fn))
+            d.addCallback(_process_file_json, fn=fn)
+
+        # imm1 should have been replaced, so both its uri and content
+        # should be different.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test2/imm1"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, "imm1" * 1000))
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test2/imm1"))
+        d.addCallback(_process_file_json, fn="imm1")
+
+        # imm3 should have been created.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test2/imm3"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, "imm3" * 1000))
+
+        # imm2 should be exactly as we left it, since our newly-copied
+        # directory didn't contain an imm2 entry.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test2/imm2"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, imm_test_txt_contents))
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test2/imm2"))
+        def _process_imm2_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            filetype, data = simplejson.loads(out)
+            self.failUnlessEqual(filetype, "filenode")
+            self.failIf(data['mutable'])
+            self.failUnlessIn("ro_uri", data)
+            self.failUnlessEqual(to_str(data["ro_uri"]), self.childuris["imm2"])
+        d.addCallback(_process_imm2_json)
+        return d
+
+    def test_cp_overwrite_readonly_mutable_file(self):
+        # tahoe cp should print an error when asked to overwrite a
+        # mutable file that it can't overwrite.
+        self.basedir = "cli/Cp/overwrite_readonly_mutable_file"
+        self.set_up_grid()
+
+        # This is our initial file. We'll link its readcap into the
+        # tahoe: alias.
+        test_file_path = os.path.join(self.basedir, "test_file.txt")
+        test_file_contents = "This is a test file."
+        fileutil.write(test_file_path, test_file_contents)
+
+        # This is our replacement file. We'll try and fail to upload it
+        # over the readcap that we linked into the tahoe: alias.
+        replacement_file_path = os.path.join(self.basedir, "replacement.txt")
+        replacement_file_contents = "These are new contents."
+        fileutil.write(replacement_file_path, replacement_file_contents)
+
+        d = self.do_cli("create-alias", "tahoe:")
+        d.addCallback(lambda ignored:
+            self.do_cli("put", "--mutable", test_file_path))
+        def _get_test_uri((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            # this should be a write uri
+            self._test_write_uri = out
+        d.addCallback(_get_test_uri)
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", self._test_write_uri))
+        def _process_test_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+            filetype, data = simplejson.loads(out)
+
+            self.failUnlessEqual(filetype, "filenode")
+            self.failUnless(data['mutable'])
+            self.failUnlessIn("ro_uri", data)
+            self._test_read_uri = to_str(data["ro_uri"])
+        d.addCallback(_process_test_json)
+        # Now we'll link the readonly URI into the tahoe: alias.
+        d.addCallback(lambda ignored:
+            self.do_cli("ln", self._test_read_uri, "tahoe:test_file.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(rc, 0))
+        # Let's grab the json of that to make sure that we did it right.
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:"))
+        def _process_tahoe_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+
+            filetype, data = simplejson.loads(out)
+            self.failUnlessEqual(filetype, "dirnode")
+            self.failUnlessIn("children", data)
+            kiddata = data['children']
+
+            self.failUnlessIn("test_file.txt", kiddata)
+            testtype, testdata = kiddata['test_file.txt']
+            self.failUnlessEqual(testtype, "filenode")
+            self.failUnless(testdata['mutable'])
+            self.failUnlessIn("ro_uri", testdata)
+            self.failUnlessEqual(to_str(testdata["ro_uri"]), self._test_read_uri)
+            self.failIfIn("rw_uri", testdata)
+        d.addCallback(_process_tahoe_json)
+        # Okay, now we're going to try uploading another mutable file in
+        # place of that one. We should get an error.
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", replacement_file_path, "tahoe:test_file.txt"))
+        def _check_error_message((rc, out, err)):
+            self.failUnlessEqual(rc, 1)
+            self.failUnlessIn("replace or update requested with read-only cap", err)
+        d.addCallback(_check_error_message)
+        # Make extra sure that that didn't work.
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test_file.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_file_contents))
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self._test_read_uri))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_file_contents))
+        # Now we'll do it without an explicit destination.
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", test_file_path, "tahoe:"))
+        d.addCallback(_check_error_message)
+        d.addCallback(lambda ignored:
+            self.do_cli("get", "tahoe:test_file.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_file_contents))
+        d.addCallback(lambda ignored:
+            self.do_cli("get", self._test_read_uri))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(out, test_file_contents))
+        # Now we'll link a readonly file into a subdirectory.
+        d.addCallback(lambda ignored:
+            self.do_cli("mkdir", "tahoe:testdir"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(rc, 0))
+        d.addCallback(lambda ignored:
+            self.do_cli("ln", self._test_read_uri, "tahoe:test/file2.txt"))
+        d.addCallback(lambda (rc, out, err):
+            self.failUnlessEqual(rc, 0))
+
+        test_dir_path = os.path.join(self.basedir, "test")
+        fileutil.make_dirs(test_dir_path)
+        for f in ("file1.txt", "file2.txt"):
+            fileutil.write(os.path.join(test_dir_path, f), f * 10000)
+
+        d.addCallback(lambda ignored:
+            self.do_cli("cp", "-r", test_dir_path, "tahoe:test"))
+        d.addCallback(_check_error_message)
+        d.addCallback(lambda ignored:
+            self.do_cli("ls", "--json", "tahoe:test"))
+        def _got_testdir_json((rc, out, err)):
+            self.failUnlessEqual(rc, 0)
+
+            filetype, data = simplejson.loads(out)
+            self.failUnlessEqual(filetype, "dirnode")
+
+            self.failUnlessIn("children", data)
+            childdata = data['children']
+
+            self.failUnlessIn("file2.txt", childdata)
+            file2type, file2data = childdata['file2.txt']
+            self.failUnlessEqual(file2type, "filenode")
+            self.failUnless(file2data['mutable'])
+            self.failUnlessIn("ro_uri", file2data)
+            self.failUnlessEqual(to_str(file2data["ro_uri"]), self._test_read_uri)
+            self.failIfIn("rw_uri", file2data)
+        d.addCallback(_got_testdir_json)
+        return d
+
 
 class Backup(GridTestMixin, CLITestMixin, StallMixin, unittest.TestCase):
 
@@ -1882,7 +2678,7 @@ class Backup(GridTestMixin, CLITestMixin, StallMixin, unittest.TestCase):
     def test_exclude_options_unicode(self):
         nice_doc = u"nice_d\u00F8c.lyx"
         try:
-            doc_pattern_arg = u"*d\u00F8c*".encode(get_argv_encoding())
+            doc_pattern_arg = u"*d\u00F8c*".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -2079,7 +2875,8 @@ class Check(GridTestMixin, CLITestMixin, unittest.TestCase):
         self.set_up_grid()
         c0 = self.g.clients[0]
         DATA = "data" * 100
-        d = c0.create_mutable_file(DATA)
+        DATA_uploadable = MutableData(DATA)
+        d = c0.create_mutable_file(DATA_uploadable)
         def _stash_uri(n):
             self.uri = n.get_uri()
         d.addCallback(_stash_uri)
@@ -2180,7 +2977,8 @@ class Check(GridTestMixin, CLITestMixin, unittest.TestCase):
                                            upload.Data("literal",
                                                         convergence="")))
         d.addCallback(_stash_uri, "small")
-        d.addCallback(lambda ign: c0.create_mutable_file(DATA+"1"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(MutableData(DATA+"1")))
         d.addCallback(lambda fn: self.rootnode.set_node(u"mutable", fn))
         d.addCallback(_stash_uri, "mutable")
 
@@ -2412,7 +3210,7 @@ class Errors(GridTestMixin, CLITestMixin, unittest.TestCase):
         # enough shares. The one remaining share might be in either the
         # COMPLETE or the PENDING state.
         in_complete_msg = "ran out of shares: complete=sh0 pending= overdue= unused= need 3"
-        in_pending_msg = "ran out of shares: complete= pending=Share(sh0-on-fob7v) overdue= unused= need 3"
+        in_pending_msg = "ran out of shares: complete= pending=Share(sh0-on-fob7vqgd) overdue= unused= need 3"
 
         d.addCallback(lambda ign: self.do_cli("get", self.uri_1share))
         def _check1((rc, out, err)):
@@ -2512,12 +3310,77 @@ class Mkdir(GridTestMixin, CLITestMixin, unittest.TestCase):
 
         return d
 
+    def test_mkdir_mutable_type(self):
+        self.basedir = os.path.dirname(self.mktemp())
+        self.set_up_grid()
+        d = self.do_cli("create-alias", "tahoe")
+        def _check((rc, out, err), st):
+            self.failUnlessReallyEqual(rc, 0)
+            self.failUnlessReallyEqual(err, "")
+            self.failUnlessIn(st, out)
+            return out
+        def _mkdir(ign, mutable_type, uri_prefix, dirname):
+            d2 = self.do_cli("mkdir", "--format="+mutable_type, dirname)
+            d2.addCallback(_check, uri_prefix)
+            def _stash_filecap(cap):
+                u = uri.from_string(cap)
+                fn_uri = u.get_filenode_cap()
+                self._filecap = fn_uri.to_string()
+            d2.addCallback(_stash_filecap)
+            d2.addCallback(lambda ign: self.do_cli("ls", "--json", dirname))
+            d2.addCallback(_check, uri_prefix)
+            d2.addCallback(lambda ign: self.do_cli("ls", "--json", self._filecap))
+            d2.addCallback(_check, '"format": "%s"' % (mutable_type.upper(),))
+            return d2
+
+        d.addCallback(_mkdir, "sdmf", "URI:DIR2", "tahoe:foo")
+        d.addCallback(_mkdir, "SDMF", "URI:DIR2", "tahoe:foo2")
+        d.addCallback(_mkdir, "mdmf", "URI:DIR2-MDMF", "tahoe:bar")
+        d.addCallback(_mkdir, "MDMF", "URI:DIR2-MDMF", "tahoe:bar2")
+        return d
+
+    def test_mkdir_mutable_type_unlinked(self):
+        self.basedir = os.path.dirname(self.mktemp())
+        self.set_up_grid()
+        d = self.do_cli("mkdir", "--format=SDMF")
+        def _check((rc, out, err), st):
+            self.failUnlessReallyEqual(rc, 0)
+            self.failUnlessReallyEqual(err, "")
+            self.failUnlessIn(st, out)
+            return out
+        d.addCallback(_check, "URI:DIR2")
+        def _stash_dircap(cap):
+            self._dircap = cap
+            # Now we're going to feed the cap into uri.from_string...
+            u = uri.from_string(cap)
+            # ...grab the underlying filenode uri.
+            fn_uri = u.get_filenode_cap()
+            # ...and stash that.
+            self._filecap = fn_uri.to_string()
+        d.addCallback(_stash_dircap)
+        d.addCallback(lambda res: self.do_cli("ls", "--json",
+                                              self._filecap))
+        d.addCallback(_check, '"format": "SDMF"')
+        d.addCallback(lambda res: self.do_cli("mkdir", "--format=MDMF"))
+        d.addCallback(_check, "URI:DIR2-MDMF")
+        d.addCallback(_stash_dircap)
+        d.addCallback(lambda res: self.do_cli("ls", "--json",
+                                              self._filecap))
+        d.addCallback(_check, '"format": "MDMF"')
+        return d
+
+    def test_mkdir_bad_mutable_type(self):
+        o = cli.MakeDirectoryOptions()
+        self.failUnlessRaises(usage.UsageError,
+                              o.parseOptions,
+                              ["--format=LDMF"])
+
     def test_mkdir_unicode(self):
         self.basedir = os.path.dirname(self.mktemp())
         self.set_up_grid()
 
         try:
-            motorhead_arg = u"tahoe:Mot\u00F6rhead".encode(get_argv_encoding())
+            motorhead_arg = u"tahoe:Mot\u00F6rhead".encode(get_io_encoding())
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII command argument could not be encoded on this platform.")
 
@@ -2545,29 +3408,37 @@ class Mkdir(GridTestMixin, CLITestMixin, unittest.TestCase):
         return d
 
 
-class Rm(GridTestMixin, CLITestMixin, unittest.TestCase):
-    def test_rm_without_alias(self):
-        # 'tahoe rm' should behave sensibly when invoked without an explicit
+class Unlink(GridTestMixin, CLITestMixin, unittest.TestCase):
+    command = "unlink"
+
+    def _create_test_file(self):
+        data = "puppies" * 1000
+        path = os.path.join(self.basedir, "datafile")
+        fileutil.write(path, data)
+        self.datafile = path
+
+    def test_unlink_without_alias(self):
+        # 'tahoe unlink' should behave sensibly when invoked without an explicit
         # alias before the default 'tahoe' alias has been created.
-        self.basedir = "cli/Rm/rm_without_alias"
+        self.basedir = "cli/Unlink/%s_without_alias" % (self.command,)
         self.set_up_grid()
-        d = self.do_cli("rm", "afile")
+        d = self.do_cli(self.command, "afile")
         def _check((rc, out, err)):
             self.failUnlessReallyEqual(rc, 1)
             self.failUnlessIn("error:", err)
             self.failUnlessReallyEqual(out, "")
         d.addCallback(_check)
 
-        d.addCallback(lambda ign: self.do_cli("unlink", "afile"))
+        d.addCallback(lambda ign: self.do_cli(self.command, "afile"))
         d.addCallback(_check)
         return d
 
-    def test_rm_with_nonexistent_alias(self):
-        # 'tahoe rm' should behave sensibly when invoked with an explicit
+    def test_unlink_with_nonexistent_alias(self):
+        # 'tahoe unlink' should behave sensibly when invoked with an explicit
         # alias that doesn't exist.
-        self.basedir = "cli/Rm/rm_with_nonexistent_alias"
+        self.basedir = "cli/Unlink/%s_with_nonexistent_alias" % (self.command,)
         self.set_up_grid()
-        d = self.do_cli("rm", "nonexistent:afile")
+        d = self.do_cli(self.command, "nonexistent:afile")
         def _check((rc, out, err)):
             self.failUnlessReallyEqual(rc, 1)
             self.failUnlessIn("error:", err)
@@ -2575,9 +3446,35 @@ class Rm(GridTestMixin, CLITestMixin, unittest.TestCase):
             self.failUnlessReallyEqual(out, "")
         d.addCallback(_check)
 
-        d.addCallback(lambda ign: self.do_cli("unlink", "nonexistent:afile"))
+        d.addCallback(lambda ign: self.do_cli(self.command, "nonexistent:afile"))
         d.addCallback(_check)
         return d
+
+    def test_unlink_without_path(self):
+        # 'tahoe unlink' should give a sensible error message when invoked without a path.
+        self.basedir = "cli/Unlink/%s_without_path" % (self.command,)
+        self.set_up_grid()
+        self._create_test_file()
+        d = self.do_cli("create-alias", "tahoe")
+        d.addCallback(lambda ign: self.do_cli("put", self.datafile, "tahoe:test"))
+        def _do_unlink((rc, out, err)):
+            self.failUnlessReallyEqual(rc, 0)
+            self.failUnless(out.startswith("URI:"), out)
+            return self.do_cli(self.command, out.strip('\n'))
+        d.addCallback(_do_unlink)
+
+        def _check((rc, out, err)):
+            self.failUnlessReallyEqual(rc, 1)
+            self.failUnlessIn("'tahoe %s'" % (self.command,), err)
+            self.failUnlessIn("path must be given", err)
+            self.failUnlessReallyEqual(out, "")
+        d.addCallback(_check)
+        return d
+
+
+class Rm(Unlink):
+    """Test that 'tahoe rm' behaves in the same way as 'tahoe unlink'."""
+    command = "rm"
 
 
 class Stats(GridTestMixin, CLITestMixin, unittest.TestCase):
@@ -2649,4 +3546,40 @@ class Webopen(GridTestMixin, CLITestMixin, unittest.TestCase):
             self.failUnlessIn("error:", err)
             self.failUnlessReallyEqual(out, "")
         d.addCallback(_check)
+        return d
+
+    def test_webopen(self):
+        # TODO: replace with @patch that supports Deferreds.
+        import webbrowser
+        def call_webbrowser_open(url):
+            self.failUnlessIn(self.alias_uri.replace(':', '%3A'), url)
+            self.webbrowser_open_called = True
+        def _cleanup(res):
+            webbrowser.open = self.old_webbrowser_open
+            return res
+
+        self.old_webbrowser_open = webbrowser.open
+        try:
+            webbrowser.open = call_webbrowser_open
+
+            self.basedir = "cli/Webopen/webopen"
+            self.set_up_grid()
+            d = self.do_cli("create-alias", "alias:")
+            def _check_alias((rc, out, err)):
+                self.failUnlessReallyEqual(rc, 0, repr((rc, out, err)))
+                self.failUnlessIn("Alias 'alias' created", out)
+                self.failUnlessReallyEqual(err, "")
+                self.alias_uri = get_aliases(self.get_clientdir())["alias"]
+            d.addCallback(_check_alias)
+            d.addCallback(lambda res: self.do_cli("webopen", "alias:"))
+            def _check_webopen((rc, out, err)):
+                self.failUnlessReallyEqual(rc, 0, repr((rc, out, err)))
+                self.failUnlessReallyEqual(out, "")
+                self.failUnlessReallyEqual(err, "")
+                self.failUnless(self.webbrowser_open_called)
+            d.addCallback(_check_webopen)
+            d.addBoth(_cleanup)
+        except:
+            _cleanup(None)
+            raise
         return d

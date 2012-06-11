@@ -4,8 +4,9 @@ from twisted.web import http
 from twisted.internet import defer
 from nevow import rend, url, tags as T
 from allmydata.immutable.upload import FileHandle
+from allmydata.mutable.publish import MutableFileHandle
 from allmydata.web.common import getxmlfile, get_arg, boolean_of_arg, \
-     convert_children_json, WebError
+     convert_children_json, WebError, get_format, get_mutable_type
 from allmydata.web import status
 
 def PUTUnlinkedCHK(req, client):
@@ -16,17 +17,24 @@ def PUTUnlinkedCHK(req, client):
     # that fires with the URI of the new file
     return d
 
-def PUTUnlinkedSSK(req, client):
+def PUTUnlinkedSSK(req, client, version):
     # SDMF: files are small, and we can only upload data
     req.content.seek(0)
-    data = req.content.read()
-    d = client.create_mutable_file(data)
+    data = MutableFileHandle(req.content)
+    d = client.create_mutable_file(data, version=version)
     d.addCallback(lambda n: n.get_uri())
     return d
 
 def PUTUnlinkedCreateDirectory(req, client):
     # "PUT /uri?t=mkdir", to create an unlinked directory.
-    d = client.create_dirnode()
+    file_format = get_format(req, None)
+    if file_format == "CHK":
+        raise WebError("format=CHK not accepted for PUT /uri?t=mkdir",
+                       http.BAD_REQUEST)
+    mt = None
+    if file_format:
+        mt = get_mutable_type(file_format)
+    d = client.create_dirnode(version=mt)
     d.addCallback(lambda dirnode: dirnode.get_uri())
     # XXX add redirect_to_result
     return d
@@ -79,13 +87,12 @@ class UploadResultsPage(status.UploadResultsRendererMixin, rend.Page):
                       ["/uri/" + res.uri])
         return d
 
-def POSTUnlinkedSSK(req, client):
+def POSTUnlinkedSSK(req, client, version):
     # "POST /uri", to create an unlinked file.
     # SDMF: files are small, and we can only upload data
-    contents = req.fields["file"]
-    contents.file.seek(0)
-    data = contents.file.read()
-    d = client.create_mutable_file(data)
+    contents = req.fields["file"].file
+    data = MutableFileHandle(contents)
+    d = client.create_mutable_file(data, version=version)
     d.addCallback(lambda n: n.get_uri())
     return d
 
@@ -104,7 +111,14 @@ def POSTUnlinkedCreateDirectory(req, client):
             raise WebError("t=mkdir does not accept children=, "
                            "try t=mkdir-with-children instead",
                            http.BAD_REQUEST)
-    d = client.create_dirnode()
+    file_format = get_format(req, None)
+    if file_format == "CHK":
+        raise WebError("format=CHK not currently accepted for POST /uri?t=mkdir",
+                       http.BAD_REQUEST)
+    mt = None
+    if file_format:
+        mt = get_mutable_type(file_format)
+    d = client.create_dirnode(version=mt)
     redirect = get_arg(req, "redirect_to_result", "false")
     if boolean_of_arg(redirect):
         def _then_redir(res):

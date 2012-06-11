@@ -22,6 +22,8 @@ def mkdir(options):
     if not where or not path:
         # create a new unlinked directory
         url = nodeurl + "uri?t=mkdir"
+        if options["format"]:
+            url += "&format=%s" % urllib.quote(options['format'])
         resp = do_http("POST", url)
         rc = check_http_error(resp, stderr)
         if rc:
@@ -37,6 +39,9 @@ def mkdir(options):
     # path must be "/".join([s.encode("utf-8") for s in segments])
     url = nodeurl + "uri/%s/%s?t=mkdir" % (urllib.quote(rootcap),
                                            urllib.quote(path))
+    if options['format']:
+        url += "&format=%s" % urllib.quote(options['format'])
+
     resp = do_http("POST", url)
     check_http_error(resp, stderr)
     new_uri = resp.read().strip()

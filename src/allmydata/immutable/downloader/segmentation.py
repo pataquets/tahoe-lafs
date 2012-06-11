@@ -7,8 +7,9 @@ from twisted.internet.interfaces import IPushProducer
 from foolscap.api import eventually
 from allmydata.util import log
 from allmydata.util.spans import overlap
+from allmydata.interfaces import DownloadStopped
 
-from common import BadSegmentNumberError, WrongSegmentError, DownloadStopped
+from common import BadSegmentNumberError, WrongSegmentError
 
 class Segmentation:
     """I am responsible for a single offset+size read of the file. I handle
@@ -123,6 +124,8 @@ class Segmentation:
         # the consumer might call our .pauseProducing() inside that write()
         # call, setting self._hungry=False
         self._read_ev.update(len(desired_data), 0, 0)
+        # note: filenode.DecryptingConsumer is responsible for calling
+        # _read_ev.update with how much decrypt_time was consumed
         self._maybe_fetch_next()
 
     def _retry_bad_segment(self, f):

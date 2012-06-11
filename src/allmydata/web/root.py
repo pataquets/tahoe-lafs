@@ -16,7 +16,7 @@ from allmydata.interfaces import IFileNode
 from allmydata.web import filenode, directory, unlinked, status, operations
 from allmydata.web import reliability, storage
 from allmydata.web.common import abbreviate_size, getxmlfile, WebError, \
-     get_arg, RenderMixin, boolean_of_arg
+     get_arg, RenderMixin, get_format, get_mutable_type
 
 
 class URIHandler(RenderMixin, rend.Page):
@@ -45,9 +45,10 @@ class URIHandler(RenderMixin, rend.Page):
         # "PUT /uri?t=mkdir" to create an unlinked directory
         t = get_arg(req, "t", "").strip()
         if t == "":
-            mutable = boolean_of_arg(get_arg(req, "mutable", "false").strip())
-            if mutable:
-                return unlinked.PUTUnlinkedSSK(req, self.client)
+            file_format = get_format(req, "CHK")
+            mutable_type = get_mutable_type(file_format)
+            if mutable_type is not None:
+                return unlinked.PUTUnlinkedSSK(req, self.client, mutable_type)
             else:
                 return unlinked.PUTUnlinkedCHK(req, self.client)
         if t == "mkdir":
@@ -63,9 +64,10 @@ class URIHandler(RenderMixin, rend.Page):
         req = IRequest(ctx)
         t = get_arg(req, "t", "").strip()
         if t in ("", "upload"):
-            mutable = bool(get_arg(req, "mutable", "").strip())
-            if mutable:
-                return unlinked.POSTUnlinkedSSK(req, self.client)
+            file_format = get_format(req)
+            mutable_type = get_mutable_type(file_format)
+            if mutable_type is not None:
+                return unlinked.POSTUnlinkedSSK(req, self.client, mutable_type)
             else:
                 return unlinked.POSTUnlinkedCHK(req, self.client)
         if t == "mkdir":
@@ -140,6 +142,8 @@ class NoReliability(rend.Page):
 </html>
 ''')
 
+SPACE = u"\u00A0"*2
+
 class Root(rend.Page):
 
     addSlash = True
@@ -164,6 +168,11 @@ class Root(rend.Page):
         self.child_named = FileHandler(client)
         self.child_status = status.Status(client.get_history())
         self.child_statistics = status.Statistics(client.stats_provider)
+        def f(name):
+            return nevow_File(resource_filename('allmydata.web', name))
+        self.putChild("download_status_timeline.js", f("download_status_timeline.js"))
+        self.putChild("jquery-1.6.1.min.js", f("jquery-1.6.1.min.js"))
+        self.putChild("protovis-3.3.1.min.js", f("protovis-3.3.1.min.js"))
 
     def child_helper_status(self, ctx):
         # the Helper isn't attached until after the Tub starts, so this child
@@ -247,18 +256,18 @@ class Root(rend.Page):
 
     def data_connected_storage_servers(self, ctx, data):
         sb = self.client.get_storage_broker()
-        return len(sb.get_all_servers())
+        return len(sb.get_connected_servers())
 
     def data_services(self, ctx, data):
         sb = self.client.get_storage_broker()
-        return sb.get_all_descriptors()
+        return sorted(sb.get_known_servers(), key=lambda s: s.get_serverid())
 
-    def render_service_row(self, ctx, descriptor):
-        nodeid = descriptor.get_serverid()
+    def render_service_row(self, ctx, server):
+        nodeid = server.get_serverid()
 
-        ctx.fillSlots("peerid", idlib.nodeid_b2a(nodeid))
-        ctx.fillSlots("nickname", descriptor.get_nickname())
-        rhost = descriptor.get_remote_host()
+        ctx.fillSlots("peerid", server.get_longname())
+        ctx.fillSlots("nickname", server.get_nickname())
+        rhost = server.get_remote_host()
         if rhost:
             if nodeid == self.client.nodeid:
                 rhost_s = "(loopback)"
@@ -267,12 +276,12 @@ class Root(rend.Page):
             else:
                 rhost_s = str(rhost)
             connected = "Yes: to " + rhost_s
-            since = descriptor.get_last_connect_time()
+            since = server.get_last_connect_time()
         else:
             connected = "No"
-            since = descriptor.get_last_loss_time()
-        announced = descriptor.get_announcement_time()
-        announcement = descriptor.get_announcement()
+            since = server.get_last_loss_time()
+        announced = server.get_announcement_time()
+        announcement = server.get_announcement()
         version = announcement["my-version"]
         service_name = announcement["service-name"]
 
@@ -294,9 +303,9 @@ class Root(rend.Page):
                       enctype="multipart/form-data")[
             T.fieldset[
             T.legend(class_="freeform-form-label")["Download a file"],
-            T.div["Tahoe-URI to download: ",
+            T.div["Tahoe-URI to download:"+SPACE,
                   T.input(type="text", name="uri")],
-            T.div["Filename to download as: ",
+            T.div["Filename to download as:"+SPACE,
                   T.input(type="text", name="filename")],
             T.input(type="submit", value="Download!"),
             ]]
@@ -309,32 +318,54 @@ class Root(rend.Page):
                       enctype="multipart/form-data")[
             T.fieldset[
             T.legend(class_="freeform-form-label")["View a file or directory"],
-            "Tahoe-URI to view: ",
-            T.input(type="text", name="uri"), " ",
+            "Tahoe-URI to view:"+SPACE,
+            T.input(type="text", name="uri"), SPACE*2,
             T.input(type="submit", value="View!"),
             ]]
         return T.div[form]
 
     def render_upload_form(self, ctx, data):
-        # this is a form where users can upload unlinked files
+        # This is a form where users can upload unlinked files.
+        # Users can choose immutable, SDMF, or MDMF from a radio button.
+
+        upload_chk  = T.input(type='radio', name='format',
+                              value='chk', id='upload-chk',
+                              checked='checked')
+        upload_sdmf = T.input(type='radio', name='format',
+                              value='sdmf', id='upload-sdmf')
+        upload_mdmf = T.input(type='radio', name='format',
+                              value='mdmf', id='upload-mdmf')
+
         form = T.form(action="uri", method="post",
                       enctype="multipart/form-data")[
             T.fieldset[
             T.legend(class_="freeform-form-label")["Upload a file"],
-            T.div["Choose a file: ",
+            T.div["Choose a file:"+SPACE,
                   T.input(type="file", name="file", class_="freeform-input-file")],
             T.input(type="hidden", name="t", value="upload"),
-            T.div[T.input(type="checkbox", name="mutable"), T.label(for_="mutable")["Create mutable file"],
-                  " ", T.input(type="submit", value="Upload!")],
+            T.div[upload_chk,  T.label(for_="upload-chk") [" Immutable"],           SPACE,
+                  upload_sdmf, T.label(for_="upload-sdmf")[" SDMF"],                SPACE,
+                  upload_mdmf, T.label(for_="upload-mdmf")[" MDMF (experimental)"], SPACE*2,
+                  T.input(type="submit", value="Upload!")],
             ]]
         return T.div[form]
 
     def render_mkdir_form(self, ctx, data):
-        # this is a form where users can create new directories
+        # This is a form where users can create new directories.
+        # Users can choose SDMF or MDMF from a radio button.
+
+        mkdir_sdmf = T.input(type='radio', name='format',
+                             value='sdmf', id='mkdir-sdmf',
+                             checked='checked')
+        mkdir_mdmf = T.input(type='radio', name='format',
+                             value='mdmf', id='mkdir-mdmf')
+
         form = T.form(action="uri", method="post",
                       enctype="multipart/form-data")[
             T.fieldset[
             T.legend(class_="freeform-form-label")["Create a directory"],
+            mkdir_sdmf, T.label(for_='mkdir-sdmf')[" SDMF"],                SPACE,
+            mkdir_mdmf, T.label(for_='mkdir-mdmf')[" MDMF (experimental)"], SPACE*2,
             T.input(type="hidden", name="t", value="mkdir"),
             T.input(type="hidden", name="redirect_to_result", value="true"),
             T.input(type="submit", value="Create a directory"),
@@ -348,8 +379,8 @@ class Root(rend.Page):
             T.fieldset[
             T.legend(class_="freeform-form-label")["Report an Incident"],
             T.input(type="hidden", name="t", value="report-incident"),
-            "What went wrong?: ",
-            T.input(type="text", name="details"), " ",
+            "What went wrong?:"+SPACE,
+            T.input(type="text", name="details"), SPACE,
             T.input(type="submit", value="Report!"),
             ]]
         return T.div[form]

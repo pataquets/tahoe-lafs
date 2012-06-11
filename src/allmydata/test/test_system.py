@@ -23,6 +23,7 @@ from allmydata.interfaces import IDirectoryNode, IFileNode, \
 from allmydata.monitor import Monitor
 from allmydata.mutable.common import NotWriteableError
 from allmydata.mutable import layout as mutable_layout
+from allmydata.mutable.publish import MutableData
 from foolscap.api import DeadReferenceError
 from twisted.python.failure import Failure
 from twisted.web.client import getPage
@@ -65,7 +66,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
                 all_peerids = c.get_storage_broker().get_all_serverids()
                 self.failUnlessEqual(len(all_peerids), self.numclients+1)
                 sb = c.storage_broker
-                permuted_peers = sb.get_servers_for_index("a")
+                permuted_peers = sb.get_servers_for_psi("a")
                 self.failUnlessEqual(len(permuted_peers), self.numclients+1)
 
         d.addCallback(_check)
@@ -101,7 +102,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
                 all_peerids = c.get_storage_broker().get_all_serverids()
                 self.failUnlessEqual(len(all_peerids), self.numclients)
                 sb = c.storage_broker
-                permuted_peers = sb.get_servers_for_index("a")
+                permuted_peers = sb.get_servers_for_psi("a")
                 self.failUnlessEqual(len(permuted_peers), self.numclients)
         d.addCallback(_check_connections)
 
@@ -463,15 +464,18 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
     def test_mutable(self):
         self.basedir = "system/SystemTest/test_mutable"
         DATA = "initial contents go here."  # 25 bytes % 3 != 0
+        DATA_uploadable = MutableData(DATA)
         NEWDATA = "new contents yay"
+        NEWDATA_uploadable = MutableData(NEWDATA)
         NEWERDATA = "this is getting old"
+        NEWERDATA_uploadable = MutableData(NEWERDATA)
 
         d = self.set_up_nodes(use_key_generator=True)
 
         def _create_mutable(res):
             c = self.clients[0]
             log.msg("starting create_mutable_file")
-            d1 = c.create_mutable_file(DATA)
+            d1 = c.create_mutable_file(DATA_uploadable)
             def _done(res):
                 log.msg("DONE: %s" % (res,))
                 self._mutable_node_1 = res
@@ -558,7 +562,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             self.failUnlessEqual(res, DATA)
             # replace the data
             log.msg("starting replace1")
-            d1 = newnode.overwrite(NEWDATA)
+            d1 = newnode.overwrite(NEWDATA_uploadable)
             d1.addCallback(lambda res: newnode.download_best_version())
             return d1
         d.addCallback(_check_download_3)
@@ -572,7 +576,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             newnode2 = self.clients[3].create_node_from_uri(uri)
             self._newnode3 = self.clients[3].create_node_from_uri(uri)
             log.msg("starting replace2")
-            d1 = newnode1.overwrite(NEWERDATA)
+            d1 = newnode1.overwrite(NEWERDATA_uploadable)
             d1.addCallback(lambda res: newnode2.download_best_version())
             return d1
         d.addCallback(_check_download_4)
@@ -642,7 +646,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         def _check_empty_file(res):
             # make sure we can create empty files, this usually screws up the
             # segsize math
-            d1 = self.clients[2].create_mutable_file("")
+            d1 = self.clients[2].create_mutable_file(MutableData(""))
             d1.addCallback(lambda newnode: newnode.download_best_version())
             d1.addCallback(lambda res: self.failUnlessEqual("", res))
             return d1
@@ -673,7 +677,8 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
                                  self.key_generator_svc.key_generator.pool_size + size_delta)
 
         d.addCallback(check_kg_poolsize, 0)
-        d.addCallback(lambda junk: self.clients[3].create_mutable_file('hello, world'))
+        d.addCallback(lambda junk:
+            self.clients[3].create_mutable_file(MutableData('hello, world')))
         d.addCallback(check_kg_poolsize, -1)
         d.addCallback(lambda junk: self.clients[3].create_dirnode())
         d.addCallback(check_kg_poolsize, -2)
@@ -1107,7 +1112,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         d.addCallback(lambda res: getPage(base + public + "/subdir1"))
         def _got_subdir1(page):
             # there ought to be an href for our file
-            self.failUnless(("<td>%d</td>" % len(self.data)) in page)
+            self.failUnlessIn('<td align="right">%d</td>' % len(self.data), page)
             self.failUnless(">mydata567</a>" in page)
         d.addCallback(_got_subdir1)
         d.addCallback(self.log, "done with _got_subdir1")
@@ -1393,7 +1398,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             self.failUnlessEqual(data, expected_data)
         d.addCallback(_check)
         d.addCallback(lambda res: rref.callRemote("speed_test", 1, 200, False))
-        if sys.platform == "linux2":
+        if sys.platform in ("linux2", "linux3"):
             d.addCallback(lambda res: rref.callRemote("get_memory_usage"))
         d.addCallback(lambda res: rref.callRemote("measure_peer_response_time"))
         return d
@@ -1513,7 +1518,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         d.addCallback(run, "put", files[1], "subdir/tahoe-file1")
         #  tahoe put bar tahoe:FOO
         d.addCallback(run, "put", files[2], "tahoe:file2")
-        d.addCallback(run, "put", "--mutable", files[3], "tahoe:file3")
+        d.addCallback(run, "put", "--format=SDMF", files[3], "tahoe:file3")
         def _check_put_mutable((out,err)):
             self._mutable_file3_uri = out.strip()
         d.addCallback(_check_put_mutable)

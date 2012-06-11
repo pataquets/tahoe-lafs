@@ -3,7 +3,7 @@ from zope.interface import implements
 from twisted.internet import defer
 from allmydata.interfaces import IStorageBucketWriter, IStorageBucketReader, \
      FileTooLargeError, HASH_SIZE
-from allmydata.util import mathutil, idlib, observer, pipeline
+from allmydata.util import mathutil, observer, pipeline
 from allmydata.util.assertutil import precondition
 from allmydata.storage.server import si_b2a
 
@@ -76,19 +76,22 @@ limitations described in #346.
 
 FORCE_V2 = False # set briefly by unit tests to make small-sized V2 shares
 
-def make_write_bucket_proxy(rref, data_size, block_size, num_segments,
-                            num_share_hashes, uri_extension_size_max, nodeid):
+def make_write_bucket_proxy(rref, server,
+                            data_size, block_size, num_segments,
+                            num_share_hashes, uri_extension_size_max):
     # Use layout v1 for small files, so they'll be readable by older versions
     # (<tahoe-1.3.0). Use layout v2 for large files; they'll only be readable
     # by tahoe-1.3.0 or later.
     try:
         if FORCE_V2:
             raise FileTooLargeError
-        wbp = WriteBucketProxy(rref, data_size, block_size, num_segments,
-                               num_share_hashes, uri_extension_size_max, nodeid)
+        wbp = WriteBucketProxy(rref, server,
+                               data_size, block_size, num_segments,
+                               num_share_hashes, uri_extension_size_max)
     except FileTooLargeError:
-        wbp = WriteBucketProxy_v2(rref, data_size, block_size, num_segments,
-                                  num_share_hashes, uri_extension_size_max, nodeid)
+        wbp = WriteBucketProxy_v2(rref, server,
+                                  data_size, block_size, num_segments,
+                                  num_share_hashes, uri_extension_size_max)
     return wbp
 
 class WriteBucketProxy:
@@ -96,14 +99,13 @@ class WriteBucketProxy:
     fieldsize = 4
     fieldstruct = ">L"
 
-    def __init__(self, rref, data_size, block_size, num_segments,
-                 num_share_hashes, uri_extension_size_max, nodeid,
-                 pipeline_size=50000):
+    def __init__(self, rref, server, data_size, block_size, num_segments,
+                 num_share_hashes, uri_extension_size_max, pipeline_size=50000):
         self._rref = rref
+        self._server = server
         self._data_size = data_size
         self._block_size = block_size
         self._num_segments = num_segments
-        self._nodeid = nodeid
 
         effective_segments = mathutil.next_power_of_k(num_segments,2)
         self._segment_hash_size = (2*effective_segments - 1) * HASH_SIZE
@@ -161,11 +163,7 @@ class WriteBucketProxy:
         self._offset_data = offset_data
 
     def __repr__(self):
-        if self._nodeid:
-            nodeid_s = idlib.nodeid_b2a(self._nodeid)
-        else:
-            nodeid_s = "[None]"
-        return "<WriteBucketProxy for node %s>" % nodeid_s
+        return "<WriteBucketProxy for node %s>" % self._server.get_name()
 
     def put_header(self):
         return self._write(0, self._offset_data)
@@ -247,10 +245,10 @@ class WriteBucketProxy:
         return self._rref.callRemoteOnly("abort")
 
 
+    def get_servername(self):
+        return self._server.get_name()
     def get_peerid(self):
-        if self._nodeid:
-            return self._nodeid
-        return None
+        return self._server.get_serverid()
 
 class WriteBucketProxy_v2(WriteBucketProxy):
     fieldsize = 8
@@ -296,20 +294,19 @@ class ReadBucketProxy:
 
     MAX_UEB_SIZE = 2000 # actual size is closer to 419, but varies by a few bytes
 
-    def __init__(self, rref, peerid, storage_index):
+    def __init__(self, rref, server, storage_index):
         self._rref = rref
-        self._peerid = peerid
-        peer_id_s = idlib.shortnodeid_b2a(peerid)
-        storage_index_s = si_b2a(storage_index)
-        self._reprstr = "<ReadBucketProxy %s to peer [%s] SI %s>" % (id(self), peer_id_s, storage_index_s)
+        self._server = server
+        self._storage_index = storage_index
         self._started = False # sent request to server
         self._ready = observer.OneShotObserverList() # got response from server
 
     def get_peerid(self):
-        return self._peerid
+        return self._server.get_serverid()
 
     def __repr__(self):
-        return self._reprstr
+        return "<ReadBucketProxy %s to peer [%s] SI %s>" % \
+               (id(self), self._server.get_name(), si_b2a(self._storage_index))
 
     def _start_if_needed(self):
         """ Returns a deferred that will be fired when I'm ready to return

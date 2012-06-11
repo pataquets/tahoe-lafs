@@ -8,18 +8,19 @@ from twisted.trial import unittest
 from twisted.internet import defer, reactor
 from allmydata import uri
 from allmydata.storage.server import storage_index_to_dir
-from allmydata.util import base32, fileutil, spans, log
+from allmydata.util import base32, fileutil, spans, log, hashutil
 from allmydata.util.consumer import download_to_data, MemoryConsumer
 from allmydata.immutable import upload, layout
-from allmydata.test.no_network import GridTestMixin
+from allmydata.test.no_network import GridTestMixin, NoNetworkServer
 from allmydata.test.common import ShouldFailMixin
-from allmydata.interfaces import NotEnoughSharesError, NoSharesError
+from allmydata.interfaces import NotEnoughSharesError, NoSharesError, \
+     DownloadStopped
 from allmydata.immutable.downloader.common import BadSegmentNumberError, \
-     BadCiphertextHashError, DownloadStopped, COMPLETE, OVERDUE, DEAD
+     BadCiphertextHashError, COMPLETE, OVERDUE, DEAD
 from allmydata.immutable.downloader.status import DownloadStatus
 from allmydata.immutable.downloader.fetcher import SegmentFetcher
 from allmydata.codec import CRSDecoder
-from foolscap.eventual import fireEventually, flushEventualQueue
+from foolscap.eventual import eventually, fireEventually, flushEventualQueue
 
 plaintext = "This is a moderate-sized file.\n" * 10
 mutable_plaintext = "This is a moderate-sized mutable file.\n" * 10
@@ -596,7 +597,8 @@ class DownloadTest(_Base, unittest.TestCase):
         # tweak the client's copies of server-version data, so it believes
         # that they're old and can't handle reads that overrun the length of
         # the share. This exercises a different code path.
-        for (peerid, rref) in self.c0.storage_broker.get_all_servers():
+        for s in self.c0.storage_broker.get_connected_servers():
+            rref = s.get_rref()
             v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
@@ -896,10 +898,14 @@ class PausingConsumer(MemoryConsumer):
         self.producer.resumeProducing()
 
 class PausingAndStoppingConsumer(PausingConsumer):
+    debug_stopped = False
     def write(self, data):
+        if self.debug_stopped:
+            raise Exception("I'm stopped, don't write to me")
         self.producer.pauseProducing()
-        reactor.callLater(0.5, self._stop)
+        eventually(self._stop)
     def _stop(self):
+        self.debug_stopped = True
         self.producer.stopProducing()
 
 class StoppingConsumer(PausingConsumer):
@@ -1113,7 +1119,7 @@ class Corruption(_Base, unittest.TestCase):
             for i,which,substring in corrupt_me:
                 # All these tests result in a failed download.
                 d.addCallback(self._corrupt_flip_all, imm_uri, i)
-                d.addCallback(lambda ign:
+                d.addCallback(lambda ign, which=which, substring=substring:
                               self.shouldFail(NoSharesError, which,
                                               substring,
                                               _download, imm_uri))
@@ -1167,7 +1173,8 @@ class DownloadV2(_Base, unittest.TestCase):
         # tweak the client's copies of server-version data, so it believes
         # that they're old and can't handle reads that overrun the length of
         # the share. This exercises a different code path.
-        for (peerid, rref) in self.c0.storage_broker.get_all_servers():
+        for s in self.c0.storage_broker.get_connected_servers():
+            rref = s.get_rref()
             v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
@@ -1186,7 +1193,8 @@ class DownloadV2(_Base, unittest.TestCase):
         self.set_up_grid()
         self.c0 = self.g.clients[0]
 
-        for (peerid, rref) in self.c0.storage_broker.get_all_servers():
+        for s in self.c0.storage_broker.get_connected_servers():
+            rref = s.get_rref()
             v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
@@ -1214,14 +1222,16 @@ class Status(unittest.TestCase):
         now = 12345.1
         ds = DownloadStatus("si-1", 123)
         self.failUnlessEqual(ds.get_status(), "idle")
-        ds.add_segment_request(0, now)
+        ev0 = ds.add_segment_request(0, now)
         self.failUnlessEqual(ds.get_status(), "fetching segment 0")
-        ds.add_segment_delivery(0, now+1, 0, 1000, 2.0)
+        ev0.activate(now+0.5)
+        ev0.deliver(now+1, 0, 1000, 2.0)
         self.failUnlessEqual(ds.get_status(), "idle")
-        ds.add_segment_request(2, now+2)
-        ds.add_segment_request(1, now+2)
+        ev2 = ds.add_segment_request(2, now+2)
+        del ev2 # hush pyflakes
+        ev1 = ds.add_segment_request(1, now+2)
         self.failUnlessEqual(ds.get_status(), "fetching segments 1,2")
-        ds.add_segment_error(1, now+3)
+        ev1.error(now+3)
         self.failUnlessEqual(ds.get_status(),
                              "fetching segment 2; errors on segment 1")
 
@@ -1264,14 +1274,22 @@ class Status(unittest.TestCase):
         e2.finished(now+3)
         self.failUnlessEqual(ds.get_active(), False)
 
+def make_server(clientid):
+    tubid = hashutil.tagged_hash("clientid", clientid)[:20]
+    return NoNetworkServer(tubid, None)
+def make_servers(clientids):
+    servers = {}
+    for clientid in clientids:
+        servers[clientid] = make_server(clientid)
+    return servers
+
 class MyShare:
-    def __init__(self, shnum, peerid, rtt):
+    def __init__(self, shnum, server, rtt):
         self._shnum = shnum
-        self._peerid = peerid
-        self._peerid_s = peerid
+        self._server = server
         self._dyhb_rtt = rtt
     def __repr__(self):
-        return "sh%d-on-%s" % (self._shnum, self._peerid)
+        return "sh%d-on-%s" % (self._shnum, self._server.get_name())
 
 class MySegmentFetcher(SegmentFetcher):
     def __init__(self, *args, **kwargs):
@@ -1316,7 +1334,8 @@ class Selection(unittest.TestCase):
     def test_only_one_share(self):
         node = FakeNode()
         sf = MySegmentFetcher(node, 0, 3, None)
-        shares = [MyShare(0, "peer-A", 0.0)]
+        serverA = make_server("peer-A")
+        shares = [MyShare(0, serverA, 0.0)]
         sf.add_shares(shares)
         d = flushEventualQueue()
         def _check1(ign):
@@ -1328,7 +1347,8 @@ class Selection(unittest.TestCase):
         def _check2(ign):
             self.failUnless(node.failed)
             self.failUnless(node.failed.check(NotEnoughSharesError))
-            self.failUnlessIn("complete= pending=sh0-on-peer-A overdue= unused=",
+            sname = serverA.get_name()
+            self.failUnlessIn("complete= pending=sh0-on-%s overdue= unused="  % sname,
                               str(node.failed))
         d.addCallback(_check2)
         return d
@@ -1336,7 +1356,7 @@ class Selection(unittest.TestCase):
     def test_good_diversity_early(self):
         node = FakeNode()
         sf = MySegmentFetcher(node, 0, 3, None)
-        shares = [MyShare(i, "peer-%d" % i, i) for i in range(10)]
+        shares = [MyShare(i, make_server("peer-%d" % i), i) for i in range(10)]
         sf.add_shares(shares)
         d = flushEventualQueue()
         def _check1(ign):
@@ -1358,7 +1378,7 @@ class Selection(unittest.TestCase):
     def test_good_diversity_late(self):
         node = FakeNode()
         sf = MySegmentFetcher(node, 0, 3, None)
-        shares = [MyShare(i, "peer-%d" % i, i) for i in range(10)]
+        shares = [MyShare(i, make_server("peer-%d" % i), i) for i in range(10)]
         sf.add_shares([])
         d = flushEventualQueue()
         def _check1(ign):
@@ -1387,11 +1407,12 @@ class Selection(unittest.TestCase):
         # we could satisfy the read entirely from the first server, but we'd
         # prefer not to. Instead, we expect to only pull one share from the
         # first server
-        shares = [MyShare(0, "peer-A", 0.0),
-                  MyShare(1, "peer-A", 0.0),
-                  MyShare(2, "peer-A", 0.0),
-                  MyShare(3, "peer-B", 1.0),
-                  MyShare(4, "peer-C", 2.0),
+        servers = make_servers(["peer-A", "peer-B", "peer-C"])
+        shares = [MyShare(0, servers["peer-A"], 0.0),
+                  MyShare(1, servers["peer-A"], 0.0),
+                  MyShare(2, servers["peer-A"], 0.0),
+                  MyShare(3, servers["peer-B"], 1.0),
+                  MyShare(4, servers["peer-C"], 2.0),
                   ]
         sf.add_shares([])
         d = flushEventualQueue()
@@ -1421,11 +1442,12 @@ class Selection(unittest.TestCase):
         sf = MySegmentFetcher(node, 0, 3, None)
         # we satisfy the read entirely from the first server because we don't
         # have any other choice.
-        shares = [MyShare(0, "peer-A", 0.0),
-                  MyShare(1, "peer-A", 0.0),
-                  MyShare(2, "peer-A", 0.0),
-                  MyShare(3, "peer-A", 0.0),
-                  MyShare(4, "peer-A", 0.0),
+        serverA = make_server("peer-A")
+        shares = [MyShare(0, serverA, 0.0),
+                  MyShare(1, serverA, 0.0),
+                  MyShare(2, serverA, 0.0),
+                  MyShare(3, serverA, 0.0),
+                  MyShare(4, serverA, 0.0),
                   ]
         sf.add_shares([])
         d = flushEventualQueue()
@@ -1456,11 +1478,12 @@ class Selection(unittest.TestCase):
         sf = MySegmentFetcher(node, 0, 3, None)
         # we satisfy the read entirely from the first server because we don't
         # have any other choice.
-        shares = [MyShare(0, "peer-A", 0.0),
-                  MyShare(1, "peer-A", 0.0),
-                  MyShare(2, "peer-A", 0.0),
-                  MyShare(3, "peer-A", 0.0),
-                  MyShare(4, "peer-A", 0.0),
+        serverA = make_server("peer-A")
+        shares = [MyShare(0, serverA, 0.0),
+                  MyShare(1, serverA, 0.0),
+                  MyShare(2, serverA, 0.0),
+                  MyShare(3, serverA, 0.0),
+                  MyShare(4, serverA, 0.0),
                   ]
         sf.add_shares(shares)
         d = flushEventualQueue()
@@ -1484,7 +1507,7 @@ class Selection(unittest.TestCase):
     def test_overdue(self):
         node = FakeNode()
         sf = MySegmentFetcher(node, 0, 3, None)
-        shares = [MyShare(i, "peer-%d" % i, i) for i in range(10)]
+        shares = [MyShare(i, make_server("peer-%d" % i), i) for i in range(10)]
         sf.add_shares(shares)
         d = flushEventualQueue()
         def _check1(ign):
@@ -1512,7 +1535,8 @@ class Selection(unittest.TestCase):
     def test_overdue_fails(self):
         node = FakeNode()
         sf = MySegmentFetcher(node, 0, 3, None)
-        shares = [MyShare(i, "peer-%d" % i, i) for i in range(6)]
+        servers = make_servers(["peer-%d" % i for i in range(6)])
+        shares = [MyShare(i, servers["peer-%d" % i], i) for i in range(6)]
         sf.add_shares(shares)
         sf.no_more_shares()
         d = flushEventualQueue()
@@ -1545,7 +1569,8 @@ class Selection(unittest.TestCase):
         def _check4(ign):
             self.failUnless(node.failed)
             self.failUnless(node.failed.check(NotEnoughSharesError))
-            self.failUnlessIn("complete=sh0 pending= overdue=sh2-on-peer-2 unused=",
+            sname = servers["peer-2"].get_name()
+            self.failUnlessIn("complete=sh0 pending= overdue=sh2-on-%s unused=" % sname,
                               str(node.failed))
         d.addCallback(_check4)
         return d
@@ -1556,11 +1581,13 @@ class Selection(unittest.TestCase):
         # we could satisfy the read entirely from the first server, but we'd
         # prefer not to. Instead, we expect to only pull one share from the
         # first server
-        shares = [MyShare(0, "peer-A", 0.0),
-                  MyShare(1, "peer-B", 1.0),
-                  MyShare(0, "peer-C", 2.0), # this will be skipped
-                  MyShare(1, "peer-D", 3.0),
-                  MyShare(2, "peer-E", 4.0),
+        servers = make_servers(["peer-A", "peer-B", "peer-C", "peer-D",
+                                "peer-E"])
+        shares = [MyShare(0, servers["peer-A"],0.0),
+                  MyShare(1, servers["peer-B"],1.0),
+                  MyShare(0, servers["peer-C"],2.0), # this will be skipped
+                  MyShare(1, servers["peer-D"],3.0),
+                  MyShare(2, servers["peer-E"],4.0),
                   ]
         sf.add_shares(shares[:3])
         d = flushEventualQueue()

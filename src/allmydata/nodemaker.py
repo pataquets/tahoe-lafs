@@ -1,27 +1,34 @@
 import weakref
 from zope.interface import implements
+from allmydata.util.assertutil import precondition
 from allmydata.interfaces import INodeMaker
 from allmydata.immutable.literal import LiteralFileNode
 from allmydata.immutable.filenode import ImmutableFileNode, CiphertextFileNode
 from allmydata.immutable.upload import Data
 from allmydata.mutable.filenode import MutableFileNode
+from allmydata.mutable.publish import MutableData
 from allmydata.dirnode import DirectoryNode, pack_children
 from allmydata.unknown import UnknownNode
+from allmydata.blacklist import ProhibitedNode
 from allmydata import uri
+
 
 class NodeMaker:
     implements(INodeMaker)
 
     def __init__(self, storage_broker, secret_holder, history,
                  uploader, terminator,
-                 default_encoding_parameters, key_generator):
+                 default_encoding_parameters, mutable_file_default,
+                 key_generator, blacklist=None):
         self.storage_broker = storage_broker
         self.secret_holder = secret_holder
         self.history = history
         self.uploader = uploader
         self.terminator = terminator
         self.default_encoding_parameters = default_encoding_parameters
+        self.mutable_file_default = mutable_file_default
         self.key_generator = key_generator
+        self.blacklist = blacklist
 
         self._node_cache = weakref.WeakValueDictionary() # uri -> node
 
@@ -60,14 +67,27 @@ class NodeMaker:
         else:
             memokey = "M" + bigcap
         if memokey in self._node_cache:
-            return self._node_cache[memokey]
-        cap = uri.from_string(bigcap, deep_immutable=deep_immutable, name=name)
-        node = self._create_from_single_cap(cap)
-        if node:
-            self._node_cache[memokey] = node  # note: WeakValueDictionary
+            node = self._node_cache[memokey]
         else:
-            # don't cache UnknownNode
-            node = UnknownNode(writecap, readcap, deep_immutable=deep_immutable, name=name)
+            cap = uri.from_string(bigcap, deep_immutable=deep_immutable,
+                                  name=name)
+            node = self._create_from_single_cap(cap)
+            if node:
+                self._node_cache[memokey] = node  # note: WeakValueDictionary
+            else:
+                # don't cache UnknownNode
+                node = UnknownNode(writecap, readcap,
+                                   deep_immutable=deep_immutable, name=name)
+
+        if self.blacklist:
+            si = node.get_storage_index()
+            # if this node is blacklisted, return the reason, otherwise return None
+            reason = self.blacklist.check_storageindex(si)
+            if reason is not None:
+                # The original node object is cached above, not the ProhibitedNode wrapper.
+                # This ensures that removing the blacklist entry will make the node
+                # accessible if create_from_cap is called again.
+                node = ProhibitedNode(node, reason)
         return node
 
     def _create_from_single_cap(self, cap):
@@ -77,27 +97,39 @@ class NodeMaker:
             return self._create_immutable(cap)
         if isinstance(cap, uri.CHKFileVerifierURI):
             return self._create_immutable_verifier(cap)
-        if isinstance(cap, (uri.ReadonlySSKFileURI, uri.WriteableSSKFileURI)):
+        if isinstance(cap, (uri.ReadonlySSKFileURI, uri.WriteableSSKFileURI,
+                            uri.WriteableMDMFFileURI, uri.ReadonlyMDMFFileURI)):
             return self._create_mutable(cap)
         if isinstance(cap, (uri.DirectoryURI,
                             uri.ReadonlyDirectoryURI,
                             uri.ImmutableDirectoryURI,
-                            uri.LiteralDirectoryURI)):
+                            uri.LiteralDirectoryURI,
+                            uri.MDMFDirectoryURI,
+                            uri.ReadonlyMDMFDirectoryURI)):
             filenode = self._create_from_single_cap(cap.get_filenode_cap())
             return self._create_dirnode(filenode)
         return None
 
-    def create_mutable_file(self, contents=None, keysize=None):
+    def create_mutable_file(self, contents=None, keysize=None, version=None):
+        if version is None:
+            version = self.mutable_file_default
         n = MutableFileNode(self.storage_broker, self.secret_holder,
                             self.default_encoding_parameters, self.history)
         d = self.key_generator.generate(keysize)
-        d.addCallback(n.create_with_keys, contents)
+        d.addCallback(n.create_with_keys, contents, version=version)
         d.addCallback(lambda res: n)
         return d
 
-    def create_new_mutable_directory(self, initial_children={}):
+    def create_new_mutable_directory(self, initial_children={}, version=None):
+        # initial_children must have metadata (i.e. {} instead of None)
+        for (name, (node, metadata)) in initial_children.iteritems():
+            precondition(isinstance(metadata, dict),
+                         "create_new_mutable_directory requires metadata to be a dict, not None", metadata)
+            node.raise_error()
         d = self.create_mutable_file(lambda n:
-                                     pack_children(initial_children, n.get_writekey()))
+                                     MutableData(pack_children(initial_children,
+                                                    n.get_writekey())),
+                                     version=version)
         d.addCallback(self._create_dirnode)
         return d
 
@@ -106,7 +138,7 @@ class NodeMaker:
             convergence = self.secret_holder.get_convergence_secret()
         packed = pack_children(children, None, deep_immutable=True)
         uploadable = Data(packed, convergence)
-        d = self.uploader.upload(uploadable, history=self.history)
+        d = self.uploader.upload(uploadable)
         d.addCallback(lambda results: self.create_from_cap(None, results.uri))
         d.addCallback(self._create_dirnode)
         return d

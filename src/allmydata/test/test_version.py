@@ -1,7 +1,7 @@
 
 from twisted.trial import unittest
 
-from allmydata import check_requirement, PackagingError
+from allmydata import check_requirement, cross_check, PackagingError
 from allmydata.util.verlib import NormalizedVersion as V, \
                                   IrrationalVersionError, \
                                   suggest_normalized_version as suggest
@@ -13,6 +13,8 @@ class CheckRequirement(unittest.TestCase):
         check_requirement("setuptools >= 0.6c6", {"setuptools": ("0.6", "", "distribute")})
         check_requirement("pycrypto == 2.0.1, == 2.1, >= 2.3", {"pycrypto": ("2.1.0", "", None)})
         check_requirement("pycrypto == 2.0.1, == 2.1, >= 2.3", {"pycrypto": ("2.4.0", "", None)})
+        check_requirement("zope.interface <= 3.6.2, >= 3.6.6", {"zope.interface": ("3.6.1", "", None)})
+        check_requirement("zope.interface <= 3.6.2, >= 3.6.6", {"zope.interface": ("3.6.6", "", None)})
 
         check_requirement("zope.interface", {"zope.interface": ("unknown", "", None)})
         check_requirement("mock", {"mock": ("0.6.0", "", None)})
@@ -20,15 +22,89 @@ class CheckRequirement(unittest.TestCase):
 
         check_requirement("foolscap[secure_connections] >= 0.6.0", {"foolscap": ("0.7.0", "", None)})
 
+        try:
+            check_requirement("foolscap[secure_connections] >= 0.6.0", {"foolscap": ("0.6.1+", "", None)})
+            # succeeding is ok
+        except PackagingError, e:
+            self.failUnlessIn("could not parse", str(e))
+
         self.failUnlessRaises(PackagingError, check_requirement,
                               "foolscap[secure_connections] >= 0.6.0", {"foolscap": ("0.5.1", "", None)})
         self.failUnlessRaises(PackagingError, check_requirement,
                               "pycrypto == 2.0.1, == 2.1, >= 2.3", {"pycrypto": ("2.2.0", "", None)})
         self.failUnlessRaises(PackagingError, check_requirement,
+                              "zope.interface <= 3.6.2, >= 3.6.6", {"zope.interface": ("3.6.4", "", None)})
+        self.failUnlessRaises(PackagingError, check_requirement,
                               "foo >= 1.0", {})
+        self.failUnlessRaises(PackagingError, check_requirement,
+                              "foo >= 1.0", {"foo": ("irrational", "", None)})
 
         self.failUnlessRaises(ImportError, check_requirement,
                               "foo >= 1.0", {"foo": (None, None, "foomodule")})
+
+    def test_cross_check_ticket_1355(self):
+        # The bug in #1355 is triggered when a version string from either pkg_resources or import
+        # is not parseable at all by normalized_version.
+
+        res = cross_check({"foo": ("unparseable", "")}, [("foo", ("1.0", "", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("by pkg_resources could not be parsed", res[0])
+
+        res = cross_check({"foo": ("1.0", "")}, [("foo", ("unparseable", "", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn(") could not be parsed", res[0])
+
+    def test_cross_check(self):
+        res = cross_check({}, [])
+        self.failUnlessEqual(res, [])
+
+        res = cross_check({}, [("sqlite3", ("1.0", "", "blah"))])
+        self.failUnlessEqual(res, [])
+
+        res = cross_check({"foo": ("unparseable", "")}, [])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("not found by import", res[0])
+
+        res = cross_check({"argparse": ("unparseable", "")}, [])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({}, [("foo", ("unparseable", "", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("not found by pkg_resources", res[0])
+
+        res = cross_check({"distribute": ("1.0", "/somewhere")}, [("setuptools", ("2.0", "/somewhere", "distribute"))])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({"distribute": ("1.0", "/somewhere")}, [("setuptools", ("2.0", "/somewhere", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("location mismatch", res[0])
+
+        res = cross_check({"distribute": ("1.0", "/somewhere")}, [("setuptools", ("2.0", "/somewhere_different", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("location mismatch", res[0])
+
+        res = cross_check({"zope.interface": ("1.0", "")}, [("zope.interface", ("unknown", "", None))])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({"foo": ("1.0", "")}, [("foo", ("unknown", "", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("could not find a version number", res[0])
+
+        # When pkg_resources and import both find a package, there is only a warning if both
+        # the version and the path fail to match.
+
+        res = cross_check({"foo": ("1.0", "/somewhere")}, [("foo", ("2.0", "/somewhere", None))])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({"foo": ("1.0", "/somewhere")}, [("foo", ("1.0", "/somewhere_different", None))])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({"foo": ("1.0-r123", "/somewhere")}, [("foo", ("1.0.post123", "/somewhere_different", None))])
+        self.failUnlessEqual(len(res), 0)
+
+        res = cross_check({"foo": ("1.0", "/somewhere")}, [("foo", ("2.0", "/somewhere_different", None))])
+        self.failUnlessEqual(len(res), 1)
+        self.failUnlessIn("but version '2.0'", res[0])
 
 
 # based on https://bitbucket.org/tarek/distutilsversion/src/17df9a7d96ef/test_verlib.py

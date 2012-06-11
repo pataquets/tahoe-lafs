@@ -14,28 +14,30 @@ The Tahoe REST-ful Web API
     1. `Reading a file`_
     2. `Writing/Uploading a File`_
     3. `Creating a New Directory`_
-    4. `Get Information About A File Or Directory (as JSON)`_
-    5. `Attaching an existing File or Directory by its read- or write-cap`_
-    6. `Adding multiple files or directories to a parent directory at once`_
-    7. `Deleting a File or Directory`_
+    4. `Getting Information About A File Or Directory (as JSON)`_
+    5. `Attaching an Existing File or Directory by its read- or write-cap`_
+    6. `Adding Multiple Files or Directories to a Parent Directory at Once`_
+    7. `Unlinking a File or Directory`_
 
 6.  `Browser Operations: Human-Oriented Interfaces`_
 
     1.  `Viewing A Directory (as HTML)`_
     2.  `Viewing/Downloading a File`_
-    3.  `Get Information About A File Or Directory (as HTML)`_
+    3.  `Getting Information About A File Or Directory (as HTML)`_
     4.  `Creating a Directory`_
     5.  `Uploading a File`_
     6.  `Attaching An Existing File Or Directory (by URI)`_
-    7.  `Deleting A Child`_
+    7.  `Unlinking A Child`_
     8.  `Renaming A Child`_
     9.  `Other Utilities`_
     10. `Debugging and Testing Features`_
 
 7.  `Other Useful Pages`_
 8.  `Static Files in /public_html`_
-9.  `Safety and security issues -- names vs. URIs`_
+9.  `Safety and Security Issues -- Names vs. URIs`_
 10. `Concurrency Issues`_
+11. `Access Blacklist`_
+
 
 Enabling the web-API port
 =========================
@@ -60,6 +62,7 @@ runs an SSL server.
 This webport can be set when the node is created by passing a --webport
 option to the 'tahoe create-node' command. By default, the node listens on
 port 3456, on the loopback (127.0.0.1) interface.
+
 
 Basic Concepts: GET, PUT, DELETE, POST
 ======================================
@@ -88,15 +91,16 @@ URL) will return information about the object, such as metadata. GET
 operations are required to have no side-effects.
 
 PUT is used to upload new objects into the filesystem, or to replace an
-existing object. DELETE it used to delete objects from the filesystem. Both
-PUT and DELETE are required to be idempotent: performing the same operation
-multiple times must have the same side-effects as only performing it once.
+existing link or the contents of a mutable file. DELETE is used to unlink
+objects from directories. Both PUT and DELETE are required to be idempotent:
+performing the same operation multiple times must have the same side-effects
+as only performing it once.
 
 POST is used for more complicated actions that cannot be expressed as a GET,
 PUT, or DELETE. POST operations can be thought of as a method call: sending
 some message to the object referenced by the URL. In Tahoe, POST is also used
 for operations that must be triggered by an HTML form (including upload and
-delete), because otherwise a regular web browser has no way to accomplish
+unlinking), because otherwise a regular web browser has no way to accomplish
 these tasks. In general, everything that can be done with a PUT or DELETE can
 also be done with a POST.
 
@@ -105,7 +109,7 @@ a program that needs to manipulate the virtual file system. Such programs are
 expected to use the RESTful interface described above. The second is a human
 using a standard web browser to work with the filesystem. This user is given
 a series of HTML pages with links to download files, and forms that use POST
-actions to upload, rename, and delete files.
+actions to upload, rename, and unlink files.
 
 When an error occurs, the HTTP response code will be set to an appropriate
 400-series code (like 404 Not Found for an unknown childname, or 400 Bad Request
@@ -119,6 +123,7 @@ stderr should provide an "Accept: text/plain" header to their requests to get
 a plain text stack trace instead. If the Accept header contains ``*/*``, or
 ``text/*``, or text/html (or if there is no Accept header), HTML tracebacks will
 be generated.
+
 
 URLs
 ====
@@ -153,7 +158,7 @@ listening on this port::
 
 So, to access the directory named above (which happens to be the
 publically-writeable sample directory on the Tahoe test grid, described at
-http://allmydata.org/trac/tahoe/wiki/TestGrid), the URL would be::
+http://allmydata.org/trac/tahoe-lafs/wiki/TestGrid), the URL would be::
 
  http://127.0.0.1:3456/uri/URI%3ADIR2%3Adjrdkfawoqihigoett4g6auz6a%3Ajx5mplfpwexnoqff7y5e4zjus4lidm76dcuarpct7cckorh2dpgq/
 
@@ -236,6 +241,7 @@ for you. If you don't know the cap, you can't access the file. This allows
 the security properties of Tahoe caps to be extended across the web-API
 interface.
 
+
 Slow Operations, Progress, and Cancelling
 =========================================
 
@@ -316,6 +322,7 @@ operations have streaming equivalents. These equivalents do not use operation
 handles. Instead, they emit line-oriented status results immediately. Client
 code can cancel the operation by simply closing the HTTP connection.
 
+
 Programmatic Operations
 =======================
 
@@ -325,6 +332,7 @@ This section contains a catalog of GET, PUT, DELETE, and POST operations that
 can be performed on these URLs. This set of operations are aimed at programs
 that use HTTP to communicate with a Tahoe node. A later section describes
 operations that are intended for web browsers.
+
 
 Reading A File
 --------------
@@ -340,6 +348,7 @@ Reading A File
  Content-Type and Content-Disposition headers. Please see the next section
  "Browser Operations", for details on how to modify these URLs for that
  purpose.
+
 
 Writing/Uploading A File
 ------------------------
@@ -357,13 +366,34 @@ Writing/Uploading A File
  To use the /uri/$FILECAP form, $FILECAP must be a write-cap for a mutable file.
 
  In the /uri/$DIRCAP/[SUBDIRS../]FILENAME form, if the target file is a
- writeable mutable file, that file's contents will be overwritten in-place. If
- it is a read-cap for a mutable file, an error will occur. If it is an
- immutable file, the old file will be discarded, and a new one will be put in
- its place.
+ writeable mutable file, that file's contents will be overwritten
+ in-place. If it is a read-cap for a mutable file, an error will occur.
+ If it is an immutable file, the old file will be discarded, and a new
+ one will be put in its place. If the target file is a writable mutable
+ file, you may also specify an "offset" parameter -- a byte offset that
+ determines where in the mutable file the data from the HTTP request
+ body is placed. This operation is relatively efficient for MDMF mutable
+ files, and is relatively inefficient (but still supported) for SDMF
+ mutable files. If no offset parameter is specified, then the entire
+ file is replaced with the data from the HTTP request body. For an
+ immutable file, the "offset" parameter is not valid.
 
- When creating a new file, if "mutable=true" is in the query arguments, the
- operation will create a mutable file instead of an immutable one.
+ When creating a new file, you can control the type of file created by
+ specifying a format= argument in the query string. format=MDMF creates an
+ MDMF mutable file. format=SDMF creates an SDMF mutable file. format=CHK
+ creates an immutable file. The value of the format argument is
+ case-insensitive. If no format is specified, the newly-created file will be
+ immutable (but see below).
+
+ For compatibility with previous versions of Tahoe-LAFS, the web-API will
+ also accept a mutable=true argument in the query string. If mutable=true is
+ given, then the new file will be mutable, and its format will be the default
+ mutable file format, as configured by the [client]mutable.format option of
+ tahoe.cfg on the Tahoe-LAFS node hosting the webapi server. Use of
+ mutable=true is discouraged; new code should use format= instead of
+ mutable=true (unless it needs to be compatible with web-API servers older
+ than v1.9.0). If neither format= nor mutable=true are given, the
+ newly-created file will be immutable.
 
  This returns the file-cap of the resulting file. If a new file was created
  by this method, the HTTP response code (as dictated by rfc2616) will be set
@@ -379,9 +409,9 @@ Writing/Uploading A File
  attach the file into the filesystem. No directories will be modified by
  this operation. The file-cap is returned as the body of the HTTP response.
 
- If "mutable=true" is in the query arguments, the operation will create a
- mutable file, and return its write-cap in the HTTP respose. The default is
- to create an immutable file, returning the read-cap as a response.
+ This method accepts format= and mutable=true as query string arguments, and
+ interprets those arguments in the same way as the linked forms of PUT
+ described immediately above.
 
 Creating A New Directory
 ------------------------
@@ -395,11 +425,22 @@ Creating A New Directory
  filesystem. The "PUT" operation is provided for backwards compatibility:
  new code should use POST.
 
+ This supports a format= argument in the query string. The format=
+ argument, if specified, controls the format of the directory. format=MDMF
+ indicates that the directory should be stored as an MDMF file; format=SDMF
+ indicates that the directory should be stored as an SDMF file. The value of
+ the format= argument is case-insensitive. If no format= argument is
+ given, the directory's format is determined by the default mutable file
+ format, as configured on the Tahoe-LAFS node responding to the request.
+
 ``POST /uri?t=mkdir-with-children``
 
  Create a new directory, populated with a set of child nodes, and return its
  write-cap as the HTTP response body. The new directory is not attached to
  any other directory: the returned write-cap is the only reference to it.
+
+ The format of the directory can be controlled with the format= argument in
+ the query string, as described above.
 
  Initial children are provided as the body of the POST form (this is more
  efficient than doing separate mkdir and set_children operations). If the
@@ -512,6 +553,14 @@ Creating A New Directory
 
  If the final directory is created, it will be empty.
 
+ This accepts a format= argument in the query string, which controls the
+ format of the named target directory, if it does not already exist. format=
+ is interpreted in the same way as in the POST /uri?t=mkdir form. Note that
+ format= only controls the format of the named target directory;
+ intermediate directories, if created, are created based on the default
+ mutable type, as configured on the Tahoe-LAFS server responding to the
+ request.
+
  This operation will return an error if a blocking file is present at any of
  the parent names, preventing the server from creating the necessary parent
  directory; or if it would require changing an immutable directory.
@@ -526,6 +575,14 @@ Creating A New Directory
  intermediate mutable directories as necessary. If the final directory is
  created, it will be populated with initial children from the POST request
  body, as described above.
+
+ This accepts a format= argument in the query string, which controls the
+ format of the target directory, if the target directory is created as part
+ of the operation. format= is interpreted in the same way as in the POST/
+ uri?t=mkdir-with-children operation. Note that format= only controls the
+ format of the named target directory; intermediate directories, if created,
+ are created using the default mutable type setting, as configured on the
+ Tahoe-LAFS server responding to the request.
  
  This operation will return an error if a blocking file is present at any of
  the parent names, preventing the server from creating the necessary parent
@@ -550,6 +607,14 @@ Creating A New Directory
  Create a new empty mutable directory and attach it to the given existing
  directory. This will create additional intermediate directories as necessary.
 
+ This accepts a format= argument in the query string, which controls the
+ format of the named target directory, if it does not already exist. format=
+ is interpreted in the same way as in the POST /uri?t=mkdir form. Note that
+ format= only controls the format of the named target directory;
+ intermediate directories, if created, are created based on the default
+ mutable type, as configured on the Tahoe-LAFS server responding to the
+ request.
+
  This operation will return an error if a blocking file is present at any of
  the parent names, preventing the server from creating the necessary parent
  directory, or if it would require changing any immutable directory.
@@ -563,7 +628,15 @@ Creating A New Directory
  Like /uri/$DIRCAP/[SUBDIRS../]?t=mkdir&name=NAME, but the new directory will
  be populated with initial children via the POST request body. This command
  will create additional intermediate mutable directories as necessary.
- 
+
+ This accepts a format= argument in the query string, which controls the
+ format of the target directory, if the target directory is created as part
+ of the operation. format= is interpreted in the same way as in the POST/
+ uri?t=mkdir-with-children operation. Note that format= only controls the
+ format of the named target directory; intermediate directories, if created,
+ are created using the default mutable type setting, as configured on the
+ Tahoe-LAFS server responding to the request.
+
  This operation will return an error if a blocking file is present at any of
  the parent names, preventing the server from creating the necessary parent
  directory; or if it would require changing an immutable directory; or if
@@ -585,8 +658,9 @@ Creating A New Directory
  This operation will return an error if the parent directory is immutable,
  or already has a child named NAME.
 
-Get Information About A File Or Directory (as JSON)
----------------------------------------------------
+
+Getting Information About A File Or Directory (as JSON)
+-------------------------------------------------------
 
 ``GET /uri/$FILECAP?t=json``
 
@@ -605,11 +679,12 @@ Get Information About A File Or Directory (as JSON)
   GET /uri/$FILECAP?t=json :
 
    [ "filenode", {
-	 "ro_uri": file_uri,
-	 "verify_uri": verify_uri,
-	 "size": bytes,
-	 "mutable": false
-	 } ]
+      "ro_uri": file_uri,
+      "verify_uri": verify_uri,
+      "size": bytes,
+      "mutable": false,
+      "format": "CHK"
+     } ]
 
  If it is a capability to a directory followed by a path from that directory
  to a file, then the information also includes metadata from the link to the
@@ -618,17 +693,18 @@ Get Information About A File Or Directory (as JSON)
   GET /uri/$DIRCAP/[SUBDIRS../]FILENAME?t=json
 
    [ "filenode", {
-	 "ro_uri": file_uri,
-	 "verify_uri": verify_uri,
-	 "size": bytes,
-	 "mutable": false,
-	 "metadata": {
-	   "ctime": 1202777696.7564139,
-	   "mtime": 1202777696.7564139,
-	   "tahoe": {
-		 "linkcrtime": 1202777696.7564139,
-		 "linkmotime": 1202777696.7564139
-		 } } } ]
+      "ro_uri": file_uri,
+      "verify_uri": verify_uri,
+      "size": bytes,
+      "mutable": false,
+      "format": "CHK",
+      "metadata": {
+       "ctime": 1202777696.7564139,
+       "mtime": 1202777696.7564139,
+       "tahoe": {
+        "linkcrtime": 1202777696.7564139,
+        "linkmotime": 1202777696.7564139
+       } } } ]
 
  If it is a directory, then it includes information about the children of
  this directory, as a mapping from child name to a set of data about the
@@ -641,32 +717,35 @@ Get Information About A File Or Directory (as JSON)
   GET /uri/$DIRCAP/[SUBDIRS../]SUBDIR?t=json :
 
    [ "dirnode", {
-	 "rw_uri": read_write_uri,
-	 "ro_uri": read_only_uri,
-	 "verify_uri": verify_uri,
-	 "mutable": true,
-	 "children": {
-	   "foo.txt": [ "filenode", {
-		   "ro_uri": uri,
-		   "size": bytes,
-		   "metadata": {
-			 "ctime": 1202777696.7564139,
-			 "mtime": 1202777696.7564139,
-			 "tahoe": {
-			   "linkcrtime": 1202777696.7564139,
-			   "linkmotime": 1202777696.7564139
-			   } } } ],
-	   "subdir":  [ "dirnode", {
-		   "rw_uri": rwuri,
-		   "ro_uri": rouri,
-		   "metadata": {
-			 "ctime": 1202778102.7589991,
-			 "mtime": 1202778111.2160511,
-			 "tahoe": {
-			   "linkcrtime": 1202777696.7564139,
-			   "linkmotime": 1202777696.7564139
-			 } } } ]
-	 } } ]
+     "rw_uri": read_write_uri,
+     "ro_uri": read_only_uri,
+     "verify_uri": verify_uri,
+     "mutable": true,
+     "format": "SDMF",
+     "children": {
+      "foo.txt": [ "filenode",
+                   {
+                     "ro_uri": uri,
+                     "size": bytes,
+                     "metadata": {
+                       "ctime": 1202777696.7564139,
+                       "mtime": 1202777696.7564139,
+                       "tahoe": {
+                         "linkcrtime": 1202777696.7564139,
+                         "linkmotime": 1202777696.7564139
+                       } } } ],
+      "subdir":  [ "dirnode",
+                   {
+                     "rw_uri": rwuri,
+                     "ro_uri": rouri,
+                     "metadata": {
+                       "ctime": 1202778102.7589991,
+                       "mtime": 1202778111.2160511,
+                       "tahoe": {
+                         "linkcrtime": 1202777696.7564139,
+                         "linkmotime": 1202777696.7564139
+                       } } } ]
+      } } ]
 
  In the above example, note how 'children' is a dictionary in which the keys
  are child names and the values depend upon whether the child is a file or a
@@ -686,22 +765,22 @@ Get Information About A File Or Directory (as JSON)
   GET /uri/$UNKNOWNCAP?t=json :
 
    [ "unknown", {
-	 "ro_uri": unknown_read_uri
-	 } ]
+       "ro_uri": unknown_read_uri
+       } ]
 
   GET /uri/$DIRCAP/[SUBDIRS../]UNKNOWNCHILDNAME?t=json :
 
    [ "unknown", {
-	 "rw_uri": unknown_write_uri,
-	 "ro_uri": unknown_read_uri,
-	 "mutable": true,
-	 "metadata": {
-	   "ctime": 1202777696.7564139,
-	   "mtime": 1202777696.7564139,
-	   "tahoe": {
-		 "linkcrtime": 1202777696.7564139,
-		 "linkmotime": 1202777696.7564139
-		 } } } ]
+       "rw_uri": unknown_write_uri,
+       "ro_uri": unknown_read_uri,
+       "mutable": true,
+       "metadata": {
+         "ctime": 1202777696.7564139,
+         "mtime": 1202777696.7564139,
+         "tahoe": {
+           "linkcrtime": 1202777696.7564139,
+           "linkmotime": 1202777696.7564139
+         } } } ]
 
  As in the case of file nodes, the metadata will only be present when the
  capability is to a directory followed by a path. The "mutable" field is also
@@ -798,7 +877,7 @@ There are several ways that the 'ctime' field could be confusing:
    time.
 
 
-Attaching an existing File or Directory by its read- or write-cap
+Attaching an Existing File or Directory by its read- or write-cap
 -----------------------------------------------------------------
 
 ``PUT /uri/$DIRCAP/[SUBDIRS../]CHILDNAME?t=uri``
@@ -838,7 +917,8 @@ Attaching an existing File or Directory by its read- or write-cap
  would result in granting the cap's write authority to holders of the
  directory read cap.
 
-Adding multiple files or directories to a parent directory at once
+
+Adding Multiple Files or Directories to a Parent Directory at Once
 ------------------------------------------------------------------
 
 ``POST /uri/$DIRCAP/[SUBDIRS..]?t=set_children``
@@ -881,8 +961,8 @@ Adding multiple files or directories to a parent directory at once
  backward compatibility should continue to use "set_children".
 
 
-Deleting a File or Directory
-----------------------------
+Unlinking a File or Directory
+-----------------------------
 
 ``DELETE /uri/$DIRCAP/[SUBDIRS../]CHILDNAME``
 
@@ -891,7 +971,7 @@ Deleting a File or Directory
  be modified.
 
  Note that this does not actually delete the file or directory that the name
- points to from the tahoe grid -- it only removes the named reference from
+ points to from the tahoe grid -- it only unlinks the named reference from
  this directory. If there are other names in this directory or in other
  directories that point to the resource, then it will remain accessible
  through those paths. Even if all names pointing to this object are removed
@@ -910,6 +990,7 @@ Deleting a File or Directory
  This method returns the file- or directory- cap of the object that was just
  removed.
 
+
 Browser Operations: Human-oriented interfaces
 =============================================
 
@@ -926,6 +1007,7 @@ separated from the main URL by "?", and from each other by "&". For example,
 specified by using <input type="hidden"> elements. For clarity, the
 descriptions below display the most significant arguments as URL query args.
 
+
 Viewing A Directory (as HTML)
 -----------------------------
 
@@ -935,8 +1017,9 @@ Viewing A Directory (as HTML)
  browser, which contains HREF links to all files and directories reachable
  from this directory. These HREF links do not have a t= argument, meaning
  that a human who follows them will get pages also meant for a human. It also
- contains forms to upload new files, and to delete files and directories.
- Those forms use POST methods to do their job.
+ contains forms to upload new files, and to unlink files and directories
+ from their parent directory. Those forms use POST methods to do their job.
+
 
 Viewing/Downloading a File
 --------------------------
@@ -978,8 +1061,9 @@ Viewing/Downloading a File
  this form can *only* be used with file caps; it is an error to use a
  directory cap after the /named/ prefix.
 
-Get Information About A File Or Directory (as HTML)
----------------------------------------------------
+
+Getting Information About A File Or Directory (as HTML)
+-------------------------------------------------------
 
 ``GET /uri/$FILECAP?t=info``
 
@@ -999,7 +1083,8 @@ Get Information About A File Or Directory (as HTML)
  * access caps (URIs): verify-cap, read-cap, write-cap (for mutable objects)
  * check/verify/repair form
  * deep-check/deep-size/deep-stats/manifest (for directories)
- * replace-conents form (for mutable files)
+ * replace-contents form (for mutable files)
+
 
 Creating a Directory
 --------------------
@@ -1018,6 +1103,10 @@ Creating a Directory
  /uri/$DIRCAP page. There is a "create directory" button on the Welcome page
  to invoke this action.
 
+ This accepts a format= argument in the query string. Refer to the
+ documentation of the PUT /uri?t=mkdir operation in `Creating A
+ New Directory`_ for information on the behavior of the format= argument.
+
  If "redirect_to_result=true" is not provided (or is given a value of
  "false"), then the HTTP response body will simply be the write-cap of the
  new directory.
@@ -1026,6 +1115,11 @@ Creating a Directory
 
  This creates a new empty directory as a child of the designated SUBDIR. This
  will create additional intermediate directories as necessary.
+
+ This accepts a format= argument in the query string. Refer to the
+ documentation of POST /uri/$DIRCAP/[SUBDIRS../]?t=mkdir&name=CHILDNAME in
+ `Creating A New Directory`_ for information on the behavior of the format=
+ argument.
 
  If a "when_done=URL" argument is provided, the HTTP response will cause the
  web browser to redirect to the given URL. This provides a convenient way to
@@ -1063,11 +1157,9 @@ Uploading a File
  about which storage servers were used for the upload, how long each
  operation took, etc.
 
- If a "mutable=true" argument is provided, the operation will create a
- mutable file, and the response body will contain the write-cap instead of
- the upload results page. The default is to create an immutable file,
- returning the upload results page as a response.
-
+ This accepts format= and mutable=true query string arguments. Refer to
+ `Writing/Uploading A File`_ for information on the behavior of format= and
+ mutable=true.
 
 ``POST /uri/$DIRCAP/[SUBDIRS../]?t=upload``
 
@@ -1103,9 +1195,9 @@ Uploading a File
  /uri/$DIRCAP/[SUBDIRS../]", it is likely that the parent directory will
  already exist.
 
- If a "mutable=true" argument is provided, any new file that is created will
- be a mutable file instead of an immutable one. <input type="checkbox"
- name="mutable" /> will give the user a way to set this option.
+ This accepts format= and mutable=true query string arguments. Refer to
+ `Writing/Uploading A File`_ for information on the behavior of format= and
+ mutable=true.
 
  If a "when_done=URL" argument is provided, the HTTP response will cause the
  web browser to redirect to the given URL. This provides a convenient way to
@@ -1129,6 +1221,7 @@ Uploading a File
  the "PUT /uri/$FILECAP" form, but uses a POST for the benefit of HTML forms
  in a web browser.
 
+
 Attaching An Existing File Or Directory (by URI)
 ------------------------------------------------
 
@@ -1147,10 +1240,13 @@ Attaching An Existing File Or Directory (by URI)
 
  This accepts the same replace= argument as POST t=upload.
 
-Deleting A Child
-----------------
+
+Unlinking A Child
+-----------------
 
 ``POST /uri/$DIRCAP/[SUBDIRS../]?t=delete&name=CHILDNAME``
+
+``POST /uri/$DIRCAP/[SUBDIRS../]?t=unlink&name=CHILDNAME``
 
  This instructs the node to remove a child object (file or subdirectory) from
  the given directory, which must be mutable. Note that the entire subtree is
@@ -1158,6 +1254,11 @@ Deleting A Child
  filesystem, the subtree need not be empty; if it isn't, then other references
  into the subtree will see that the child subdirectories are not modified by
  this operation. Only the link from the given directory to its child is severed.
+
+ In Tahoe-LAFS v1.9.0 and later, t=unlink can be used as a synonym for t=delete.
+ If interoperability with older web-API servers is required, t=delete should
+ be used.
+
 
 Renaming A Child
 ----------------
@@ -1203,6 +1304,7 @@ Other Utilities
  This returns a read-only file- or directory- cap for the specified object.
  If the object is an immutable file, this will return the same value as
  t=uri.
+
 
 Debugging and Testing Features
 ------------------------------
@@ -1635,6 +1737,7 @@ mainly intended for developers.
  was untraversable, since the manifest entry is emitted to the HTTP response
  body before the child is traversed.
 
+
 Other Useful Pages
 ==================
 
@@ -1807,7 +1910,7 @@ This can be useful to serve a javascript application which provides a
 prettier front-end to the rest of the Tahoe web-API.
 
 
-Safety and security issues -- names vs. URIs
+Safety and Security Issues -- Names vs. URIs
 ============================================
 
 Summary: use explicit file- and dir- caps whenever possible, to reduce the
@@ -1863,6 +1966,7 @@ In general, use names if you want "whatever object (whether file or
 directory) is found by following this name (or sequence of names) when my
 request reaches the server". Use URIs if you want "this particular object".
 
+
 Concurrency Issues
 ==================
 
@@ -1903,6 +2007,51 @@ web requests themselves).
 
 For more details, please see the "Consistency vs Availability" and "The Prime
 Coordination Directive" sections of `mutable.rst <../specifications/mutable.rst>`_.
+
+
+Access Blacklist
+================
+
+Gateway nodes may find it necessary to prohibit access to certain files. The
+web-API has a facility to block access to filecaps by their storage index,
+returning a 403 "Forbidden" error instead of the original file.
+
+This blacklist is recorded in $NODEDIR/access.blacklist, and contains one
+blocked file per line. Comment lines (starting with ``#``) are ignored. Each
+line consists of the storage-index (in the usual base32 format as displayed
+by the "More Info" page, or by the "tahoe debug dump-cap" command), followed
+by whitespace, followed by a reason string, which will be included in the 403
+error message. This could hold a URL to a page that explains why the file is
+blocked, for example.
+
+So for example, if you found a need to block access to a file with filecap
+``URI:CHK:n7r3m6wmomelk4sep3kw5cvduq:os7ijw5c3maek7pg65e5254k2fzjflavtpejjyhshpsxuqzhcwwq:3:20:14861``,
+you could do the following::
+
+ tahoe debug dump-cap URI:CHK:n7r3m6wmomelk4sep3kw5cvduq:os7ijw5c3maek7pg65e5254k2fzjflavtpejjyhshpsxuqzhcwwq:3:20:14861
+ -> storage index: whpepioyrnff7orecjolvbudeu
+ echo "whpepioyrnff7orecjolvbudeu my puppy told me to" >>$NODEDIR/access.blacklist
+ tahoe restart $NODEDIR
+ tahoe get URI:CHK:n7r3m6wmomelk4sep3kw5cvduq:os7ijw5c3maek7pg65e5254k2fzjflavtpejjyhshpsxuqzhcwwq:3:20:14861
+ -> error, 403 Access Prohibited: my puppy told me to
+
+The ``access.blacklist`` file will be checked each time a file or directory
+is accessed: the file's ``mtime`` is used to decide whether it need to be
+reloaded. Therefore no node restart is necessary when creating the initial
+blacklist, nor when adding second, third, or additional entries to the list.
+When modifying the file, be careful to update it atomically, otherwise a
+request may arrive while the file is only halfway written, and the partial
+file may be incorrectly parsed.
+
+The blacklist is applied to all access paths (including FTP, SFTP, and CLI
+operations), not just the web-API. The blacklist also applies to directories.
+If a directory is blacklisted, the gateway will refuse access to both that
+directory and any child files/directories underneath it, when accessed via
+"DIRCAP/SUBDIR/FILENAME" -style URLs. Users who go directly to the child
+file/dir will bypass the blacklist.
+
+The node will log the SI of the file being blocked, and the reason code, into
+the ``logs/twistd.log`` file.
 
 
 .. [1] URLs and HTTP and UTF-8, Oh My

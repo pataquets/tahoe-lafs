@@ -14,16 +14,31 @@ install_requires = [
     # Feisty has simplejson 1.4
     "simplejson >= 1.4",
 
-    "zope.interface",
+    # zope.interface 3.6.3 and 3.6.4 are incompatible with Nevow (#1435).
+    "zope.interface <= 3.6.2, >= 3.6.5",
 
-    "Twisted >= 2.4.0",
+    # On Windows we need at least Twisted 9.0 to avoid an indirect dependency on pywin32.
+    # On Linux we need at least Twisted 10.1.0 for inotify support used by the drop-upload
+    # frontend.
+    # We also need Twisted 10.1 for the FTP frontend in order for Twisted's FTP server to
+    # support asynchronous close.
+    "Twisted >= 10.1.0",
 
     # foolscap < 0.5.1 had a performance bug which spent
     # O(N**2) CPU for transferring large mutable files
     # of size N.
     # foolscap < 0.6 is incompatible with Twisted 10.2.0.
     # foolscap 0.6.1 quiets a DeprecationWarning.
-    "foolscap[secure_connections] >= 0.6.1",
+    # pyOpenSSL is required by foolscap for it (foolscap) to provide secure
+    # connections. Foolscap doesn't reliably declare this dependency in a
+    # machine-readable way, so we need to declare a dependency on pyOpenSSL
+    # ourselves. Tahoe-LAFS doesn't *really* depend directly on pyOpenSSL,
+    # so if something changes in the relationship between foolscap and
+    # pyOpenSSL, such as foolscap requiring a specific version of pyOpenSSL,
+    # or foolscap switching from pyOpenSSL to a different crypto library, we
+    # need to update this declaration here.
+    "foolscap >= 0.6.1",
+    "pyOpenSSL",
 
     "Nevow >= 0.6.0",
 
@@ -61,7 +76,7 @@ package_imports = [
 def require_more():
     import platform, sys
 
-    if platform.machine().lower() in ['i386', 'x86_64', 'amd64', 'x86', '']:
+    if platform.machine().lower() in ['i386', 'x86', 'i686', 'x86_64', 'amd64', '']:
         # pycryptopp v0.5.20 fixes bugs in SHA-256 and AES on x86 or amd64
         # (from Crypto++ revisions 470, 471, 480, 492).  The '' is there
         # in case platform.machine is broken and this is actually an x86
@@ -102,7 +117,11 @@ deprecation_messages = [
     "the sets module is deprecated",
 ]
 
-deprecation_imports = [
+user_warning_messages = [
+    "Hashing uninitialized InterfaceClass instance",
+]
+
+warning_imports = [
     'nevow',
     'twisted.persisted.sob',
     'twisted.python.filepath',

@@ -2,6 +2,7 @@
 
 import os, sys, re, glob
 
+
 def read_version_py(infname):
     try:
         verstrline = open(infname, "rt").read()

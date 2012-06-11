@@ -9,7 +9,7 @@ from allmydata.storage.server import si_b2a
 from allmydata.immutable import upload
 from allmydata.immutable.layout import ReadBucketProxy
 from allmydata.util.assertutil import precondition
-from allmydata.util import idlib, log, observer, fileutil, hashutil, dictutil
+from allmydata.util import log, observer, fileutil, hashutil, dictutil
 
 
 class NotEnoughWritersError(Exception):
@@ -53,23 +53,23 @@ class CHKCheckerAndUEBFetcher:
 
     def _get_all_shareholders(self, storage_index):
         dl = []
-        for (peerid, ss) in self._peer_getter(storage_index):
-            d = ss.callRemote("get_buckets", storage_index)
+        for s in self._peer_getter(storage_index):
+            d = s.get_rref().callRemote("get_buckets", storage_index)
             d.addCallbacks(self._got_response, self._got_error,
-                           callbackArgs=(peerid,))
+                           callbackArgs=(s,))
             dl.append(d)
         return defer.DeferredList(dl)
 
-    def _got_response(self, buckets, peerid):
+    def _got_response(self, buckets, server):
         # buckets is a dict: maps shum to an rref of the server who holds it
         shnums_s = ",".join([str(shnum) for shnum in buckets])
         self.log("got_response: [%s] has %d shares (%s)" %
-                 (idlib.shortnodeid_b2a(peerid), len(buckets), shnums_s),
+                 (server.get_name(), len(buckets), shnums_s),
                  level=log.NOISY)
         self._found_shares.update(buckets.keys())
         for k in buckets:
-            self._sharemap.add(k, peerid)
-        self._readers.update( [ (bucket, peerid)
+            self._sharemap.add(k, server.get_serverid())
+        self._readers.update( [ (bucket, server)
                                 for bucket in buckets.values() ] )
 
     def _got_error(self, f):
@@ -84,8 +84,8 @@ class CHKCheckerAndUEBFetcher:
         if not self._readers:
             self.log("no readers, so no UEB", level=log.NOISY)
             return
-        b,peerid = self._readers.pop()
-        rbp = ReadBucketProxy(b, peerid, si_b2a(self._storage_index))
+        b,server = self._readers.pop()
+        rbp = ReadBucketProxy(b, server, si_b2a(self._storage_index))
         d = rbp.get_uri_extension()
         d.addCallback(self._got_uri_extension)
         d.addErrback(self._ueb_error)
@@ -620,7 +620,7 @@ class Helper(Referenceable):
         lp2 = self.log("doing a quick check+UEBfetch",
                        parent=lp, level=log.NOISY)
         sb = self._storage_broker
-        c = CHKCheckerAndUEBFetcher(sb.get_servers_for_index, storage_index, lp2)
+        c = CHKCheckerAndUEBFetcher(sb.get_servers_for_psi, storage_index, lp2)
         d = c.check()
         def _checked(res):
             if res:

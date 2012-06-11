@@ -1,4 +1,4 @@
-import os.path, re, sys, fnmatch
+import os.path, re, fnmatch
 from twisted.python import usage
 from allmydata.scripts.common import BaseOptions, get_aliases, get_default_nodedir, DEFAULT_ALIAS
 from allmydata.util.encodingutil import argv_to_unicode, argv_to_abspath, quote_output
@@ -50,8 +50,20 @@ class VDriveOptions(BaseOptions):
 
 
 class MakeDirectoryOptions(VDriveOptions):
+    optParameters = [
+        ("format", None, None, "Create a directory with the given format: SDMF or MDMF (case-insensitive)"),
+        ]
+
     def parseArgs(self, where=""):
         self.where = argv_to_unicode(where)
+
+        if self['format']:
+            if self['format'].upper() not in ("SDMF", "MDMF"):
+                raise usage.UsageError("%s is an invalid format" % self['format'])
+
+    def getSynopsis(self):
+        return "Usage:  %s mkdir [options] [REMOTE_DIR]" % (self.command_name,)
+
     longdesc = """Create a new directory, either unlinked or as a subdirectory."""
 
 class AddAliasOptions(VDriveOptions):
@@ -62,7 +74,7 @@ class AddAliasOptions(VDriveOptions):
         self.cap = cap
 
     def getSynopsis(self):
-        return "Usage:  %s add-alias ALIAS[:] DIRCAP" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s add-alias [options] ALIAS[:] DIRCAP" % (self.command_name,)
 
     longdesc = """Add a new alias for an existing directory."""
 
@@ -73,11 +85,14 @@ class CreateAliasOptions(VDriveOptions):
             self.alias = self.alias[:-1]
 
     def getSynopsis(self):
-        return "Usage:  %s create-alias ALIAS[:]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s create-alias [options] ALIAS[:]" % (self.command_name,)
 
     longdesc = """Create a new directory and add an alias for it."""
 
-class ListAliasOptions(VDriveOptions):
+class ListAliasesOptions(VDriveOptions):
+    def getSynopsis(self):
+        return "Usage:  %s list-aliases [options]" % (self.command_name,)
+
     longdesc = """Display a table of all configured aliases."""
 
 class ListOptions(VDriveOptions):
@@ -135,7 +150,7 @@ class GetOptions(VDriveOptions):
             self.to_file = None
 
     def getSynopsis(self):
-        return "Usage:  %s get REMOTE_FILE LOCAL_FILE" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s get [options] REMOTE_FILE LOCAL_FILE" % (self.command_name,)
 
     longdesc = """
     Retrieve a file from the grid and write it to the local filesystem. If
@@ -155,7 +170,10 @@ Examples:
 
 class PutOptions(VDriveOptions):
     optFlags = [
-        ("mutable", "m", "Create a mutable file instead of an immutable one."),
+        ("mutable", "m", "Create a mutable file instead of an immutable one (like --format=SDMF)"),
+        ]
+    optParameters = [
+        ("format", None, None, "Create a file with the given format: SDMF and MDMF for mutable, CHK (default) for immutable. (case-insensitive)"),
         ]
 
     def parseArgs(self, arg1=None, arg2=None):
@@ -173,8 +191,12 @@ class PutOptions(VDriveOptions):
         if self.from_file == u"-":
             self.from_file = None
 
+        if self['format']:
+            if self['format'].upper() not in ("SDMF", "MDMF", "CHK"):
+                raise usage.UsageError("%s is an invalid format" % self['format'])
+
     def getSynopsis(self):
-        return "Usage:  %s put LOCAL_FILE REMOTE_FILE" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s put [options] LOCAL_FILE REMOTE_FILE" % (self.command_name,)
 
     longdesc = """
     Put a file into the grid, copying its contents from the local filesystem.
@@ -205,13 +227,16 @@ class CpOptions(VDriveOptions):
          "When copying to local files, write out filecaps instead of actual "
          "data (only useful for debugging and tree-comparison purposes)."),
         ]
+
     def parseArgs(self, *args):
         if len(args) < 2:
             raise usage.UsageError("cp requires at least two arguments")
         self.sources = map(argv_to_unicode, args[:-1])
         self.destination = argv_to_unicode(args[-1])
+
     def getSynopsis(self):
-        return "Usage: tahoe [options] cp FROM.. TO"
+        return "Usage: %s cp [options] FROM.. TO" % (self.command_name,)
+
     longdesc = """
     Use 'tahoe cp' to copy files between a local filesystem and a Tahoe grid.
     Any FROM/TO arguments that begin with an alias indicate Tahoe-side
@@ -237,16 +262,16 @@ class CpOptions(VDriveOptions):
     slashes.
     """
 
-class RmOptions(VDriveOptions):
+class UnlinkOptions(VDriveOptions):
     def parseArgs(self, where):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s rm REMOTE_FILE" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s unlink [options] REMOTE_FILE" % (self.command_name,)
 
-class UnlinkOptions(RmOptions):
+class RmOptions(UnlinkOptions):
     def getSynopsis(self):
-        return "Usage:  %s unlink REMOTE_FILE" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s rm [options] REMOTE_FILE" % (self.command_name,)
 
 class MvOptions(VDriveOptions):
     def parseArgs(self, frompath, topath):
@@ -254,7 +279,8 @@ class MvOptions(VDriveOptions):
         self.to_file = argv_to_unicode(topath)
 
     def getSynopsis(self):
-        return "Usage:  %s mv FROM TO" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s mv [options] FROM TO" % (self.command_name,)
+
     longdesc = """
     Use 'tahoe mv' to move files that are already on the grid elsewhere on
     the grid, e.g., 'tahoe mv alias:some_file alias:new_file'.
@@ -273,7 +299,7 @@ class LnOptions(VDriveOptions):
         self.to_file = argv_to_unicode(topath)
 
     def getSynopsis(self):
-        return "Usage:  %s ln FROM_LINK TO_LINK" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s ln [options] FROM_LINK TO_LINK" % (self.command_name,)
 
     longdesc = """
     Use 'tahoe ln' to duplicate a link (directory entry) already on the grid
@@ -319,8 +345,8 @@ class BackupOptions(VDriveOptions):
         self.from_dir = argv_to_unicode(localdir)
         self.to_dir = argv_to_unicode(topath)
 
-    def getSynopsis(Self):
-        return "Usage:  %s backup FROM ALIAS:TO" % os.path.basename(sys.argv[0])
+    def getSynopsis(self):
+        return "Usage:  %s backup [options] FROM ALIAS:TO" % (self.command_name,)
 
     def opt_exclude(self, pattern):
         """Ignore files matching a glob pattern. You may give multiple
@@ -378,7 +404,7 @@ class WebopenOptions(VDriveOptions):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s webopen [ALIAS:PATH]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s webopen [options] [ALIAS:PATH]" % (self.command_name,)
 
     longdesc = """Open a web browser to the contents of some file or
     directory on the grid. When run without arguments, open the Welcome
@@ -395,7 +421,7 @@ class ManifestOptions(VDriveOptions):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s manifest [ALIAS:PATH]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s manifest [options] [ALIAS:PATH]" % (self.command_name,)
 
     longdesc = """Print a list of all files and directories reachable from
     the given starting point."""
@@ -408,7 +434,7 @@ class StatsOptions(VDriveOptions):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s stats [ALIAS:PATH]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s stats [options] [ALIAS:PATH]" % (self.command_name,)
 
     longdesc = """Print statistics about of all files and directories
     reachable from the given starting point."""
@@ -424,7 +450,7 @@ class CheckOptions(VDriveOptions):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s check [ALIAS:PATH]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s check [options] [ALIAS:PATH]" % (self.command_name,)
 
     longdesc = """
     Check a single file or directory: count how many shares are available and
@@ -443,7 +469,7 @@ class DeepCheckOptions(VDriveOptions):
         self.where = argv_to_unicode(where)
 
     def getSynopsis(self):
-        return "Usage:  %s deep-check [ALIAS:PATH]" % (os.path.basename(sys.argv[0]),)
+        return "Usage:  %s deep-check [options] [ALIAS:PATH]" % (self.command_name,)
 
     longdesc = """
     Check all files and directories reachable from the given starting point
@@ -454,13 +480,13 @@ subCommands = [
     ["mkdir", None, MakeDirectoryOptions, "Create a new directory."],
     ["add-alias", None, AddAliasOptions, "Add a new alias cap."],
     ["create-alias", None, CreateAliasOptions, "Create a new alias cap."],
-    ["list-aliases", None, ListAliasOptions, "List all alias caps."],
+    ["list-aliases", None, ListAliasesOptions, "List all alias caps."],
     ["ls", None, ListOptions, "List a directory."],
     ["get", None, GetOptions, "Retrieve a file from the grid."],
     ["put", None, PutOptions, "Upload a file into the grid."],
     ["cp", None, CpOptions, "Copy one or more files or directories."],
-    ["rm", None, RmOptions, "Unlink a file or directory on the grid."],
-    ["unlink", None, UnlinkOptions, "Unlink a file or directory on the grid (same as rm)."],
+    ["unlink", None, UnlinkOptions, "Unlink a file or directory on the grid."],
+    ["rm", None, RmOptions, "Unlink a file or directory on the grid (same as unlink)."],
     ["mv", None, MvOptions, "Move a file within the grid."],
     ["ln", None, LnOptions, "Make an additional link to an existing file or directory."],
     ["backup", None, BackupOptions, "Make target dir look like local dir."],
@@ -520,10 +546,13 @@ def cp(options):
     rc = tahoe_cp.copy(options)
     return rc
 
-def rm(options):
-    from allmydata.scripts import tahoe_rm
-    rc = tahoe_rm.rm(options)
+def unlink(options, command="unlink"):
+    from allmydata.scripts import tahoe_unlink
+    rc = tahoe_unlink.unlink(options, command=command)
     return rc
+
+def rm(options):
+    return unlink(options, command="rm")
 
 def mv(options):
     from allmydata.scripts import tahoe_mv
@@ -574,8 +603,8 @@ dispatch = {
     "get": get,
     "put": put,
     "cp": cp,
+    "unlink": unlink,
     "rm": rm,
-    "unlink": rm,
     "mv": mv,
     "ln": ln,
     "backup": backup,

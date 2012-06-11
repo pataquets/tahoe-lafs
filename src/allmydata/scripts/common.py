@@ -40,6 +40,12 @@ class BaseOptions(usage.Options):
             _default_nodedir and (" [default for most commands: " + quote_output(_default_nodedir) + "]") or "")],
     ]
 
+    def __init__(self):
+        super(BaseOptions, self).__init__()
+        self.command_name = os.path.basename(sys.argv[0])
+        if self.command_name == 'trial':
+            self.command_name = 'tahoe'
+
     def opt_version(self):
         import allmydata
         print >>self.stdout, allmydata.get_package_versions_string(debug=True)
@@ -165,9 +171,9 @@ def get_alias(aliases, path_unicode, default):
         if default == None:
             return DefaultAliasMarker, path
         if default not in aliases:
-            raise UnknownAliasError("No alias specified, and the default "
-                                    "'tahoe' alias doesn't exist. To create "
-                                    "it, use 'tahoe create-alias tahoe'.")
+            raise UnknownAliasError("No alias specified, and the default %s alias doesn't exist. "
+                                    "To create it, use 'tahoe create-alias %s'."
+                                    % (quote_output(default), quote_output(default, quotemarks=False)))
         return aliases[default], path
     if colon == 1 and default is None and platform_uses_lettercolon_drivename():
         # treat C:\why\must\windows\be\so\weird as a local path, not a tahoe
@@ -182,9 +188,9 @@ def get_alias(aliases, path_unicode, default):
         if default == None:
             return DefaultAliasMarker, path
         if default not in aliases:
-            raise UnknownAliasError("No alias specified, and the default "
-                                    "'tahoe' alias doesn't exist. To create "
-                                    "it, use 'tahoe create-alias tahoe'.")
+            raise UnknownAliasError("No alias specified, and the default %s alias doesn't exist. "
+                                    "To create it, use 'tahoe create-alias %s'."
+                                    % (quote_output(default), quote_output(default, quotemarks=False)))
         return aliases[default], path
     if alias not in aliases:
         raise UnknownAliasError("Unknown alias %s, please create it with 'tahoe add-alias' or 'tahoe create-alias'." %

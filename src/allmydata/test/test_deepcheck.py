@@ -6,6 +6,7 @@ from twisted.internet import defer
 from twisted.internet import threads # CLI tests use deferToThread
 from allmydata.immutable import upload
 from allmydata.mutable.common import UnrecoverableFileError
+from allmydata.mutable.publish import MutableData
 from allmydata.util import idlib
 from allmydata.util import base32
 from allmydata.scripts import runner
@@ -34,7 +35,8 @@ class MutableChecker(GridTestMixin, unittest.TestCase, ErrorMixin):
         self.basedir = "deepcheck/MutableChecker/good"
         self.set_up_grid()
         CONTENTS = "a little bit of data"
-        d = self.g.clients[0].create_mutable_file(CONTENTS)
+        CONTENTS_uploadable = MutableData(CONTENTS)
+        d = self.g.clients[0].create_mutable_file(CONTENTS_uploadable)
         def _created(node):
             self.node = node
             self.fileurl = "uri/" + urllib.quote(node.get_uri())
@@ -56,7 +58,8 @@ class MutableChecker(GridTestMixin, unittest.TestCase, ErrorMixin):
         self.basedir = "deepcheck/MutableChecker/corrupt"
         self.set_up_grid()
         CONTENTS = "a little bit of data"
-        d = self.g.clients[0].create_mutable_file(CONTENTS)
+        CONTENTS_uploadable = MutableData(CONTENTS)
+        d = self.g.clients[0].create_mutable_file(CONTENTS_uploadable)
         def _stash_and_corrupt(node):
             self.node = node
             self.fileurl = "uri/" + urllib.quote(node.get_uri())
@@ -93,7 +96,8 @@ class MutableChecker(GridTestMixin, unittest.TestCase, ErrorMixin):
         self.basedir = "deepcheck/MutableChecker/delete_share"
         self.set_up_grid()
         CONTENTS = "a little bit of data"
-        d = self.g.clients[0].create_mutable_file(CONTENTS)
+        CONTENTS_uploadable = MutableData(CONTENTS)
+        d = self.g.clients[0].create_mutable_file(CONTENTS_uploadable)
         def _stash_and_delete(node):
             self.node = node
             self.fileurl = "uri/" + urllib.quote(node.get_uri())
@@ -216,7 +220,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
             self.root = n
             self.root_uri = n.get_uri()
         d.addCallback(_created_root)
-        d.addCallback(lambda ign: c0.create_mutable_file("mutable file contents"))
+        d.addCallback(lambda ign:
+            c0.create_mutable_file(MutableData("mutable file contents")))
         d.addCallback(lambda n: self.root.set_node(u"mutable", n))
         def _created_mutable(n):
             self.mutable = n
@@ -287,14 +292,14 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
         self.failUnlessEqual(d["list-corrupt-shares"], [], where)
         if not incomplete:
             self.failUnlessEqual(sorted(d["servers-responding"]),
-                                 sorted(self.g.servers_by_id.keys()),
+                                 sorted(self.g.get_all_serverids()),
                                  where)
             self.failUnless("sharemap" in d, str((where, d)))
             all_serverids = set()
             for (shareid, serverids) in d["sharemap"].items():
                 all_serverids.update(serverids)
             self.failUnlessEqual(sorted(all_serverids),
-                                 sorted(self.g.servers_by_id.keys()),
+                                 sorted(self.g.get_all_serverids()),
                                  where)
 
         self.failUnlessEqual(d["count-wrong-shares"], 0, where)
@@ -545,7 +550,7 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
         if not incomplete:
             self.failUnlessEqual(sorted(r["servers-responding"]),
                                  sorted([idlib.nodeid_b2a(sid)
-                                         for sid in self.g.servers_by_id]),
+                                         for sid in self.g.get_all_serverids()]),
                                  where)
             self.failUnless("sharemap" in r, where)
             all_serverids = set()
@@ -553,7 +558,7 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
                 all_serverids.update(serverids_s)
             self.failUnlessEqual(sorted(all_serverids),
                                  sorted([idlib.nodeid_b2a(sid)
-                                         for sid in self.g.servers_by_id]),
+                                         for sid in self.g.get_all_serverids()]),
                                  where)
         self.failUnlessEqual(r["count-wrong-shares"], 0, where)
         self.failUnlessEqual(r["count-recoverable-versions"], 1, where)
@@ -957,7 +962,8 @@ class DeepCheckWebBad(DeepCheckBase, unittest.TestCase):
     def create_mangled(self, ignored, name):
         nodetype, mangletype = name.split("-", 1)
         if nodetype == "mutable":
-            d = self.g.clients[0].create_mutable_file("mutable file contents")
+            mutable_uploadable = MutableData("mutable file contents")
+            d = self.g.clients[0].create_mutable_file(mutable_uploadable)
             d.addCallback(lambda n: self.root.set_node(unicode(name), n))
         elif nodetype == "large":
             large = upload.Data("Lots of data\n" * 1000 + name + "\n", None)

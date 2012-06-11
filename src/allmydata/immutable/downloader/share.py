@@ -32,10 +32,10 @@ class Share:
     # this is a specific implementation of IShare for tahoe's native storage
     # servers. A different backend would use a different class.
 
-    def __init__(self, rref, server_version, verifycap, commonshare, node,
-                 download_status, peerid, shnum, dyhb_rtt, logparent):
+    def __init__(self, rref, server, verifycap, commonshare, node,
+                 download_status, shnum, dyhb_rtt, logparent):
         self._rref = rref
-        self._server_version = server_version
+        self._server = server
         self._node = node # holds share_hash_tree and UEB
         self.actual_segment_size = node.segment_size # might still be None
         # XXX change node.guessed_segment_size to
@@ -46,14 +46,13 @@ class Share:
         self._UEB_length = None
         self._commonshare = commonshare # holds block_hash_tree
         self._download_status = download_status
-        self._peerid = peerid
-        self._peerid_s = base32.b2a(peerid)[:5]
         self._storage_index = verifycap.storage_index
         self._si_prefix = base32.b2a(verifycap.storage_index)[:8]
         self._shnum = shnum
         self._dyhb_rtt = dyhb_rtt
         # self._alive becomes False upon fatal corruption or server error
         self._alive = True
+        self._loop_scheduled = False
         self._lp = log.msg(format="%(share)s created", share=repr(self),
                            level=log.NOISY, parent=logparent, umid="P7hv2w")
 
@@ -82,7 +81,8 @@ class Share:
         # download can re-fetch it.
 
         self._requested_blocks = [] # (segnum, set(observer2..))
-        ver = server_version["http://allmydata.org/tahoe/protocols/storage/v1"]
+        v = server.get_version()
+        ver = v["http://allmydata.org/tahoe/protocols/storage/v1"]
         self._overrun_ok = ver["tolerates-immutable-read-overrun"]
         # If _overrun_ok and we guess the offsets correctly, we can get
         # everything in one RTT. If _overrun_ok and we guess wrong, we might
@@ -94,7 +94,7 @@ class Share:
         self.had_corruption = False # for unit tests
 
     def __repr__(self):
-        return "Share(sh%d-on-%s)" % (self._shnum, self._peerid_s)
+        return "Share(sh%d-on-%s)" % (self._shnum, self._server.get_name())
 
     def is_alive(self):
         # XXX: reconsider. If the share sees a single error, should it remain
@@ -123,9 +123,8 @@ class Share:
         # use the upload-side code to get this as accurate as possible
         ht = IncompleteHashTree(N)
         num_share_hashes = len(ht.needed_hashes(0, include_leaf=True))
-        wbp = make_write_bucket_proxy(None, share_size, r["block_size"],
-                                      r["num_segments"], num_share_hashes, 0,
-                                      None)
+        wbp = make_write_bucket_proxy(None, None, share_size, r["block_size"],
+                                      r["num_segments"], num_share_hashes, 0)
         self._fieldsize = wbp.fieldsize
         self._fieldstruct = wbp.fieldstruct
         self.guessed_offsets = wbp._offsets
@@ -165,7 +164,7 @@ class Share:
                 break
         else:
             self._requested_blocks.append( (segnum, set([o])) )
-        eventually(self.loop)
+        self.schedule_loop()
         return o
 
     def _cancel_block_request(self, o):
@@ -185,7 +184,14 @@ class Share:
             return self._requested_blocks[0]
         return None, []
 
+    def schedule_loop(self):
+        if self._loop_scheduled:
+            return
+        self._loop_scheduled = True
+        eventually(self.loop)
+
     def loop(self):
+        self._loop_scheduled = False
         if not self._alive:
             return
         try:
@@ -727,11 +733,11 @@ class Share:
                          share=repr(self),
                          start=start, length=length,
                          level=log.NOISY, parent=self._lp, umid="sgVAyA")
-            req_ev = ds.add_request_sent(self._peerid, self._shnum,
-                                         start, length, now())
+            block_ev = ds.add_block_request(self._server, self._shnum,
+                                            start, length, now())
             d = self._send_request(start, length)
-            d.addCallback(self._got_data, start, length, req_ev, lp)
-            d.addErrback(self._got_error, start, length, req_ev, lp)
+            d.addCallback(self._got_data, start, length, block_ev, lp)
+            d.addErrback(self._got_error, start, length, block_ev, lp)
             d.addCallback(self._trigger_loop)
             d.addErrback(lambda f:
                          log.err(format="unhandled error during send_request",
@@ -741,8 +747,8 @@ class Share:
     def _send_request(self, start, length):
         return self._rref.callRemote("read", start, length)
 
-    def _got_data(self, data, start, length, req_ev, lp):
-        req_ev.finished(len(data), now())
+    def _got_data(self, data, start, length, block_ev, lp):
+        block_ev.finished(len(data), now())
         if not self._alive:
             return
         log.msg(format="%(share)s._got_data [%(start)d:+%(length)d] -> %(datalen)d",
@@ -784,12 +790,12 @@ class Share:
         # the wanted/needed span is only "wanted" for the first pass. Once
         # the offset table arrives, it's all "needed".
 
-    def _got_error(self, f, start, length, req_ev, lp):
-        req_ev.finished("error", now())
+    def _got_error(self, f, start, length, block_ev, lp):
+        block_ev.error(now())
         log.msg(format="error requesting %(start)d+%(length)d"
                 " from %(server)s for si %(si)s",
                 start=start, length=length,
-                server=self._peerid_s, si=self._si_prefix,
+                server=self._server.get_name(), si=self._si_prefix,
                 failure=f, parent=lp, level=log.UNUSUAL, umid="BZgAJw")
         # retire our observers, assuming we won't be able to make any
         # further progress
@@ -797,7 +803,7 @@ class Share:
 
     def _trigger_loop(self, res):
         if self._alive:
-            eventually(self.loop)
+            self.schedule_loop()
         return res
 
     def _fail(self, f, level=log.WEIRD):

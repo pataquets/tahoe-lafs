@@ -4,6 +4,10 @@ from foolscap.api import StringConstraint, ListOf, TupleOf, SetOf, DictOf, \
      ChoiceOf, IntegerConstraint, Any, RemoteInterface, Referenceable
 
 HASH_SIZE=32
+SALT_SIZE=16
+
+SDMF_VERSION=0
+MDMF_VERSION=1
 
 Hash = StringConstraint(maxLength=HASH_SIZE,
                         minLength=HASH_SIZE)# binary format 32-byte SHA256 hash
@@ -360,13 +364,17 @@ class IStorageBucketReader(Interface):
         """
 
 class IStorageBroker(Interface):
-    def get_servers_for_index(peer_selection_index):
+    def get_servers_for_psi(peer_selection_index):
         """
-        @return: list of (peerid, versioned-rref) tuples
+        @return: list of IServer instances
         """
-    def get_all_servers():
+    def get_connected_servers():
         """
-        @return: frozenset of (peerid, versioned-rref) tuples
+        @return: frozenset of connected IServer instances
+        """
+    def get_known_servers():
+        """
+        @return: frozenset of IServer instances
         """
     def get_all_serverids():
         """
@@ -418,6 +426,72 @@ class IStorageBroker(Interface):
         the connections that provide SERVICE_NAME, using a hash-based
         permutation keyed by KEY. This randomizes the service list in a
         repeatable way, to distribute load over many peers.
+        """
+
+
+class IMutableSlotWriter(Interface):
+    """
+    The interface for a writer around a mutable slot on a remote server.
+    """
+    def set_checkstring(checkstring, *args):
+        """
+        Set the checkstring that I will pass to the remote server when
+        writing.
+
+            @param checkstring A packed checkstring to use.
+
+        Note that implementations can differ in which semantics they
+        wish to support for set_checkstring -- they can, for example,
+        build the checkstring themselves from its constituents, or
+        some other thing.
+        """
+
+    def get_checkstring():
+        """
+        Get the checkstring that I think currently exists on the remote
+        server.
+        """
+
+    def put_block(data, segnum, salt):
+        """
+        Add a block and salt to the share.
+        """
+
+    def put_encprivkey(encprivkey):
+        """
+        Add the encrypted private key to the share.
+        """
+
+    def put_blockhashes(blockhashes=list):
+        """
+        Add the block hash tree to the share.
+        """
+
+    def put_sharehashes(sharehashes=dict):
+        """
+        Add the share hash chain to the share.
+        """
+
+    def get_signable():
+        """
+        Return the part of the share that needs to be signed.
+        """
+
+    def put_signature(signature):
+        """
+        Add the signature to the share.
+        """
+
+    def put_verification_key(verification_key):
+        """
+        Add the verification key to the share.
+        """
+
+    def finish_publishing():
+        """
+        Do anything necessary to finish writing the share to a remote
+        server. I require that no further publishing needs to take place
+        after this method has been called.
         """
 
 
@@ -476,7 +550,7 @@ class IImmutableFileURI(IFileURI):
     pass
 
 class IMutableFileURI(Interface):
-    """I am a URI which represents a mutable filenode."""
+    pass
 
 class IDirectoryURI(Interface):
     pass
@@ -499,6 +573,175 @@ class MustBeReadonlyError(CapConstraintError):
 
 class MustNotBeUnknownRWError(CapConstraintError):
     """Cannot add an unknown child cap specified in a rw_uri field."""
+
+
+class IReadable(Interface):
+    """I represent a readable object -- either an immutable file, or a
+    specific version of a mutable file.
+    """
+
+    def is_readonly():
+        """Return True if this reference provides mutable access to the given
+        file or directory (i.e. if you can modify it), or False if not. Note
+        that even if this reference is read-only, someone else may hold a
+        read-write reference to it.
+
+        For an IReadable returned by get_best_readable_version(), this will
+        always return True, but for instances of subinterfaces such as
+        IMutableFileVersion, it may return False."""
+
+    def is_mutable():
+        """Return True if this file or directory is mutable (by *somebody*,
+        not necessarily you), False if it is is immutable. Note that a file
+        might be mutable overall, but your reference to it might be
+        read-only. On the other hand, all references to an immutable file
+        will be read-only; there are no read-write references to an immutable
+        file."""
+
+    def get_storage_index():
+        """Return the storage index of the file."""
+
+    def get_size():
+        """Return the length (in bytes) of this readable object."""
+
+    def download_to_data():
+        """Download all of the file contents. I return a Deferred that fires
+        with the contents as a byte string."""
+
+    def read(consumer, offset=0, size=None):
+        """Download a portion (possibly all) of the file's contents, making
+        them available to the given IConsumer. Return a Deferred that fires
+        (with the consumer) when the consumer is unregistered (either because
+        the last byte has been given to it, or because the consumer threw an
+        exception during write(), possibly because it no longer wants to
+        receive data). The portion downloaded will start at 'offset' and
+        contain 'size' bytes (or the remainder of the file if size==None).
+
+        The consumer will be used in non-streaming mode: an IPullProducer
+        will be attached to it.
+
+        The consumer will not receive data right away: several network trips
+        must occur first. The order of events will be::
+
+         consumer.registerProducer(p, streaming)
+          (if streaming == False)::
+           consumer does p.resumeProducing()
+            consumer.write(data)
+           consumer does p.resumeProducing()
+            consumer.write(data).. (repeat until all data is written)
+         consumer.unregisterProducer()
+         deferred.callback(consumer)
+
+        If a download error occurs, or an exception is raised by
+        consumer.registerProducer() or consumer.write(), I will call
+        consumer.unregisterProducer() and then deliver the exception via
+        deferred.errback(). To cancel the download, the consumer should call
+        p.stopProducing(), which will result in an exception being delivered
+        via deferred.errback().
+
+        See src/allmydata/util/consumer.py for an example of a simple
+        download-to-memory consumer.
+        """
+
+
+class IWriteable(Interface):
+    """
+    I define methods that callers can use to update SDMF and MDMF
+    mutable files on a Tahoe-LAFS grid.
+    """
+    # XXX: For the moment, we have only this. It is possible that we
+    #      want to move overwrite() and modify() in here too.
+    def update(data, offset):
+        """
+        I write the data from my data argument to the MDMF file,
+        starting at offset. I continue writing data until my data
+        argument is exhausted, appending data to the file as necessary.
+        """
+        # assert IMutableUploadable.providedBy(data)
+        # to append data: offset=node.get_size_of_best_version()
+        # do we want to support compacting MDMF?
+        # for an MDMF file, this can be done with O(data.get_size())
+        # memory. For an SDMF file, any modification takes
+        # O(node.get_size_of_best_version()).
+
+
+class IMutableFileVersion(IReadable):
+    """I provide access to a particular version of a mutable file. The
+    access is read/write if I was obtained from a filenode derived from
+    a write cap, or read-only if the filenode was derived from a read cap.
+    """
+
+    def get_sequence_number():
+        """Return the sequence number of this version."""
+
+    def get_servermap():
+        """Return the IMutableFileServerMap instance that was used to create
+        this object.
+        """
+
+    def get_writekey():
+        """Return this filenode's writekey, or None if the node does not have
+        write-capability. This may be used to assist with data structures
+        that need to make certain data available only to writers, such as the
+        read-write child caps in dirnodes. The recommended process is to have
+        reader-visible data be submitted to the filenode in the clear (where
+        it will be encrypted by the filenode using the readkey), but encrypt
+        writer-visible data using this writekey.
+        """
+
+    # TODO: Can this be overwrite instead of replace?
+    def replace(new_contents):
+        """Replace the contents of the mutable file, provided that no other
+        node has published (or is attempting to publish, concurrently) a
+        newer version of the file than this one.
+
+        I will avoid modifying any share that is different than the version
+        given by get_sequence_number(). However, if another node is writing
+        to the file at the same time as me, I may manage to update some shares
+        while they update others. If I see any evidence of this, I will signal
+        UncoordinatedWriteError, and the file will be left in an inconsistent
+        state (possibly the version you provided, possibly the old version,
+        possibly somebody else's version, and possibly a mix of shares from
+        all of these).
+
+        The recommended response to UncoordinatedWriteError is to either
+        return it to the caller (since they failed to coordinate their
+        writes), or to attempt some sort of recovery. It may be sufficient to
+        wait a random interval (with exponential backoff) and repeat your
+        operation. If I do not signal UncoordinatedWriteError, then I was
+        able to write the new version without incident.
+
+        I return a Deferred that fires (with a PublishStatus object) when the
+        update has completed.
+        """
+
+    def modify(modifier_cb):
+        """Modify the contents of the file, by downloading this version,
+        applying the modifier function (or bound method), then uploading
+        the new version. This will succeed as long as no other node
+        publishes a version between the download and the upload.
+        I return a Deferred that fires (with a PublishStatus object) when
+        the update is complete.
+
+        The modifier callable will be given three arguments: a string (with
+        the old contents), a 'first_time' boolean, and a servermap. As with
+        download_to_data(), the old contents will be from this version,
+        but the modifier can use the servermap to make other decisions
+        (such as refusing to apply the delta if there are multiple parallel
+        versions, or if there is evidence of a newer unrecoverable version).
+        'first_time' will be True the first time the modifier is called,
+        and False on any subsequent calls.
+
+        The callable should return a string with the new contents. The
+        callable must be prepared to be called multiple times, and must
+        examine the input string to see if the change that it wants to make
+        is already present in the old version. If it does not need to make
+        any changes, it can either return None, or return its input string.
+
+        If the modifier raises an exception, it will be returned in the
+        errback.
+        """
+
 
 # The hierarchy looks like this:
 #  IFilesystemNode
@@ -544,7 +787,7 @@ class IFilesystemNode(Interface):
         read-only access with others, use get_readonly_uri().
         """
 
-    def get_write_uri(n):
+    def get_write_uri():
         """Return the URI string that can be used by others to get write
         access to this node, if it is writeable. If this is a read-only node,
         return None."""
@@ -590,6 +833,7 @@ class IFilesystemNode(Interface):
     def raise_error():
         """Raise any error associated with this node."""
 
+    # XXX: These may not be appropriate outside the context of an IReadable.
     def get_size():
         """Return the length (in bytes) of the data this node represents. For
         directory nodes, I return the size of the backing store. I return
@@ -606,42 +850,44 @@ class IFilesystemNode(Interface):
 class IFileNode(IFilesystemNode):
     """I am a node which represents a file: a sequence of bytes. I am not a
     container, like IDirectoryNode."""
+    def get_best_readable_version():
+        """Return a Deferred that fires with an IReadable for the 'best'
+        available version of the file. The IReadable provides only read
+        access, even if this filenode was derived from a write cap.
 
-class IImmutableFileNode(IFileNode):
-    def read(consumer, offset=0, size=None):
-        """Download a portion (possibly all) of the file's contents, making
-        them available to the given IConsumer. Return a Deferred that fires
-        (with the consumer) when the consumer is unregistered (either because
-        the last byte has been given to it, or because the consumer threw an
-        exception during write(), possibly because it no longer wants to
-        receive data). The portion downloaded will start at 'offset' and
-        contain 'size' bytes (or the remainder of the file if size==None).
-
-        The consumer will be used in non-streaming mode: an IPullProducer
-        will be attached to it.
-
-        The consumer will not receive data right away: several network trips
-        must occur first. The order of events will be::
-
-         consumer.registerProducer(p, streaming)
-          (if streaming == False)::
-           consumer does p.resumeProducing()
-            consumer.write(data)
-           consumer does p.resumeProducing()
-            consumer.write(data).. (repeat until all data is written)
-         consumer.unregisterProducer()
-         deferred.callback(consumer)
-
-        If a download error occurs, or an exception is raised by
-        consumer.registerProducer() or consumer.write(), I will call
-        consumer.unregisterProducer() and then deliver the exception via
-        deferred.errback(). To cancel the download, the consumer should call
-        p.stopProducing(), which will result in an exception being delivered
-        via deferred.errback().
-
-        See src/allmydata/util/consumer.py for an example of a simple
-        download-to-memory consumer.
+        For an immutable file, there is only one version. For a mutable
+        file, the 'best' version is the recoverable version with the
+        highest sequence number. If no uncoordinated writes have occurred,
+        and if enough shares are available, then this will be the most
+        recent version that has been uploaded. If no version is recoverable,
+        the Deferred will errback with an UnrecoverableFileError.
         """
+
+    def download_best_version():
+        """Download the contents of the version that would be returned
+        by get_best_readable_version(). This is equivalent to calling
+        download_to_data() on the IReadable given by that method.
+
+        I return a Deferred that fires with a byte string when the file
+        has been fully downloaded. To support streaming download, use
+        the 'read' method of IReadable. If no version is recoverable,
+        the Deferred will errback with an UnrecoverableFileError.
+        """
+
+    def get_size_of_best_version():
+        """Find the size of the version that would be returned by
+        get_best_readable_version().
+
+        I return a Deferred that fires with an integer. If no version
+        is recoverable, the Deferred will errback with an
+        UnrecoverableFileError.
+        """
+
+
+class IImmutableFileNode(IFileNode, IReadable):
+    """I am a node representing an immutable file. Immutable files have
+    only one version"""
+
 
 class IMutableFileNode(IFileNode):
     """I provide access to a 'mutable file', which retains its identity
@@ -702,26 +948,16 @@ class IMutableFileNode(IFileNode):
     only be retrieved and updated all-at-once, as a single big string. Future
     versions of our mutable files will remove this restriction.
     """
-
-    def download_best_version():
-        """Download the 'best' available version of the file, meaning one of
-        the recoverable versions with the highest sequence number. If no
+    def get_best_mutable_version():
+        """Return a Deferred that fires with an IMutableFileVersion for
+        the 'best' available version of the file. The best version is
+        the recoverable version with the highest sequence number. If no
         uncoordinated writes have occurred, and if enough shares are
-        available, then this will be the most recent version that has been
-        uploaded.
+        available, then this will be the most recent version that has
+        been uploaded.
 
-        I update an internal servermap with MODE_READ, determine which
-        version of the file is indicated by
-        servermap.best_recoverable_version(), and return a Deferred that
-        fires with its contents. If no version is recoverable, the Deferred
-        will errback with UnrecoverableFileError.
-        """
-
-    def get_size_of_best_version():
-        """Find the size of the version that would be downloaded with
-        download_best_version(), without actually downloading the whole file.
-
-        I return a Deferred that fires with an integer.
+        If no version is recoverable, the Deferred will errback with an
+        UnrecoverableFileError.
         """
 
     def overwrite(new_contents):
@@ -759,7 +995,6 @@ class IMutableFileNode(IFileNode):
         If the modifier raises an exception, it will be returned in the
         errback.
         """
-
 
     def get_servermap(mode):
         """Return a Deferred that fires with an IMutableFileServerMap
@@ -814,11 +1049,17 @@ class IMutableFileNode(IFileNode):
         writer-visible data using this writekey.
         """
 
+    def get_version():
+        """Returns the mutable file protocol version."""
+
 class NotEnoughSharesError(Exception):
     """Download was unable to get enough shares"""
 
 class NoSharesError(Exception):
     """Download was unable to get any shares at all."""
+
+class DownloadStopped(Exception):
+    pass
 
 class UploadUnhappinessError(Exception):
     """Upload was unable to satisfy 'servers_of_happiness'"""
@@ -1650,6 +1891,37 @@ class IUploadable(Interface):
         """The upload is finished, and whatever filehandle was in use may be
         closed."""
 
+
+class IMutableUploadable(Interface):
+    """
+    I represent content that is due to be uploaded to a mutable filecap.
+    """
+    # This is somewhat simpler than the IUploadable interface above
+    # because mutable files do not need to be concerned with possibly
+    # generating a CHK, nor with per-file keys. It is a subset of the
+    # methods in IUploadable, though, so we could just as well implement
+    # the mutable uploadables as IUploadables that don't happen to use
+    # those methods (with the understanding that the unused methods will
+    # never be called on such objects)
+    def get_size():
+        """
+        Returns a Deferred that fires with the size of the content held
+        by the uploadable.
+        """
+
+    def read(length):
+        """
+        Returns a list of strings which, when concatenated, are the next
+        length bytes of the file, or fewer if there are fewer bytes
+        between the current location and the end of the file.
+        """
+
+    def close():
+        """
+        The process that used the Uploadable is finished using it, so
+        the uploadable may be closed.
+        """
+
 class IUploadResults(Interface):
     """I am returned by upload() methods. I contain a number of public
     attributes which can be read to determine the results of the upload. Some
@@ -1719,7 +1991,7 @@ class IUploader(Interface):
 
 class ICheckable(Interface):
     def check(monitor, verify=False, add_lease=False):
-        """Check upon my health, optionally repairing any problems.
+        """Check up on my health, optionally repairing any problems.
 
         This returns a Deferred that fires with an instance that provides
         ICheckResults, or None if the object is non-distributed (i.e. LIT
@@ -2325,7 +2597,7 @@ class RIControlClient(RemoteInterface):
         @return: a dictionary mapping peerid to a float (RTT time in seconds)
         """
 
-        return DictOf(Nodeid, float)
+        return DictOf(str, float)
 
 UploadResults = Any() #DictOf(str, str)
 
@@ -2394,12 +2666,12 @@ class RIStatsProvider(RemoteInterface):
     def get_stats():
         """
         returns a dictionary containing 'counters' and 'stats', each a
-        dictionary with string counter/stat name keys, and numeric values.
+        dictionary with string counter/stat name keys, and numeric or None values.
         counters are monotonically increasing measures of work done, and
         stats are instantaneous measures (potentially time averaged
         internally)
         """
-        return DictOf(str, DictOf(str, ChoiceOf(float, int, long)))
+        return DictOf(str, DictOf(str, ChoiceOf(float, int, long, None)))
 
 class RIStatsGatherer(RemoteInterface):
     __remote_name__ = "RIStatsGatherer.tahoe.allmydata.com"

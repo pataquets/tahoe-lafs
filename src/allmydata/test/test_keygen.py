@@ -7,6 +7,7 @@ from foolscap.api import Tub, fireEventually, flushEventualQueue
 
 from allmydata import key_generator
 from allmydata.util import pollmixin
+from allmydata.test.common import TEST_RSA_KEY_SIZE
 from pycryptopp.publickey import rsa
 
 def flush_but_dont_ignore(res):
@@ -41,7 +42,7 @@ class KeyGenService(unittest.TestCase, pollmixin.PollMixin):
             return junk
 
         #print 'starting key generator service'
-        keysize = 522
+        keysize = TEST_RSA_KEY_SIZE
         kgs = key_generator.KeyGeneratorService(display_furl=False, default_key_size=keysize)
         kgs.key_generator.verbose = True
         kgs.setServiceParent(self.parent)

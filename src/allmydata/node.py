@@ -1,4 +1,3 @@
-
 import datetime, os.path, re, types, ConfigParser, tempfile
 from base64 import b32decode, b32encode
 
@@ -12,7 +11,7 @@ from allmydata.util import log
 from allmydata.util import fileutil, iputil, observer
 from allmydata.util.assertutil import precondition, _assert
 from allmydata.util.fileutil import abspath_expanduser_unicode
-from allmydata.util.encodingutil import get_filesystem_encoding
+from allmydata.util.encodingutil import get_filesystem_encoding, quote_output
 
 # Add our application versions to the data that Foolscap's LogPublisher
 # reports.
@@ -42,7 +41,17 @@ class _None: # used as a marker in get_config()
     pass
 
 class MissingConfigEntry(Exception):
-    pass
+    """ A required config entry was not found. """
+
+class OldConfigError(Exception):
+    """ An obsolete config file was found. See
+    docs/historical/configuration.rst. """
+    def __str__(self):
+        return ("Found pre-Tahoe-LAFS-v1.3 configuration file(s):\n"
+                "%s\n"
+                "See docs/historical/configuration.rst."
+                % "\n".join([quote_output(fname) for fname in self.args[0]]))
+
 
 class Node(service.MultiService):
     # this implements common functionality of both Client nodes and Introducer
@@ -50,6 +59,7 @@ class Node(service.MultiService):
     NODETYPE = "unknown NODETYPE"
     PORTNUMFILE = None
     CERTFILE = "node.pem"
+    GENERATED_FILES = []
 
     def __init__(self, basedir=u"."):
         service.MultiService.__init__(self)
@@ -59,9 +69,8 @@ class Node(service.MultiService):
         fileutil.make_dirs(os.path.join(self.basedir, "private"), 0700)
         open(os.path.join(self.basedir, "private", "README"), "w").write(PRIV_README)
 
-        # creates self.config, populates from distinct files if necessary
+        # creates self.config
         self.read_config()
-
         nickname_utf8 = self.get_config("node", "nickname", "<unspecified>")
         self.nickname = nickname_utf8.decode("utf-8")
         assert type(self.nickname) is unicode
@@ -96,9 +105,9 @@ class Node(service.MultiService):
             return self.config.get(section, option)
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             if default is _None:
-                fn = os.path.join(self.basedir, "tahoe.cfg")
+                fn = os.path.join(self.basedir, u"tahoe.cfg")
                 raise MissingConfigEntry("%s is missing the [%s]%s entry"
-                                         % (fn, section, option))
+                                         % (quote_output(fn), section, option))
             return default
 
     def set_config(self, section, option, value):
@@ -108,17 +117,9 @@ class Node(service.MultiService):
         assert self.config.get(section, option) == value
 
     def read_config(self):
+        self.error_about_old_config_files()
         self.config = ConfigParser.SafeConfigParser()
         self.config.read([os.path.join(self.basedir, "tahoe.cfg")])
-        self.read_old_config_files()
-
-    def read_old_config_files(self):
-        # backwards-compatibility: individual files will override the
-        # contents of tahoe.cfg
-        copy = self._copy_config_from_file
-
-        copy("nickname", "node", "nickname")
-        copy("webport", "node", "web.port")
 
         cfg_tubport = self.get_config("node", "tub.port", "")
         if not cfg_tubport:
@@ -126,18 +127,30 @@ class Node(service.MultiService):
             # disk. So only read self._portnumfile if tahoe.cfg doesn't
             # provide a value.
             try:
-                file_tubport = open(self._portnumfile, "rU").read().strip()
+                file_tubport = fileutil.read(self._portnumfile).strip()
                 self.set_config("node", "tub.port", file_tubport)
             except EnvironmentError:
-                pass
+                if os.path.exists(self._portnumfile):
+                    raise
 
-        copy("keepalive_timeout", "node", "timeout.keepalive")
-        copy("disconnect_timeout", "node", "timeout.disconnect")
+    def error_about_old_config_files(self):
+        """ If any old configuration files are detected, raise OldConfigError. """
 
-    def _copy_config_from_file(self, config_filename, section, keyname):
-        s = self.get_config_from_file(config_filename)
-        if s is not None:
-            self.set_config(section, keyname, s)
+        oldfnames = set()
+        for name in [
+            'nickname', 'webport', 'keepalive_timeout', 'log_gatherer.furl',
+            'disconnect_timeout', 'advertised_ip_addresses', 'introducer.furl',
+            'helper.furl', 'key_generator.furl', 'stats_gatherer.furl',
+            'no_storage', 'readonly_storage', 'sizelimit',
+            'debug_discard_storage', 'run_helper']:
+            if name not in self.GENERATED_FILES:
+                fullfname = os.path.join(self.basedir, name)
+                if os.path.exists(fullfname):
+                    oldfnames.add(fullfname)
+        if oldfnames:
+            e = OldConfigError(oldfnames)
+            twlog.msg(e)
+            raise e
 
     def create_tub(self):
         certfile = os.path.join(self.basedir, "private", self.CERTFILE)
@@ -179,19 +192,6 @@ class Node(service.MultiService):
         # TODO: merge this with allmydata.get_package_versions
         return dict(app_versions.versions)
 
-    def get_config_from_file(self, name, required=False):
-        """Get the (string) contents of a config file, or None if the file
-        did not exist. If required=True, raise an exception rather than
-        returning None. Any leading or trailing whitespace will be stripped
-        from the data."""
-        fn = os.path.join(self.basedir, name)
-        try:
-            return open(fn, "r").read().strip()
-        except EnvironmentError:
-            if not required:
-                return None
-            raise
-
     def write_private_config(self, name, value):
         """Write the (string) contents of a private config file (which is a
         config file that resides within the subdirectory named 'private'), and
@@ -212,21 +212,16 @@ class Node(service.MultiService):
         use it as a default value. If not, treat it as a 0-argument callable
         which is expected to return a string.
         """
-        privname = os.path.join("private", name)
-        value = self.get_config_from_file(privname)
-        if value is None:
-            if isinstance(default, (str, unicode)):
+        privname = os.path.join(self.basedir, "private", name)
+        try:
+            value = fileutil.read(privname)
+        except EnvironmentError:
+            if isinstance(default, basestring):
                 value = default
             else:
                 value = default()
-            fn = os.path.join(self.basedir, privname)
-            try:
-                open(fn, "w").write(value)
-            except EnvironmentError, e:
-                self.log("Unable to write config file '%s'" % fn)
-                self.log(e)
-            value = value.strip()
-        return value
+            fileutil.write(privname, value)
+        return value.strip()
 
     def write_config(self, name, value, mode="w"):
         """Write a string to a config file."""
@@ -294,8 +289,9 @@ class Node(service.MultiService):
         return self.stopService()
 
     def setup_logging(self):
-        # we replace the formatTime() method of the log observer that twistd
-        # set up for us, with a method that uses better timestamps.
+        # we replace the formatTime() method of the log observer that
+        # twistd set up for us, with a method that uses our preferred
+        # timestamp format.
         for o in twlog.theLogPublisher.observers:
             # o might be a FileLogObserver's .emit method
             if type(o) is type(self.setup_logging): # bound method
@@ -344,4 +340,3 @@ class Node(service.MultiService):
     def add_service(self, s):
         s.setServiceParent(self)
         return s
-

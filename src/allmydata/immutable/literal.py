@@ -46,8 +46,13 @@ class _ImmutableFileNodeBase(object):
 
 class LiteralProducer:
     implements(IPushProducer)
+
+    def pauseProducing(self):
+        pass
+
     def resumeProducing(self):
         pass
+
     def stopProducing(self):
         pass
 
@@ -102,3 +107,15 @@ class LiteralFileNode(_ImmutableFileNodeBase):
         d = basic.FileSender().beginFileTransfer(StringIO(data), consumer)
         d.addCallback(lambda lastSent: consumer)
         return d
+
+    # IReadable, IFileNode, IFilesystemNode
+    def get_best_readable_version(self):
+        return defer.succeed(self)
+
+
+    def download_best_version(self):
+        return defer.succeed(self.u.data)
+
+
+    download_to_data = download_best_version
+    get_size_of_best_version = get_current_size

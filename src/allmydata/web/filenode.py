@@ -6,14 +6,19 @@ from twisted.internet import defer
 from nevow import url, rend
 from nevow.inevow import IRequest
 
-from allmydata.interfaces import ExistingChildError
+from allmydata.interfaces import ExistingChildError, SDMF_VERSION, MDMF_VERSION
 from allmydata.monitor import Monitor
 from allmydata.immutable.upload import FileHandle
+from allmydata.mutable.publish import MutableFileHandle
+from allmydata.mutable.common import MODE_READ
 from allmydata.util import log, base32
+from allmydata.util.encodingutil import quote_output
+from allmydata.blacklist import FileProhibited, ProhibitedNode
 
 from allmydata.web.common import text_plain, WebError, RenderMixin, \
      boolean_of_arg, get_arg, should_create_intermediate_directories, \
-     MyExceptionHandler, parse_replace_arg
+     MyExceptionHandler, parse_replace_arg, parse_offset_arg, \
+     get_format, get_mutable_type
 from allmydata.web.check_results import CheckResults, \
      CheckAndRepairResults, LiteralCheckResults
 from allmydata.web.info import MoreInfo
@@ -21,11 +26,11 @@ from allmydata.web.info import MoreInfo
 class ReplaceMeMixin:
     def replace_me_with_a_child(self, req, client, replace):
         # a new file is being uploaded in our place.
-        mutable = boolean_of_arg(get_arg(req, "mutable", "false"))
-        if mutable:
-            req.content.seek(0)
-            data = req.content.read()
-            d = client.create_mutable_file(data)
+        file_format = get_format(req, "CHK")
+        mutable_type = get_mutable_type(file_format)
+        if mutable_type is not None:
+            data = MutableFileHandle(req.content)
+            d = client.create_mutable_file(data, version=mutable_type)
             def _uploaded(newnode):
                 d2 = self.parentnode.set_node(self.name, newnode,
                                               overwrite=replace)
@@ -33,6 +38,7 @@ class ReplaceMeMixin:
                 return d2
             d.addCallback(_uploaded)
         else:
+            assert file_format == "CHK"
             uploadable = FileHandle(req.content, convergence=client.convergence)
             d = self.parentnode.add_file(self.name, uploadable,
                                          overwrite=replace)
@@ -58,21 +64,15 @@ class ReplaceMeMixin:
         d.addCallback(lambda res: childnode.get_uri())
         return d
 
-    def _read_data_from_formpost(self, req):
-        # SDMF: files are small, and we can only upload data, so we read
-        # the whole file into memory before uploading.
-        contents = req.fields["file"]
-        contents.file.seek(0)
-        data = contents.file.read()
-        return data
 
     def replace_me_with_a_formpost(self, req, client, replace):
         # create a new file, maybe mutable, maybe immutable
-        mutable = boolean_of_arg(get_arg(req, "mutable", "false"))
-
-        if mutable:
-            data = self._read_data_from_formpost(req)
-            d = client.create_mutable_file(data)
+        file_format = get_format(req, "CHK")
+        contents = req.fields["file"]
+        if file_format in ("SDMF", "MDMF"):
+            mutable_type = get_mutable_type(file_format)
+            uploadable = MutableFileHandle(contents.file)
+            d = client.create_mutable_file(uploadable, version=mutable_type)
             def _uploaded(newnode):
                 d2 = self.parentnode.set_node(self.name, newnode,
                                               overwrite=replace)
@@ -80,12 +80,12 @@ class ReplaceMeMixin:
                 return d2
             d.addCallback(_uploaded)
             return d
-        # create an immutable file
-        contents = req.fields["file"]
+
         uploadable = FileHandle(contents.file, convergence=client.convergence)
         d = self.parentnode.add_file(self.name, uploadable, overwrite=replace)
         d.addCallback(lambda newnode: newnode.get_uri())
         return d
+
 
 class PlaceHolderNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
     def __init__(self, client, parentnode, name):
@@ -146,11 +146,13 @@ class FileNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
 
     def childFactory(self, ctx, name):
         req = IRequest(ctx)
+        if isinstance(self.node, ProhibitedNode):
+            raise FileProhibited(self.node.reason)
         if should_create_intermediate_directories(req):
-            raise WebError("Cannot create directory '%s', because its "
-                           "parent is a file, not a directory" % name)
-        raise WebError("Files have no children, certainly not named '%s'"
-                       % name)
+            raise WebError("Cannot create directory %s, because its "
+                           "parent is a file, not a directory" % quote_output(name, encoding='utf-8'))
+        raise WebError("Files have no children, certainly not named %s"
+                       % quote_output(name, encoding='utf-8'))
 
     def render_GET(self, ctx):
         req = IRequest(ctx)
@@ -169,18 +171,27 @@ class FileNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
             # properly. So we assume that at least the browser will agree
             # with itself, and echo back the same bytes that we were given.
             filename = get_arg(req, "filename", self.name) or "unknown"
-            if self.node.is_mutable():
-                # some day: d = self.node.get_best_version()
-                d = makeMutableDownloadable(self.node)
-            else:
-                d = defer.succeed(self.node)
+            d = self.node.get_best_readable_version()
             d.addCallback(lambda dn: FileDownloader(dn, filename))
             return d
         if t == "json":
-            if self.parentnode and self.name:
-                d = self.parentnode.get_metadata_for(self.name)
+            # We do this to make sure that fields like size and
+            # mutable-type (which depend on the file on the grid and not
+            # just on the cap) are filled in. The latter gets used in
+            # tests, in particular.
+            #
+            # TODO: Make it so that the servermap knows how to update in
+            # a mode specifically designed to fill in these fields, and
+            # then update it in that mode.
+            if self.node.is_mutable():
+                d = self.node.get_servermap(MODE_READ)
             else:
                 d = defer.succeed(None)
+            if self.parentnode and self.name:
+                d.addCallback(lambda ignored:
+                    self.parentnode.get_metadata_for(self.name))
+            else:
+                d.addCallback(lambda ignored: None)
             d.addCallback(lambda md: FileJSONMetadata(ctx, self.node, md))
             return d
         if t == "info":
@@ -197,11 +208,7 @@ class FileNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         if t:
             raise WebError("GET file: bad t=%s" % t)
         filename = get_arg(req, "filename", self.name) or "unknown"
-        if self.node.is_mutable():
-            # some day: d = self.node.get_best_version()
-            d = makeMutableDownloadable(self.node)
-        else:
-            d = defer.succeed(self.node)
+        d = self.node.get_best_readable_version()
         d.addCallback(lambda dn: FileDownloader(dn, filename))
         return d
 
@@ -209,17 +216,37 @@ class FileNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         req = IRequest(ctx)
         t = get_arg(req, "t", "").strip()
         replace = parse_replace_arg(get_arg(req, "replace", "true"))
+        offset = parse_offset_arg(get_arg(req, "offset", None))
 
         if not t:
-            if self.node.is_mutable():
-                return self.replace_my_contents(req)
             if not replace:
                 # this is the early trap: if someone else modifies the
                 # directory while we're uploading, the add_file(overwrite=)
                 # call in replace_me_with_a_child will do the late trap.
                 raise ExistingChildError()
-            assert self.parentnode and self.name
-            return self.replace_me_with_a_child(req, self.client, replace)
+
+            if self.node.is_mutable():
+                # Are we a readonly filenode? We shouldn't allow callers
+                # to try to replace us if we are.
+                if self.node.is_readonly():
+                    raise WebError("PUT to a mutable file: replace or update"
+                                   " requested with read-only cap")
+                if offset is None:
+                    return self.replace_my_contents(req)
+
+                if offset >= 0:
+                    return self.update_my_contents(req, offset)
+
+                raise WebError("PUT to a mutable file: Invalid offset")
+
+            else:
+                if offset is not None:
+                    raise WebError("PUT to a file: append operation invoked "
+                                   "on an immutable cap")
+
+                assert self.parentnode and self.name
+                return self.replace_me_with_a_child(req, self.client, replace)
+
         if t == "uri":
             if not replace:
                 raise ExistingChildError()
@@ -280,56 +307,36 @@ class FileNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
 
     def replace_my_contents(self, req):
         req.content.seek(0)
-        new_contents = req.content.read()
+        new_contents = MutableFileHandle(req.content)
         d = self.node.overwrite(new_contents)
         d.addCallback(lambda res: self.node.get_uri())
         return d
+
+
+    def update_my_contents(self, req, offset):
+        req.content.seek(0)
+        added_contents = MutableFileHandle(req.content)
+
+        d = self.node.get_best_mutable_version()
+        d.addCallback(lambda mv:
+            mv.update(added_contents, offset))
+        d.addCallback(lambda ignored:
+            self.node.get_uri())
+        return d
+
 
     def replace_my_contents_with_a_formpost(self, req):
         # we have a mutable file. Get the data from the formpost, and replace
         # the mutable file's contents with it.
-        new_contents = self._read_data_from_formpost(req)
+        new_contents = req.fields['file']
+        new_contents = MutableFileHandle(new_contents.file)
+
         d = self.node.overwrite(new_contents)
         d.addCallback(lambda res: self.node.get_uri())
         return d
 
-class MutableDownloadable:
-    #implements(IDownloadable)
-    def __init__(self, size, node):
-        self.size = size
-        self.node = node
-    def get_size(self):
-        return self.size
-    def is_mutable(self):
-        return True
-    def read(self, consumer, offset=0, size=None):
-        d = self.node.download_best_version()
-        d.addCallback(self._got_data, consumer, offset, size)
-        return d
-    def _got_data(self, contents, consumer, offset, size):
-        start = offset
-        if size is not None:
-            end = offset+size
-        else:
-            end = self.size
-        # SDMF: we can write the whole file in one big chunk
-        consumer.write(contents[start:end])
-        return consumer
-
-def makeMutableDownloadable(n):
-    d = defer.maybeDeferred(n.get_size_of_best_version)
-    d.addCallback(MutableDownloadable, n)
-    return d
 
 class FileDownloader(rend.Page):
-    # since we override the rendering process (to let the tahoe Downloader
-    # drive things), we must inherit from regular old twisted.web.resource
-    # instead of nevow.rend.Page . Nevow will use adapters to wrap a
-    # nevow.appserver.OldResourceAdapter around any
-    # twisted.web.resource.IResource that it is given. TODO: it looks like
-    # that wrapper would allow us to return a Deferred from render(), which
-    # might could simplify the implementation of WebDownloadTarget.
-
     def __init__(self, filenode, filename):
         rend.Page.__init__(self)
         self.filenode = filenode
@@ -444,10 +451,24 @@ class FileDownloader(rend.Page):
         req.setHeader("content-length", str(contentsize))
         if req.method == "HEAD":
             return ""
+
+        finished = []
+        def _request_finished(ign):
+            finished.append(True)
+        req.notifyFinish().addBoth(_request_finished)
+
         d = self.filenode.read(req, first, size)
+
+        def _finished(ign):
+            if not finished:
+                req.finish()
         def _error(f):
-            log.msg("error during GET", facility="tahoe.webish", failure=f,
-                    level=log.UNUSUAL, umid="xSiF3w")
+            lp = log.msg("error during GET", facility="tahoe.webish", failure=f,
+                         level=log.UNUSUAL, umid="xSiF3w")
+            if finished:
+                log.msg("but it's too late to tell them", parent=lp,
+                        level=log.UNUSUAL, umid="j1xIbw")
+                return
             req._tahoe_request_had_error = f # for HTTP-style logging
             if req.startedWriting:
                 # The content-type is already set, and the response code has
@@ -466,7 +487,7 @@ class FileDownloader(rend.Page):
                 # sensible error message.
                 eh = MyExceptionHandler()
                 eh.renderHTTP_exception(ctx, f)
-        d.addCallbacks(lambda ign: req.finish(), _error)
+        d.addCallbacks(_finished, _error)
         return req.deferred
 
 
@@ -485,6 +506,18 @@ def FileJSONMetadata(ctx, filenode, edge_metadata):
     data[1]['mutable'] = filenode.is_mutable()
     if edge_metadata is not None:
         data[1]['metadata'] = edge_metadata
+
+    if filenode.is_mutable():
+        mutable_type = filenode.get_version()
+        assert mutable_type in (SDMF_VERSION, MDMF_VERSION)
+        if mutable_type == MDMF_VERSION:
+            file_format = "MDMF"
+        else:
+            file_format = "SDMF"
+    else:
+        file_format = "CHK"
+    data[1]['format'] = file_format
+
     return text_plain(simplejson.dumps(data, indent=1) + "\n", ctx)
 
 def FileURI(ctx, filenode):

@@ -2,6 +2,7 @@ tahoe-lafs (1.9.1-1) unstable; urgency=low
 
   [ Bert Agaz ]
   * New upstream release (Closes: #652002).
+  * Update debian/patches/.
 
  -- Micah Anderson <micah@debian.org>  Tue, 12 Jun 2012 09:35:12 +0200
 

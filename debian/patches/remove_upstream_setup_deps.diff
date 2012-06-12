@@ -2,32 +2,11 @@ Description: Remove upstream setup dependencies.
  Tahoe-lafs setup uses a custom setuptools which rely on darcsver to do some
  smart guessings. This isn't relevant in Debian and needs to be ignored.
 Author: bertagaz <bertagaz@ptitcanardnoir.org>
-Index: tahoe/setup.cfg
-===================================================================
---- tahoe.orig/setup.cfg	2011-09-14 13:28:55.000000000 +0200
-+++ tahoe/setup.cfg	2011-09-14 14:00:08.127061668 +0200
-@@ -4,16 +4,6 @@
- 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-dep-sdists/
- 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-lafs-dep-eggs/
- 
--[aliases]
--build = darcsver --count-all-patches develop --prefix=support make_executable build
--test = darcsver --count-all-patches develop --prefix=support make_executable build trial
--sdist = darcsver --count-all-patches sdist
--install = darcsver --count-all-patches install
--bdist_egg = darcsver --count-all-patches bdist_egg
--trial = darcsver --count-all-patches trial
--sdist_dsc = darcsver --count-all-patches sdist_dsc
--test_mac_diskimage = darcsver --count-all-patches test_mac_diskimage
--
- [egg_info]
- tag_build = 
- tag_date = 0
 Index: tahoe/setup.py
 ===================================================================
---- tahoe.orig/setup.py	2011-06-25 13:19:00.000000000 +0200
-+++ tahoe/setup.py	2011-09-14 13:57:36.726551958 +0200
-@@ -67,15 +67,15 @@
+--- tahoe.orig/setup.py	2012-06-12 23:24:13.507159149 +0200
++++ tahoe/setup.py	2012-06-12 23:25:16.903159497 +0200
+@@ -67,13 +67,13 @@
      del sys.argv[1]
      install_requires += ["fakedependency >= 1.0.0"]
  
@@ -38,25 +17,41 @@ Index: tahoe/setup.py
 -sys.path.insert(0, egg)
 -egg = os.path.realpath(glob.glob('darcsver-*.egg')[0])
 -sys.path.insert(0, egg)
--egg = os.path.realpath(glob.glob('setuptools_darcs-*.egg')[0])
--sys.path.insert(0, egg)
 -import setuptools; setuptools.bootstrap_install_from = egg
 +#egg = os.path.realpath(glob.glob('setuptools-*.egg')[0])
 +#sys.path.insert(0, egg)
 +#egg = os.path.realpath(glob.glob('darcsver-*.egg')[0])
 +#sys.path.insert(0, egg)
-+#egg = os.path.realpath(glob.glob('setuptools_darcs-*.egg')[0])
-+#sys.path.insert(0, egg)
 +#import setuptools; setuptools.bootstrap_install_from = egg
  
- from setuptools import find_packages, setup
+ from setuptools import setup
  from setuptools.command import sdist
-@@ -410,7 +410,7 @@
-       install_requires=install_requires,
+@@ -461,7 +461,7 @@
        tests_require=tests_require,
-       include_package_data=True,
+       package_data={"allmydata.web": ["*.xhtml", "*.js", "*.png", "*.css"],
+                     },
 -      setup_requires=setup_requires,
 +      #setup_requires=setup_requires,
        entry_points = { 'console_scripts': [ 'tahoe = allmydata.scripts.runner:run' ] },
        zip_safe=False, # We prefer unzipped for easier access.
        versionfiles=['src/allmydata/_version.py',],
+Index: tahoe/setup.cfg
+===================================================================
+--- tahoe.orig/setup.cfg	2012-06-12 23:29:09.187679498 +0200
++++ tahoe/setup.cfg	2012-06-12 23:29:20.855168962 +0200
+@@ -4,15 +4,6 @@
+ 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-dep-sdists/
+ 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-lafs-dep-eggs/
+ 
+-[aliases]
+-build = update_version develop --prefix=support make_executable build
+-test = update_version develop --prefix=support make_executable build trial
+-sdist = update_version sdist
+-install = update_version install
+-bdist_egg = update_version bdist_egg
+-trial = update_version trial
+-sdist_dsc = update_version sdist_dsc
+-
+ [egg_info]
+ tag_build = 
+ tag_date = 0

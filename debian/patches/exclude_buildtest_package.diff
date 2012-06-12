@@ -4,22 +4,23 @@ Description: Exclude buildtest python package from Debian package.
 Author: bertagaz <bertagaz@ptitcanardnoir.org>
 Index: tahoe/setup.py
 ===================================================================
---- tahoe.orig/setup.py	2011-04-13 22:43:22.349847608 +0200
-+++ tahoe/setup.py	2011-04-13 22:43:54.277842306 +0200
-@@ -404,7 +404,7 @@
-                 "sdist": MySdist,
-                 },
-       package_dir = {'':'src'},
--      packages=find_packages("src"),
-+      packages=['allmydata'],
+--- tahoe.orig/setup.py	2012-06-12 23:16:09.000000000 +0200
++++ tahoe/setup.py	2012-06-12 23:20:52.923679491 +0200
+@@ -453,8 +453,7 @@
+                 'allmydata.test',
+                 'allmydata.util',
+                 'allmydata.web',
+-                'allmydata.windows',
+-                'buildtest'],
++                'allmydata.windows'],
        classifiers=trove_classifiers,
        test_suite="allmydata.test",
        install_requires=install_requires,
 Index: tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt
 ===================================================================
---- tahoe.orig/src/allmydata_tahoe.egg-info/SOURCES.txt	2011-04-13 22:46:13.953848270 +0200
-+++ tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt	2011-04-13 22:46:27.061842298 +0200
-@@ -476,7 +476,5 @@
+--- tahoe.orig/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-06-12 00:37:10.307659059 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-06-12 23:16:35.519159772 +0200
+@@ -419,7 +419,5 @@
  src/allmydata_tahoe.egg-info/not-zip-safe
  src/allmydata_tahoe.egg-info/requires.txt
  src/allmydata_tahoe.egg-info/top_level.txt
@@ -31,8 +32,8 @@ Index: tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt
 +twisted/plugins/allmydata_trial.py
 Index: tahoe/src/allmydata_tahoe.egg-info/top_level.txt
 ===================================================================
---- tahoe.orig/src/allmydata_tahoe.egg-info/top_level.txt	2011-04-13 22:46:53.945848318 +0200
-+++ tahoe/src/allmydata_tahoe.egg-info/top_level.txt	2011-04-13 22:47:01.213842243 +0200
+--- tahoe.orig/src/allmydata_tahoe.egg-info/top_level.txt	2012-06-12 00:36:58.151159940 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/top_level.txt	2012-06-12 23:16:35.519159772 +0200
 @@ -1,2 +1 @@
  allmydata
 -buildtest

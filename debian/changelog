@@ -9,6 +9,7 @@ tahoe-lafs (1.9.1-1) unstable; urgency=low
   * Bump debian standard version to 3.9.3.
   * Add manpage.
   * Switch to dh_python2.
+  * Bump debian/compat.
 
  -- Micah Anderson <micah@debian.org>  Tue, 12 Jun 2012 09:35:12 +0200
 

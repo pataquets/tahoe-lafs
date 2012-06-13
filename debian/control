@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Bert Agaz <bertagaz@ptitcanardnoir.org>
 Uploaders: Micah Anderson <micah@debian.org>
-Build-Depends: debhelper (>= 7), python-setuptools, python-all (>= 2.6.6-3~),
+Build-Depends: debhelper (>= 9), python-setuptools, python-all (>= 2.6.6-3~),
  python-twisted
 Standards-Version: 3.9.3
 Vcs-Git: git://anonscm.debian.org/tahoe/tahoe.git

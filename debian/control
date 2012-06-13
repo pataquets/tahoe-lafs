@@ -6,7 +6,7 @@ Uploaders: Micah Anderson <micah@debian.org>
 Build-Depends: debhelper (>= 7), python-support, python-setuptools,
  python, python-twisted
 XS-Python-Version: >= 2.6
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Vcs-Git: git://anonscm.debian.org/tahoe/tahoe.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=tahoe/tahoe.git
 Homepage: http://tahoe-lafs.org/trac/tahoe

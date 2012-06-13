@@ -54,6 +54,7 @@ binary-indep: build install
 	mv debian/$(package)/usr/share/doc/$(package)/NEWS.rst \
 		debian/$(package)/usr/share/doc/$(package)/changelog
 	dh_installexamples
+	dh_installman
 	dh_strip
 	dh_compress -X.py
 	dh_fixperms

@@ -9,9 +9,16 @@ package=tahoe-lafs
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
 
+override_dh_prep:
+	dh_prep
+	mv src/allmydata_tahoe.egg-info src/allmydata_tahoe.egg-info.orig
+
 override_dh_install:
 	dh_install
 	chmod 755 debian/$(package)/usr/share/munin/plugins/*
+
+	rm -rf src/allmydata_tahoe.egg-info
+	mv src/allmydata_tahoe.egg-info.orig src/allmydata_tahoe.egg-info
 
 	# Clean bin/tahoe trick stolen from upstream packaging script.
 	head -1 debian/$(package)/usr/bin/tahoe > debian/$(package)/usr/bin/tahoe.new

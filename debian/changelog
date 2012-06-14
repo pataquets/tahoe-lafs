@@ -1,7 +1,8 @@
-tahoe-lafs (1.9.1-1) unstable; urgency=low
+tahoe-lafs (1.9.1-1) unstable; urgency=high
 
   [ Bert Agaz ]
   * New upstream release (Closes: #652002).
+  * Set urgency to high due to RC bug fix.
   * Update debian/patches/.
   * Install munin plugin configuration as examples (Closes: #652106).
   * Remove old deps version numbers from debian/control.

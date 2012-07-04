@@ -2,6 +2,7 @@ tahoe-lafs (1.9.2-1) unstable; urgency=low
 
   [ Bert Agaz ]
   * New upstream release (Closes: #680083).
+  * Use manpage shipped within upstream release.
 
  -- Micah Anderson <micah@debian.org>  Wed, 04 Jul 2012 17:52:21 +0200
 

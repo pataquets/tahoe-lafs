@@ -4,9 +4,9 @@ Description: Remove upstream setup dependencies.
 Author: bertagaz <bertagaz@ptitcanardnoir.org>
 Index: tahoe/setup.py
 ===================================================================
---- tahoe.orig/setup.py	2012-06-12 23:24:13.507159149 +0200
-+++ tahoe/setup.py	2012-06-12 23:25:16.903159497 +0200
-@@ -67,13 +67,13 @@
+--- tahoe.orig/setup.py	2012-07-04 21:41:43.295659068 +0200
++++ tahoe/setup.py	2012-07-04 21:42:07.535159561 +0200
+@@ -68,13 +68,13 @@
      del sys.argv[1]
      install_requires += ["fakedependency >= 1.0.0"]
  
@@ -26,9 +26,9 @@ Index: tahoe/setup.py
  
  from setuptools import setup
  from setuptools.command import sdist
-@@ -461,7 +461,7 @@
-       tests_require=tests_require,
-       package_data={"allmydata.web": ["*.xhtml", "*.js", "*.png", "*.css"],
+@@ -476,7 +476,7 @@
+       package_data={"allmydata.web": ["*.xhtml"],
+                     "allmydata.web.static": ["*.js", "*.png", "*.css"],
                      },
 -      setup_requires=setup_requires,
 +      #setup_requires=setup_requires,
@@ -37,21 +37,18 @@ Index: tahoe/setup.py
        versionfiles=['src/allmydata/_version.py',],
 Index: tahoe/setup.cfg
 ===================================================================
---- tahoe.orig/setup.cfg	2012-06-12 23:29:09.187679498 +0200
-+++ tahoe/setup.cfg	2012-06-12 23:29:20.855168962 +0200
-@@ -4,15 +4,6 @@
- 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-dep-sdists/
- 	http://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-lafs-dep-eggs/
+--- tahoe.orig/setup.cfg	2012-07-04 21:41:43.295659068 +0200
++++ tahoe/setup.cfg	2012-07-04 21:58:29.839700075 +0200
+@@ -9,12 +9,3 @@
+ tag_date = 0
+ tag_svn_revision = 0
  
 -[aliases]
--build = update_version develop --prefix=support make_executable build
--test = update_version develop --prefix=support make_executable build trial
--sdist = update_version sdist
--install = update_version install
--bdist_egg = update_version bdist_egg
--trial = update_version trial
 -sdist_dsc = update_version sdist_dsc
+-sdist = update_version sdist
+-trial = update_version trial
+-build = update_version develop --prefix=support make_executable build
+-install = update_version install
+-test = update_version develop --prefix=support make_executable build trial
+-bdist_egg = update_version bdist_egg
 -
- [egg_info]
- tag_build = 
- tag_date = 0

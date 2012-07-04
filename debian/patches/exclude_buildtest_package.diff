@@ -4,12 +4,12 @@ Description: Exclude buildtest python package from Debian package.
 Author: bertagaz <bertagaz@ptitcanardnoir.org>
 Index: tahoe/setup.py
 ===================================================================
---- tahoe.orig/setup.py	2012-06-12 23:16:09.000000000 +0200
-+++ tahoe/setup.py	2012-06-12 23:20:52.923679491 +0200
-@@ -453,8 +453,7 @@
-                 'allmydata.test',
+--- tahoe.orig/setup.py	2012-07-04 21:42:07.000000000 +0200
++++ tahoe/setup.py	2012-07-04 21:59:45.051169297 +0200
+@@ -467,8 +467,7 @@
                  'allmydata.util',
                  'allmydata.web',
+                 'allmydata.web.static',
 -                'allmydata.windows',
 -                'buildtest'],
 +                'allmydata.windows'],
@@ -18,9 +18,9 @@ Index: tahoe/setup.py
        install_requires=install_requires,
 Index: tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt
 ===================================================================
---- tahoe.orig/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-06-12 00:37:10.307659059 +0200
-+++ tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-06-12 23:16:35.519159772 +0200
-@@ -419,7 +419,5 @@
+--- tahoe.orig/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-07-04 21:41:43.000000000 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt	2012-07-04 21:59:25.615659017 +0200
+@@ -431,7 +431,5 @@
  src/allmydata_tahoe.egg-info/not-zip-safe
  src/allmydata_tahoe.egg-info/requires.txt
  src/allmydata_tahoe.egg-info/top_level.txt
@@ -32,8 +32,8 @@ Index: tahoe/src/allmydata_tahoe.egg-info/SOURCES.txt
 +twisted/plugins/allmydata_trial.py
 Index: tahoe/src/allmydata_tahoe.egg-info/top_level.txt
 ===================================================================
---- tahoe.orig/src/allmydata_tahoe.egg-info/top_level.txt	2012-06-12 00:36:58.151159940 +0200
-+++ tahoe/src/allmydata_tahoe.egg-info/top_level.txt	2012-06-12 23:16:35.519159772 +0200
+--- tahoe.orig/src/allmydata_tahoe.egg-info/top_level.txt	2012-07-04 21:41:43.295659068 +0200
++++ tahoe/src/allmydata_tahoe.egg-info/top_level.txt	2012-07-04 21:59:25.615659017 +0200
 @@ -1,2 +1 @@
  allmydata
 -buildtest

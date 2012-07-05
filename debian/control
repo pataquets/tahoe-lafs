@@ -13,7 +13,7 @@ Homepage: http://tahoe-lafs.org/trac/tahoe
 Package: tahoe-lafs
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}, python-pyasn1, python-crypto,
- python-foolscap, python-openssl, python-nevow, python-simplejson,
+ python-foolscap (>= 0.6.3), python-openssl, python-nevow, python-simplejson,
  python-zfec, python-pycryptopp (>= 0.5.29), python-setuptools, python-mock,
  python-twisted
 Description: Secure distributed filesystem

@@ -119,15 +119,20 @@ class CiphertextFileNode:
                     assert isinstance(sm, DictOfSets), sm
                     sm.update(ur.sharemap)
                     servers_responding = set(prr.data['servers-responding'])
-                    servers_responding.union(ur.sharemap.iterkeys())
-                    prr.data['servers-responding'] = list(servers_responding)
+                    for shnum, serverids in ur.sharemap.items():
+                        servers_responding.update(serverids)
+                    servers_responding = sorted(servers_responding)
+                    prr.data['servers-responding'] = servers_responding
                     prr.data['count-shares-good'] = len(sm)
-                    prr.data['count-good-share-hosts'] = len(sm)
+                    good_hosts = len(reduce(set.union, sm.itervalues(), set()))
+                    prr.data['count-good-share-hosts'] = good_hosts
                     is_healthy = bool(len(sm) >= verifycap.total_shares)
                     is_recoverable = bool(len(sm) >= verifycap.needed_shares)
                     prr.set_healthy(is_healthy)
                     prr.set_recoverable(is_recoverable)
                     crr.repair_successful = is_healthy
+
+                    # TODO: this may be wrong, see ticket #1115 comment:27 and ticket #1784.
                     prr.set_needs_rebalancing(len(sm) >= verifycap.total_shares)
 
                     crr.post_repair_results = prr
@@ -168,6 +173,7 @@ class DecryptingConsumer:
     def __init__(self, consumer, readkey, offset):
         self._consumer = consumer
         self._read_ev = None
+        self._download_status = None
         # TODO: pycryptopp CTR-mode needs random-access operations: I want
         # either a=AES(readkey, offset) or better yet both of:
         #  a=AES(readkey, offset=0)
@@ -181,6 +187,8 @@ class DecryptingConsumer:
 
     def set_download_status_read_event(self, read_ev):
         self._read_ev = read_ev
+    def set_download_status(self, ds):
+        self._download_status = ds
 
     def registerProducer(self, producer, streaming):
         # this passes through, so the real consumer can flow-control the real
@@ -196,6 +204,8 @@ class DecryptingConsumer:
         if self._read_ev:
             elapsed = now() - started
             self._read_ev.update(0, elapsed, 0)
+        if self._download_status:
+            self._download_status.add_misc_event("AES", started, now())
         self._consumer.write(plaintext)
 
 class ImmutableFileNode:

@@ -24,27 +24,31 @@ install_requires = [
     # support asynchronous close.
     "Twisted >= 10.1.0",
 
-    # foolscap < 0.5.1 had a performance bug which spent
-    # O(N**2) CPU for transferring large mutable files
-    # of size N.
-    # foolscap < 0.6 is incompatible with Twisted 10.2.0.
-    # foolscap 0.6.1 quiets a DeprecationWarning.
-    # pyOpenSSL is required by foolscap for it (foolscap) to provide secure
-    # connections. Foolscap doesn't reliably declare this dependency in a
-    # machine-readable way, so we need to declare a dependency on pyOpenSSL
-    # ourselves. Tahoe-LAFS doesn't *really* depend directly on pyOpenSSL,
-    # so if something changes in the relationship between foolscap and
-    # pyOpenSSL, such as foolscap requiring a specific version of pyOpenSSL,
-    # or foolscap switching from pyOpenSSL to a different crypto library, we
-    # need to update this declaration here.
-    "foolscap >= 0.6.1",
+    # * foolscap < 0.5.1 had a performance bug which spent O(N**2) CPU for
+    #   transferring large mutable files of size N.
+    # * foolscap < 0.6 is incompatible with Twisted 10.2.0.
+    # * foolscap 0.6.1 quiets a DeprecationWarning.
+    # * foolscap < 0.6.3 is incompatible with Twisted-11.1.0 and newer. Since
+    #   current Twisted is 12.0, any build which needs twisted will grab a
+    #   version that requires foolscap>=0.6.3
+    # * pyOpenSSL is required by foolscap for it (foolscap) to provide secure
+    #   connections. Foolscap doesn't reliably declare this dependency in a
+    #   machine-readable way, so we need to declare a dependency on pyOpenSSL
+    #   ourselves. Tahoe-LAFS doesn't *really* depend directly on pyOpenSSL,
+    #   so if something changes in the relationship between foolscap and
+    #   pyOpenSSL, such as foolscap requiring a specific version of
+    #   pyOpenSSL, or foolscap switching from pyOpenSSL to a different crypto
+    #   library, we need to update this declaration here.
+    #
+    "foolscap >= 0.6.3",
     "pyOpenSSL",
 
     "Nevow >= 0.6.0",
 
     # Needed for SFTP. pyasn1 is needed by twisted.conch in Twisted >= 9.0.
     # pycrypto 2.2 doesn't work due to https://bugs.launchpad.net/pycrypto/+bug/620253
-    "pycrypto == 2.0.1, == 2.1.0, >= 2.3",
+    # pycrypto 2.4 doesn't work due to https://bugs.launchpad.net/pycrypto/+bug/881130
+    "pycrypto == 2.1.0, == 2.3, >= 2.4.1",
     "pyasn1 >= 0.0.8a",
 
     # http://www.voidspace.org.uk/python/mock/
@@ -108,6 +112,16 @@ def require_more():
 
 require_more()
 
+
+# These are suppressed globally:
+
+global_deprecation_messages = [
+    "BaseException.message has been deprecated as of Python 2.6",
+    "twisted.internet.interfaces.IFinishableConsumer was deprecated in Twisted 11.1.0: Please use IConsumer (and IConsumer.unregisterProducer) instead.",
+]
+
+# These are suppressed while importing dependencies:
+
 deprecation_messages = [
     "the sha module is deprecated; use the hashlib module instead",
     "object.__new__\(\) takes no parameters",
@@ -119,6 +133,11 @@ deprecation_messages = [
 
 user_warning_messages = [
     "Hashing uninitialized InterfaceClass instance",
+    "Reliable disconnection notification requires pywin32 215 or later",
+]
+
+runtime_warning_messages = [
+    "Not using mpz_powm_sec.  You should rebuild using libgmp >= 5 to avoid timing attack vulnerability.",
 ]
 
 warning_imports = [

@@ -26,7 +26,7 @@ from allmydata.storage.server import StorageServer, storage_index_to_dir
 from allmydata.util import fileutil, idlib, hashutil
 from allmydata.util.hashutil import sha1
 from allmydata.test.common_web import HTTPClientGETFactory
-from allmydata.interfaces import IStorageBroker
+from allmydata.interfaces import IStorageBroker, IServer
 from allmydata.test.common import TEST_RSA_KEY_SIZE
 
 
@@ -67,6 +67,8 @@ class LocalWrapper:
 
         def _call():
             if self.broken:
+                if self.broken is not True: # a counter, not boolean
+                    self.broken -= 1
                 raise IntentionalError("I was asked to break")
             if self.hung_until:
                 d2 = defer.Deferred()
@@ -120,17 +122,28 @@ def wrap_storage_server(original):
     return wrapper
 
 class NoNetworkServer:
+    implements(IServer)
     def __init__(self, serverid, rref):
         self.serverid = serverid
         self.rref = rref
     def __repr__(self):
         return "<NoNetworkServer for %s>" % self.get_name()
+    # Special method used by copy.copy() and copy.deepcopy(). When those are
+    # used in allmydata.immutable.filenode to copy CheckResults during
+    # repair, we want it to treat the IServer instances as singletons.
+    def __copy__(self):
+        return self
+    def __deepcopy__(self, memodict):
+        return self
     def get_serverid(self):
         return self.serverid
     def get_permutation_seed(self):
         return self.serverid
     def get_lease_seed(self):
         return self.serverid
+    def get_foolscap_write_enabler_seed(self):
+        return self.serverid
+
     def get_name(self):
         return idlib.shortnodeid_b2a(self.serverid)
     def get_longname(self):
@@ -286,11 +299,13 @@ class NoNetworkGrid(service.MultiService):
         del self.wrappers_by_id[serverid]
         del self.proxies_by_id[serverid]
         self.rebuild_serverlist()
+        return ss
 
-    def break_server(self, serverid):
+    def break_server(self, serverid, count=True):
         # mark the given server as broken, so it will throw exceptions when
-        # asked to hold a share or serve a share
-        self.wrappers_by_id[serverid].broken = True
+        # asked to hold a share or serve a share. If count= is a number,
+        # throw that many exceptions before starting to work again.
+        self.wrappers_by_id[serverid].broken = count
 
     def hang_server(self, serverid):
         # hang the given server

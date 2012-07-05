@@ -8,14 +8,14 @@ from twisted.internet import defer
 from twisted.python import failure
 from allmydata.interfaces import IPublishStatus, SDMF_VERSION, MDMF_VERSION, \
                                  IMutableUploadable
-from allmydata.util import base32, hashutil, mathutil, idlib, log
+from allmydata.util import base32, hashutil, mathutil, log
 from allmydata.util.dictutil import DictOfSets
 from allmydata import hashtree, codec
 from allmydata.storage.server import si_b2a
 from pycryptopp.cipher.aes import AES
 from foolscap.api import eventually, fireEventually
 
-from allmydata.mutable.common import MODE_WRITE, MODE_CHECK, \
+from allmydata.mutable.common import MODE_WRITE, MODE_CHECK, MODE_REPAIR, \
      UncoordinatedWriteError, NotEnoughServersError
 from allmydata.mutable.servermap import ServerMap
 from allmydata.mutable.layout import get_version_from_checkstring,\
@@ -39,7 +39,7 @@ class PublishStatus:
         self.timings["encrypt"] = 0.0
         self.timings["encode"] = 0.0
         self.servermap = None
-        self.problems = {}
+        self._problems = {}
         self.active = True
         self.storage_index = None
         self.helper = False
@@ -50,10 +50,10 @@ class PublishStatus:
         self.counter = self.statusid_counter.next()
         self.started = time.time()
 
-    def add_per_server_time(self, peerid, elapsed):
-        if peerid not in self.timings["send_per_server"]:
-            self.timings["send_per_server"][peerid] = []
-        self.timings["send_per_server"][peerid].append(elapsed)
+    def add_per_server_time(self, server, elapsed):
+        if server not in self.timings["send_per_server"]:
+            self.timings["send_per_server"][server] = []
+        self.timings["send_per_server"][server].append(elapsed)
     def accumulate_encode_time(self, elapsed):
         self.timings["encode"] += elapsed
     def accumulate_encrypt_time(self, elapsed):
@@ -79,6 +79,8 @@ class PublishStatus:
         return self.active
     def get_counter(self):
         return self.counter
+    def get_problems(self):
+        return self._problems
 
     def set_storage_index(self, si):
         self.storage_index = si
@@ -152,8 +154,8 @@ class Publish:
         it on their own.
         """
         # How this works:
-        # 1: Make peer assignments. We'll assign each share that we know
-        # about on the grid to that peer that currently holds that
+        # 1: Make server assignments. We'll assign each share that we know
+        # about on the grid to that server that currently holds that
         # share, and will not place any new shares.
         # 2: Setup encoding parameters. Most of these will stay the same
         # -- datalength will change, as will some of the offsets.
@@ -183,9 +185,9 @@ class Publish:
 
         # first, which servers will we publish to? We require that the
         # servermap was updated in MODE_WRITE, so we can depend upon the
-        # peerlist computed by that process instead of computing our own.
+        # serverlist computed by that process instead of computing our own.
         assert self._servermap
-        assert self._servermap.last_update_mode in (MODE_WRITE, MODE_CHECK)
+        assert self._servermap.get_last_update()[0] in (MODE_WRITE, MODE_CHECK, MODE_REPAIR)
         # we will push a version that is one larger than anything present
         # in the grid, according to the servermap.
         self._new_seqnum = self._servermap.highest_seqnum() + 1
@@ -210,10 +212,9 @@ class Publish:
         self._encprivkey = self._node.get_encprivkey()
 
         sb = self._storage_broker
-        full_peerlist = [(s.get_serverid(), s.get_rref())
-                         for s in sb.get_servers_for_psi(self._storage_index)]
-        self.full_peerlist = full_peerlist # for use later, immutable
-        self.bad_peers = set() # peerids who have errbacked/refused requests
+        full_serverlist = list(sb.get_servers_for_psi(self._storage_index))
+        self.full_serverlist = full_serverlist # for use later, immutable
+        self.bad_servers = set() # servers who have errbacked/refused requests
 
         # This will set self.segment_size, self.num_segments, and
         # self.fec. TODO: Does it know how to do the offset? Probably
@@ -229,7 +230,7 @@ class Publish:
         # we keep track of three tables. The first is our goal: which share
         # we want to see on which servers. This is initially populated by the
         # existing servermap.
-        self.goal = set() # pairs of (peerid, shnum) tuples
+        self.goal = set() # pairs of (server, shnum) tuples
 
         # the number of outstanding queries: those that are in flight and
         # may or may not be delivered, accepted, or acknowledged. This is
@@ -240,12 +241,7 @@ class Publish:
         # the third is a table of successes: share which have actually been
         # placed. These are populated when responses come back with success.
         # When self.placed == self.goal, we're done.
-        self.placed = set() # (peerid, shnum) tuples
-
-        # we also keep a mapping from peerid to RemoteReference. Each time we
-        # pull a connection out of the full peerlist, we add it to this for
-        # use later.
-        self.connections = {}
+        self.placed = set() # (server, shnum) tuples
 
         self.bad_share_checkstrings = {}
 
@@ -256,49 +252,49 @@ class Publish:
         # try to update each existing share in place. Since we're
         # updating, we ignore damaged and missing shares -- callers must
         # do a repair to repair and recreate these.
-        for (peerid, shnum) in self._servermap.servermap:
-            self.goal.add( (peerid, shnum) )
-            self.connections[peerid] = self._servermap.connections[peerid]
+        self.goal = set(self._servermap.get_known_shares())
         self.writers = {}
 
         # SDMF files are updated differently.
         self._version = MDMF_VERSION
         writer_class = MDMFSlotWriteProxy
 
-        # For each (peerid, shnum) in self.goal, we make a
-        # write proxy for that peer. We'll use this to write
-        # shares to the peer.
-        for key in self.goal:
-            peerid, shnum = key
-            write_enabler = self._node.get_write_enabler(peerid)
-            renew_secret = self._node.get_renewal_secret(peerid)
-            cancel_secret = self._node.get_cancel_secret(peerid)
+        # For each (server, shnum) in self.goal, we make a
+        # write proxy for that server. We'll use this to write
+        # shares to the server.
+        for (server,shnum) in self.goal:
+            write_enabler = self._node.get_write_enabler(server)
+            renew_secret = self._node.get_renewal_secret(server)
+            cancel_secret = self._node.get_cancel_secret(server)
             secrets = (write_enabler, renew_secret, cancel_secret)
 
-            self.writers[shnum] =  writer_class(shnum,
-                                                self.connections[peerid],
-                                                self._storage_index,
-                                                secrets,
-                                                self._new_seqnum,
-                                                self.required_shares,
-                                                self.total_shares,
-                                                self.segment_size,
-                                                self.datalength)
-            self.writers[shnum].peerid = peerid
-            assert (peerid, shnum) in self._servermap.servermap
-            old_versionid, old_timestamp = self._servermap.servermap[key]
+            writer = writer_class(shnum,
+                                  server.get_rref(),
+                                  self._storage_index,
+                                  secrets,
+                                  self._new_seqnum,
+                                  self.required_shares,
+                                  self.total_shares,
+                                  self.segment_size,
+                                  self.datalength)
+
+            self.writers.setdefault(shnum, []).append(writer)
+            writer.server = server
+            known_shares = self._servermap.get_known_shares()
+            assert (server, shnum) in known_shares
+            old_versionid, old_timestamp = known_shares[(server,shnum)]
             (old_seqnum, old_root_hash, old_salt, old_segsize,
              old_datalength, old_k, old_N, old_prefix,
              old_offsets_tuple) = old_versionid
-            self.writers[shnum].set_checkstring(old_seqnum,
-                                                old_root_hash,
-                                                old_salt)
+            writer.set_checkstring(old_seqnum,
+                                   old_root_hash,
+                                   old_salt)
 
         # Our remote shares will not have a complete checkstring until
         # after we are done writing share data and have started to write
         # blocks. In the meantime, we need to know what to look for when
         # writing, so that we can detect UncoordinatedWriteErrors.
-        self._checkstring = self.writers.values()[0].get_checkstring()
+        self._checkstring = self.writers.values()[0][0].get_checkstring()
 
         # Now, we start pushing shares.
         self._status.timings["setup"] = time.time() - self._started
@@ -375,9 +371,9 @@ class Publish:
 
         # first, which servers will we publish to? We require that the
         # servermap was updated in MODE_WRITE, so we can depend upon the
-        # peerlist computed by that process instead of computing our own.
+        # serverlist computed by that process instead of computing our own.
         if self._servermap:
-            assert self._servermap.last_update_mode in (MODE_WRITE, MODE_CHECK)
+            assert self._servermap.get_last_update()[0] in (MODE_WRITE, MODE_CHECK, MODE_REPAIR)
             # we will push a version that is one larger than anything present
             # in the grid, according to the servermap.
             self._new_seqnum = self._servermap.highest_seqnum() + 1
@@ -408,10 +404,9 @@ class Publish:
         self._encprivkey = self._node.get_encprivkey()
 
         sb = self._storage_broker
-        full_peerlist = [(s.get_serverid(), s.get_rref())
-                         for s in sb.get_servers_for_psi(self._storage_index)]
-        self.full_peerlist = full_peerlist # for use later, immutable
-        self.bad_peers = set() # peerids who have errbacked/refused requests
+        full_serverlist = list(sb.get_servers_for_psi(self._storage_index))
+        self.full_serverlist = full_serverlist # for use later, immutable
+        self.bad_servers = set() # servers who have errbacked/refused requests
 
         # This will set self.segment_size, self.num_segments, and
         # self.fec.
@@ -426,7 +421,7 @@ class Publish:
         # we keep track of three tables. The first is our goal: which share
         # we want to see on which servers. This is initially populated by the
         # existing servermap.
-        self.goal = set() # pairs of (peerid, shnum) tuples
+        self.goal = set() # pairs of (server, shnum) tuples
 
         # the number of outstanding queries: those that are in flight and
         # may or may not be delivered, accepted, or acknowledged. This is
@@ -437,12 +432,7 @@ class Publish:
         # the third is a table of successes: share which have actually been
         # placed. These are populated when responses come back with success.
         # When self.placed == self.goal, we're done.
-        self.placed = set() # (peerid, shnum) tuples
-
-        # we also keep a mapping from peerid to RemoteReference. Each time we
-        # pull a connection out of the full peerlist, we add it to this for
-        # use later.
-        self.connections = {}
+        self.placed = set() # (server, shnum) tuples
 
         self.bad_share_checkstrings = {}
 
@@ -451,18 +441,16 @@ class Publish:
 
         # we use the servermap to populate the initial goal: this way we will
         # try to update each existing share in place.
-        for (peerid, shnum) in self._servermap.servermap:
-            self.goal.add( (peerid, shnum) )
-            self.connections[peerid] = self._servermap.connections[peerid]
+        self.goal = set(self._servermap.get_known_shares())
+
         # then we add in all the shares that were bad (corrupted, bad
         # signatures, etc). We want to replace these.
-        for key, old_checkstring in self._servermap.bad_shares.items():
-            (peerid, shnum) = key
-            self.goal.add(key)
-            self.bad_share_checkstrings[key] = old_checkstring
-            self.connections[peerid] = self._servermap.connections[peerid]
+        for key, old_checkstring in self._servermap.get_bad_shares().items():
+            (server, shnum) = key
+            self.goal.add( (server,shnum) )
+            self.bad_share_checkstrings[(server,shnum)] = old_checkstring
 
-        # TODO: Make this part do peer selection.
+        # TODO: Make this part do server selection.
         self.update_goal()
         self.writers = {}
         if self._version == MDMF_VERSION:
@@ -470,43 +458,44 @@ class Publish:
         else:
             writer_class = SDMFSlotWriteProxy
 
-        # For each (peerid, shnum) in self.goal, we make a
-        # write proxy for that peer. We'll use this to write
-        # shares to the peer.
-        for key in self.goal:
-            peerid, shnum = key
-            write_enabler = self._node.get_write_enabler(peerid)
-            renew_secret = self._node.get_renewal_secret(peerid)
-            cancel_secret = self._node.get_cancel_secret(peerid)
+        # For each (server, shnum) in self.goal, we make a
+        # write proxy for that server. We'll use this to write
+        # shares to the server.
+        for (server,shnum) in self.goal:
+            write_enabler = self._node.get_write_enabler(server)
+            renew_secret = self._node.get_renewal_secret(server)
+            cancel_secret = self._node.get_cancel_secret(server)
             secrets = (write_enabler, renew_secret, cancel_secret)
 
-            self.writers[shnum] =  writer_class(shnum,
-                                                self.connections[peerid],
-                                                self._storage_index,
-                                                secrets,
-                                                self._new_seqnum,
-                                                self.required_shares,
-                                                self.total_shares,
-                                                self.segment_size,
-                                                self.datalength)
-            self.writers[shnum].peerid = peerid
-            if (peerid, shnum) in self._servermap.servermap:
-                old_versionid, old_timestamp = self._servermap.servermap[key]
+            writer =  writer_class(shnum,
+                                   server.get_rref(),
+                                   self._storage_index,
+                                   secrets,
+                                   self._new_seqnum,
+                                   self.required_shares,
+                                   self.total_shares,
+                                   self.segment_size,
+                                   self.datalength)
+            self.writers.setdefault(shnum, []).append(writer)
+            writer.server = server
+            known_shares = self._servermap.get_known_shares()
+            if (server, shnum) in known_shares:
+                old_versionid, old_timestamp = known_shares[(server,shnum)]
                 (old_seqnum, old_root_hash, old_salt, old_segsize,
                  old_datalength, old_k, old_N, old_prefix,
                  old_offsets_tuple) = old_versionid
-                self.writers[shnum].set_checkstring(old_seqnum,
-                                                    old_root_hash,
-                                                    old_salt)
-            elif (peerid, shnum) in self.bad_share_checkstrings:
-                old_checkstring = self.bad_share_checkstrings[(peerid, shnum)]
-                self.writers[shnum].set_checkstring(old_checkstring)
+                writer.set_checkstring(old_seqnum,
+                                       old_root_hash,
+                                       old_salt)
+            elif (server, shnum) in self.bad_share_checkstrings:
+                old_checkstring = self.bad_share_checkstrings[(server, shnum)]
+                writer.set_checkstring(old_checkstring)
 
         # Our remote shares will not have a complete checkstring until
         # after we are done writing share data and have started to write
         # blocks. In the meantime, we need to know what to look for when
         # writing, so that we can detect UncoordinatedWriteErrors.
-        self._checkstring = self.writers.values()[0].get_checkstring()
+        self._checkstring = self.writers.values()[0][0].get_checkstring()
 
         # Now, we start pushing shares.
         self._status.timings["setup"] = time.time() - self._started
@@ -633,7 +622,9 @@ class Publish:
         # Can we still successfully publish this file?
         # TODO: Keep track of outstanding queries before aborting the
         #       process.
-        if len(self.writers) < self.required_shares or self.surprised:
+        all_shnums = filter(lambda sh: len(self.writers[sh]) > 0,
+                            self.writers.iterkeys())
+        if len(all_shnums) < self.required_shares or self.surprised:
             return self._failure()
 
         # Figure out what we need to do next. Each of these needs to
@@ -688,8 +679,9 @@ class Publish:
         salt = os.urandom(16)
         assert self._version == SDMF_VERSION
 
-        for writer in self.writers.itervalues():
-            writer.put_salt(salt)
+        for shnum, writers in self.writers.iteritems():
+            for writer in writers:
+                writer.put_salt(salt)
 
 
     def _encode_segment(self, segnum):
@@ -764,8 +756,9 @@ class Publish:
             block_hash = hashutil.block_hash(hashed)
             self.blockhashes[shareid][segnum] = block_hash
             # find the writer for this share
-            writer = self.writers[shareid]
-            writer.put_block(sharedata, segnum, salt)
+            writers = self.writers[shareid]
+            for writer in writers:
+                writer.put_block(sharedata, segnum, salt)
 
 
     def push_everything_else(self):
@@ -788,8 +781,9 @@ class Publish:
     def push_encprivkey(self):
         encprivkey = self._encprivkey
         self._status.set_status("Pushing encrypted private key")
-        for writer in self.writers.itervalues():
-            writer.put_encprivkey(encprivkey)
+        for shnum, writers in self.writers.iteritems():
+            for writer in writers:
+                writer.put_encprivkey(encprivkey)
 
 
     def push_blockhashes(self):
@@ -801,8 +795,9 @@ class Publish:
             # set the leaf for future use.
             self.sharehash_leaves[shnum] = t[0]
 
-            writer = self.writers[shnum]
-            writer.put_blockhashes(self.blockhashes[shnum])
+            writers = self.writers[shnum]
+            for writer in writers:
+                writer.put_blockhashes(self.blockhashes[shnum])
 
 
     def push_sharehashes(self):
@@ -812,8 +807,9 @@ class Publish:
             needed_indices = share_hash_tree.needed_hashes(shnum)
             self.sharehashes[shnum] = dict( [ (i, share_hash_tree[i])
                                              for i in needed_indices] )
-            writer = self.writers[shnum]
-            writer.put_sharehashes(self.sharehashes[shnum])
+            writers = self.writers[shnum]
+            for writer in writers:
+                writer.put_sharehashes(self.sharehashes[shnum])
         self.root_hash = share_hash_tree[0]
 
 
@@ -824,8 +820,9 @@ class Publish:
         #   - Push the signature
         self._status.set_status("Pushing root hashes and signature")
         for shnum in xrange(self.total_shares):
-            writer = self.writers[shnum]
-            writer.put_root_hash(self.root_hash)
+            writers = self.writers[shnum]
+            for writer in writers:
+                writer.put_root_hash(self.root_hash)
         self._update_checkstring()
         self._make_and_place_signature()
 
@@ -838,7 +835,7 @@ class Publish:
         uncoordinated writes. SDMF files will have the same checkstring,
         so we need not do anything.
         """
-        self._checkstring = self.writers.values()[0].get_checkstring()
+        self._checkstring = self.writers.values()[0][0].get_checkstring()
 
 
     def _make_and_place_signature(self):
@@ -847,11 +844,12 @@ class Publish:
         """
         started = time.time()
         self._status.set_status("Signing prefix")
-        signable = self.writers[0].get_signable()
+        signable = self.writers.values()[0][0].get_signable()
         self.signature = self._privkey.sign(signable)
 
-        for (shnum, writer) in self.writers.iteritems():
-            writer.put_signature(self.signature)
+        for (shnum, writers) in self.writers.iteritems():
+            for writer in writers:
+                writer.put_signature(self.signature)
         self._status.timings['sign'] = time.time() - started
 
 
@@ -864,25 +862,26 @@ class Publish:
         ds = []
         verification_key = self._pubkey.serialize()
 
-        for (shnum, writer) in self.writers.copy().iteritems():
-            writer.put_verification_key(verification_key)
-            self.num_outstanding += 1
-            def _no_longer_outstanding(res):
-                self.num_outstanding -= 1
-                return res
+        for (shnum, writers) in self.writers.copy().iteritems():
+            for writer in writers:
+                writer.put_verification_key(verification_key)
+                self.num_outstanding += 1
+                def _no_longer_outstanding(res):
+                    self.num_outstanding -= 1
+                    return res
 
-            d = writer.finish_publishing()
-            d.addBoth(_no_longer_outstanding)
-            d.addErrback(self._connection_problem, writer)
-            d.addCallback(self._got_write_answer, writer, started)
-            ds.append(d)
+                d = writer.finish_publishing()
+                d.addBoth(_no_longer_outstanding)
+                d.addErrback(self._connection_problem, writer)
+                d.addCallback(self._got_write_answer, writer, started)
+                ds.append(d)
         self._record_verinfo()
         self._status.timings['pack'] = time.time() - started
         return defer.DeferredList(ds)
 
 
     def _record_verinfo(self):
-        self.versioninfo = self.writers.values()[0].get_verinfo()
+        self.versioninfo = self.writers.values()[0][0].get_verinfo()
 
 
     def _connection_problem(self, f, writer):
@@ -892,14 +891,13 @@ class Publish:
         """
         self.log("found problem: %s" % str(f))
         self._last_failure = f
-        del(self.writers[writer.shnum])
+        self.writers[writer.shnum].remove(writer)
 
 
     def log_goal(self, goal, message=""):
         logmsg = [message]
-        for (shnum, peerid) in sorted([(s,p) for (p,s) in goal]):
-            logmsg.append("sh%d to [%s]" % (shnum,
-                                            idlib.shortnodeid_b2a(peerid)))
+        for (shnum, server) in sorted([(s,p) for (p,s) in goal]):
+            logmsg.append("sh%d to [%s]" % (shnum, server.get_name()))
         self.log("current goal: %s" % (", ".join(logmsg)), level=log.NOISY)
         self.log("we are planning to push new seqnum=#%d" % self._new_seqnum,
                  level=log.NOISY)
@@ -909,56 +907,57 @@ class Publish:
         if True:
             self.log_goal(self.goal, "before update: ")
 
-        # first, remove any bad peers from our goal
-        self.goal = set([ (peerid, shnum)
-                          for (peerid, shnum) in self.goal
-                          if peerid not in self.bad_peers ])
+        # first, remove any bad servers from our goal
+        self.goal = set([ (server, shnum)
+                          for (server, shnum) in self.goal
+                          if server not in self.bad_servers ])
 
         # find the homeless shares:
-        homefull_shares = set([shnum for (peerid, shnum) in self.goal])
+        homefull_shares = set([shnum for (server, shnum) in self.goal])
         homeless_shares = set(range(self.total_shares)) - homefull_shares
         homeless_shares = sorted(list(homeless_shares))
         # place them somewhere. We prefer unused servers at the beginning of
-        # the available peer list.
+        # the available server list.
 
         if not homeless_shares:
             return
 
         # if an old share X is on a node, put the new share X there too.
-        # TODO: 1: redistribute shares to achieve one-per-peer, by copying
-        #       shares from existing peers to new (less-crowded) ones. The
+        # TODO: 1: redistribute shares to achieve one-per-server, by copying
+        #       shares from existing servers to new (less-crowded) ones. The
         #       old shares must still be updated.
         # TODO: 2: move those shares instead of copying them, to reduce future
         #       update work
 
         # this is a bit CPU intensive but easy to analyze. We create a sort
-        # order for each peerid. If the peerid is marked as bad, we don't
+        # order for each server. If the server is marked as bad, we don't
         # even put them in the list. Then we care about the number of shares
         # which have already been assigned to them. After that we care about
         # their permutation order.
         old_assignments = DictOfSets()
-        for (peerid, shnum) in self.goal:
-            old_assignments.add(peerid, shnum)
+        for (server, shnum) in self.goal:
+            old_assignments.add(server, shnum)
 
-        peerlist = []
-        for i, (peerid, ss) in enumerate(self.full_peerlist):
-            if peerid in self.bad_peers:
+        serverlist = []
+        for i, server in enumerate(self.full_serverlist):
+            serverid = server.get_serverid()
+            if server in self.bad_servers:
                 continue
-            entry = (len(old_assignments.get(peerid, [])), i, peerid, ss)
-            peerlist.append(entry)
-        peerlist.sort()
+            entry = (len(old_assignments.get(server, [])), i, serverid, server)
+            serverlist.append(entry)
+        serverlist.sort()
 
-        if not peerlist:
+        if not serverlist:
             raise NotEnoughServersError("Ran out of non-bad servers, "
                                         "first_error=%s" %
                                         str(self._first_write_error),
                                         self._first_write_error)
 
-        # we then index this peerlist with an integer, because we may have to
-        # wrap. We update the goal as we go.
+        # we then index this serverlist with an integer, because we may have
+        # to wrap. We update the goal as we go.
         i = 0
         for shnum in homeless_shares:
-            (ignored1, ignored2, peerid, ss) = peerlist[i]
+            (ignored1, ignored2, ignored3, server) = serverlist[i]
             # if we are forced to send a share to a server that already has
             # one, we may have two write requests in flight, and the
             # servermap (which was computed before either request was sent)
@@ -967,10 +966,9 @@ class Publish:
             # this, otherwise it would cause the publish to fail with an
             # UncoordinatedWriteError. See #546 for details of the trouble
             # this used to cause.
-            self.goal.add( (peerid, shnum) )
-            self.connections[peerid] = ss
+            self.goal.add( (server, shnum) )
             i += 1
-            if i >= len(peerlist):
+            if i >= len(serverlist):
                 i = 0
         if True:
             self.log_goal(self.goal, "after update: ")
@@ -985,26 +983,28 @@ class Publish:
             # bother checking it.
             return
 
-        peerid = writer.peerid
+        server = writer.server
         lp = self.log("_got_write_answer from %s, share %d" %
-                      (idlib.shortnodeid_b2a(peerid), writer.shnum))
+                      (server.get_name(), writer.shnum))
 
         now = time.time()
         elapsed = now - started
 
-        self._status.add_per_server_time(peerid, elapsed)
+        self._status.add_per_server_time(server, elapsed)
 
         wrote, read_data = answer
 
         surprise_shares = set(read_data.keys()) - set([writer.shnum])
 
         # We need to remove from surprise_shares any shares that we are
-        # knowingly also writing to that peer from other writers.
+        # knowingly also writing to that server from other writers.
 
         # TODO: Precompute this.
-        known_shnums = [x.shnum for x in self.writers.values()
-                        if x.peerid == peerid]
-        surprise_shares -= set(known_shnums)
+        shares = []
+        for shnum, writers in self.writers.iteritems():
+            shares.extend([x.shnum for x in writers if x.server == server])
+        known_shnums = set(shares)
+        surprise_shares -= known_shnums
         self.log("found the following surprise shares: %s" %
                  str(surprise_shares))
 
@@ -1024,7 +1024,7 @@ class Publish:
             if checkstring == self._checkstring:
                 # they have the right share, somehow
 
-                if (peerid,shnum) in self.goal:
+                if (server,shnum) in self.goal:
                     # and we want them to have it, so we probably sent them a
                     # copy in an earlier write. This is ok, and avoids the
                     # #546 problem.
@@ -1039,7 +1039,7 @@ class Publish:
 
             else:
                 # the new shares are of a different version
-                if peerid in self._servermap.reachable_peers:
+                if server in self._servermap.get_reachable_servers():
                     # we asked them about their shares, so we had knowledge
                     # of what they used to have. Any surprising shares must
                     # have come from someone else, so UCW.
@@ -1050,16 +1050,16 @@ class Publish:
                     # mapupdate should have wokred harder and asked more
                     # servers before concluding that it knew about them all.
 
-                    # signal UCW, but make sure to ask this peer next time,
+                    # signal UCW, but make sure to ask this server next time,
                     # so we'll remember to update it if/when we retry.
                     surprised = True
-                    # TODO: ask this peer next time. I don't yet have a good
+                    # TODO: ask this server next time. I don't yet have a good
                     # way to do this. Two insufficient possibilities are:
                     #
-                    # self._servermap.add_new_share(peerid, shnum, verinfo, now)
+                    # self._servermap.add_new_share(server, shnum, verinfo, now)
                     #  but that requires fetching/validating/parsing the whole
                     #  version string, and all we have is the checkstring
-                    # self._servermap.mark_bad_share(peerid, shnum, checkstring)
+                    # self._servermap.mark_bad_share(server, shnum, checkstring)
                     #  that will make publish overwrite the share next time,
                     #  but it won't re-query the server, and it won't make
                     #  mapupdate search further
@@ -1090,17 +1090,17 @@ class Publish:
             # a way to tell these two apart (in fact, the storage server code
             # doesn't have the option of refusing our share).
             #
-            # If the server is full, mark the peer as bad (so we don't ask
+            # If the server is full, mark the server as bad (so we don't ask
             # them again), but don't set self.surprised. The loop() will find
             # a new server.
             #
             # If the testv failed, log it, set self.surprised, but don't
-            # bother adding to self.bad_peers .
+            # bother adding to self.bad_servers .
 
             self.log("our testv failed, so the write did not happen",
                      parent=lp, level=log.WEIRD, umid="8sc26g")
             self.surprised = True
-            self.bad_peers.add(writer) # don't ask them again
+            self.bad_servers.add(server) # don't ask them again
             # use the checkstring to add information to the log message
             unknown_format = False
             for (shnum,readv) in read_data.items():
@@ -1115,8 +1115,8 @@ class Publish:
                      other_IV) = unpack_sdmf_checkstring(checkstring)
                 else:
                     unknown_format = True
-                expected_version = self._servermap.version_on_peer(peerid,
-                                                                   shnum)
+                expected_version = self._servermap.version_on_server(server,
+                                                                     shnum)
                 if expected_version:
                     (seqnum, root_hash, IV, segsize, datalength, k, N, prefix,
                      offsets_tuple) = expected_version
@@ -1132,8 +1132,8 @@ class Publish:
                                (other_seqnum, other_roothash)
                     self.log(msg, parent=lp, level=log.NOISY)
                 # if expected_version==None, then we didn't expect to see a
-                # share on that peer, and the 'surprise_shares' clause above
-                # will have logged it.
+                # share on that server, and the 'surprise_shares' clause
+                # above will have logged it.
             return
 
         # and update the servermap
@@ -1142,9 +1142,9 @@ class Publish:
         # shares, and can safely execute these statements.
         if self.versioninfo:
             self.log("wrote successfully: adding new share to servermap")
-            self._servermap.add_new_share(peerid, writer.shnum,
+            self._servermap.add_new_share(server, writer.shnum,
                                           self.versioninfo, started)
-            self.placed.add( (peerid, writer.shnum) )
+            self.placed.add( (server, writer.shnum) )
         self._update_status()
         # the next method in the deferred chain will check to see if
         # we're done and successful.

@@ -52,6 +52,9 @@ class OldConfigError(Exception):
                 "See docs/historical/configuration.rst."
                 % "\n".join([quote_output(fname) for fname in self.args[0]]))
 
+class OldConfigOptionError(Exception):
+    pass
+
 
 class Node(service.MultiService):
     # this implements common functionality of both Client nodes and Introducer
@@ -119,7 +122,21 @@ class Node(service.MultiService):
     def read_config(self):
         self.error_about_old_config_files()
         self.config = ConfigParser.SafeConfigParser()
-        self.config.read([os.path.join(self.basedir, "tahoe.cfg")])
+
+        tahoe_cfg = os.path.join(self.basedir, "tahoe.cfg")
+        try:
+            f = open(tahoe_cfg, "rb")
+            try:
+                # Skip any initial Byte Order Mark. Since this is an ordinary file, we
+                # don't need to handle incomplete reads, and can assume seekability.
+                if f.read(3) != '\xEF\xBB\xBF':
+                    f.seek(0)
+                self.config.readfp(f)
+            finally:
+                f.close()
+        except EnvironmentError:
+            if os.path.exists(tahoe_cfg):
+                raise
 
         cfg_tubport = self.get_config("node", "tub.port", "")
         if not cfg_tubport:
@@ -201,21 +218,27 @@ class Node(service.MultiService):
         privname = os.path.join(self.basedir, "private", name)
         open(privname, "w").write(value.strip())
 
-    def get_or_create_private_config(self, name, default):
+    def get_or_create_private_config(self, name, default=_None):
         """Try to get the (string) contents of a private config file (which
         is a config file that resides within the subdirectory named
         'private'), and return it. Any leading or trailing whitespace will be
         stripped from the data.
 
-        If the file does not exist, try to create it using default, and
-        then return the value that was written. If 'default' is a string,
-        use it as a default value. If not, treat it as a 0-argument callable
-        which is expected to return a string.
+        If the file does not exist, and default is not given, report an error.
+        If the file does not exist and a default is specified, try to create
+        it using that default, and then return the value that was written.
+        If 'default' is a string, use it as a default value. If not, treat it
+        as a zero-argument callable that is expected to return a string.
         """
         privname = os.path.join(self.basedir, "private", name)
         try:
             value = fileutil.read(privname)
         except EnvironmentError:
+            if os.path.exists(privname):
+                raise
+            if default is _None:
+                raise MissingConfigEntry("The required configuration file %s is missing."
+                                         % (quote_output(privname),))
             if isinstance(default, basestring):
                 value = default
             else:
@@ -312,7 +335,7 @@ class Node(service.MultiService):
         self.tub.setOption("bridge-twisted-logs", True)
         incident_dir = os.path.join(self.basedir, "logs", "incidents")
         # this doesn't quite work yet: unit tests fail
-        foolscap.logging.log.setLogDir(incident_dir)
+        foolscap.logging.log.setLogDir(incident_dir.encode(get_filesystem_encoding()))
 
     def log(self, *args, **kwargs):
         return log.msg(*args, **kwargs)

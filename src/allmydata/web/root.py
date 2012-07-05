@@ -1,4 +1,4 @@
-import time
+import time, os
 
 from twisted.internet import address
 from twisted.web import http
@@ -6,7 +6,6 @@ from nevow import rend, url, loaders, tags as T
 from nevow.inevow import IRequest
 from nevow.static import File as nevow_File # TODO: merge with static.File?
 from nevow.util import resource_filename
-from formless import webform
 
 import allmydata # to display import path
 from allmydata import get_package_versions_string
@@ -132,7 +131,6 @@ class NoReliability(rend.Page):
 <html xmlns:n="http://nevow.com/ns/nevow/0.1">
   <head>
     <title>AllMyData - Tahoe</title>
-    <link href="/webform_css" rel="stylesheet" type="text/css"/>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   </head>
   <body>
@@ -159,7 +157,7 @@ class Root(rend.Page):
             s = client.getServiceNamed("storage")
         except KeyError:
             s = None
-        self.child_storage = storage.StorageStatus(s)
+        self.child_storage = storage.StorageStatus(s, self.client.nickname)
 
         self.child_uri = URIHandler(client)
         self.child_cap = URIHandler(client)
@@ -168,19 +166,14 @@ class Root(rend.Page):
         self.child_named = FileHandler(client)
         self.child_status = status.Status(client.get_history())
         self.child_statistics = status.Statistics(client.stats_provider)
-        def f(name):
-            return nevow_File(resource_filename('allmydata.web', name))
-        self.putChild("download_status_timeline.js", f("download_status_timeline.js"))
-        self.putChild("jquery-1.6.1.min.js", f("jquery-1.6.1.min.js"))
-        self.putChild("protovis-3.3.1.min.js", f("protovis-3.3.1.min.js"))
+        static_dir = resource_filename("allmydata.web", "static")
+        for filen in os.listdir(static_dir):
+            self.putChild(filen, nevow_File(os.path.join(static_dir, filen)))
 
     def child_helper_status(self, ctx):
         # the Helper isn't attached until after the Tub starts, so this child
         # needs to created on each request
         return status.HelperStatus(self.client.helper)
-
-    child_webform_css = webform.defaultCSS
-    child_tahoe_css = nevow_File(resource_filename('allmydata.web', 'tahoe.css'))
 
     child_provisioning = provisioning.ProvisioningTool()
     if reliability.is_available():

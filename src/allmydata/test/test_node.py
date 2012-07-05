@@ -4,6 +4,8 @@ from twisted.trial import unittest
 from twisted.internet import defer
 from twisted.python import log
 
+from mock import patch
+
 from foolscap.api import flushEventualQueue
 from twisted.application import service
 from allmydata.node import Node, formatTimeTahoeStyle
@@ -70,6 +72,21 @@ class TestCase(testutil.SignalMixin, unittest.TestCase):
         d.addCallback(_check_addresses)
         return d
 
+    def test_tahoe_cfg_utf8(self):
+        basedir = "test_node/test_tahoe_cfg_utf8"
+        fileutil.make_dirs(basedir)
+        f = open(os.path.join(basedir, 'tahoe.cfg'), 'wt')
+        f.write(u"\uFEFF[node]\n".encode('utf-8'))
+        f.write(u"nickname = \u2621\n".encode('utf-8'))
+        f.close()
+
+        n = TestNode(basedir)
+        n.setServiceParent(self.parent)
+        d = n.when_tub_ready()
+        d.addCallback(lambda ign: self.failUnlessEqual(n.get_config("node", "nickname").decode('utf-8'),
+                                                       u"\u2621"))
+        return d
+
     def test_timestamp(self):
         # this modified logger doesn't seem to get used during the tests,
         # probably because we don't modify the LogObserver that trial
@@ -101,3 +118,15 @@ class TestCase(testutil.SignalMixin, unittest.TestCase):
         st = os.stat(privdir)
         bits = stat.S_IMODE(st[stat.ST_MODE])
         self.failUnless(bits & 0001 == 0, bits)
+
+    @patch("foolscap.logging.log.setLogDir")
+    def test_logdir_is_str(self, mock_setLogDir):
+        basedir = "test_node/test_logdir_is_str"
+        fileutil.make_dirs(basedir)
+
+        def call_setLogDir(logdir):
+            self.failUnless(isinstance(logdir, str), logdir)
+        mock_setLogDir.side_effect = call_setLogDir
+
+        TestNode(basedir)
+        self.failUnless(mock_setLogDir.called)

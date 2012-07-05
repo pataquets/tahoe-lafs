@@ -1,6 +1,6 @@
-===============================
+==========
 Tahoe-LAFS
-===============================
+==========
 
 Tahoe-LAFS is a Free Software/Open Source decentralized data store. It
 distributes your filesystem across multiple servers, and even if some of the
@@ -11,6 +11,8 @@ To get started please see `quickstart.rst`_ in the docs directory.
 
 LICENCE
 =======
+
+Copyright 2006-2012 The Tahoe-LAFS Software Foundation
 
 You may use this package under the GNU General Public License, version 2 or, at
 your option, any later version.  You may use this package under the Transitive

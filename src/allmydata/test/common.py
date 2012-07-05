@@ -6,7 +6,7 @@ from twisted.python import failure
 from twisted.application import service
 from twisted.web.error import Error as WebError
 from foolscap.api import flushEventualQueue, fireEventually
-from allmydata import uri, dirnode, client
+from allmydata import uri, client
 from allmydata.introducer.server import IntroducerNode
 from allmydata.interfaces import IMutableFileNode, IImmutableFileNode,\
                                  NotEnoughSharesError, ICheckable, \
@@ -14,7 +14,6 @@ from allmydata.interfaces import IMutableFileNode, IImmutableFileNode,\
                                  MDMF_VERSION
 from allmydata.check_results import CheckResults, CheckAndRepairResults, \
      DeepCheckResults, DeepCheckAndRepairResults
-from allmydata.mutable.common import CorruptShareError
 from allmydata.mutable.layout import unpack_header
 from allmydata.mutable.publish import MutableData
 from allmydata.storage.mutable import MutableShareFile
@@ -44,11 +43,10 @@ class FakeCHKFileNode:
     """I provide IImmutableFileNode, but all of my data is stored in a
     class-level dictionary."""
     implements(IImmutableFileNode)
-    all_contents = {}
-    bad_shares = {}
 
-    def __init__(self, filecap):
+    def __init__(self, filecap, all_contents):
         precondition(isinstance(filecap, (uri.CHKFileURI, uri.LiteralFileURI)), filecap)
+        self.all_contents = all_contents
         self.my_uri = filecap
         self.storage_index = self.my_uri.get_storage_index()
 
@@ -69,7 +67,6 @@ class FakeCHKFileNode:
 
     def check(self, monitor, verify=False, add_lease=False):
         r = CheckResults(self.my_uri, self.storage_index)
-        is_bad = self.bad_shares.get(self.storage_index, None)
         data = {}
         data["count-shares-needed"] = 3
         data["count-shares-expected"] = 10
@@ -81,17 +78,10 @@ class FakeCHKFileNode:
         data["servers-responding"] = [nodeid]
         data["count-recoverable-versions"] = 1
         data["count-unrecoverable-versions"] = 0
-        if is_bad:
-            r.set_healthy(False)
-            r.set_recoverable(True)
-            data["count-shares-good"] = 9
-            data["list-corrupt-shares"] = [(nodeid, self.storage_index, 0)]
-            r.problems = failure.Failure(CorruptShareError(is_bad))
-        else:
-            r.set_healthy(True)
-            r.set_recoverable(True)
-            data["count-shares-good"] = 10
-            r.problems = []
+        r.set_healthy(True)
+        r.set_recoverable(True)
+        data["count-shares-good"] = 10
+        r.problems = []
         r.set_data(data)
         r.set_needs_rebalancing(False)
         return defer.succeed(r)
@@ -175,10 +165,10 @@ def make_chk_file_cap(size):
 def make_chk_file_uri(size):
     return make_chk_file_cap(size).to_string()
 
-def create_chk_filenode(contents):
+def create_chk_filenode(contents, all_contents):
     filecap = make_chk_file_cap(len(contents))
-    n = FakeCHKFileNode(filecap)
-    FakeCHKFileNode.all_contents[filecap.to_string()] = contents
+    n = FakeCHKFileNode(filecap, all_contents)
+    all_contents[filecap.to_string()] = contents
     return n
 
 
@@ -188,12 +178,11 @@ class FakeMutableFileNode:
 
     implements(IMutableFileNode, ICheckable)
     MUTABLE_SIZELIMIT = 10000
-    all_contents = {}
-    bad_shares = {}
-    file_types = {} # storage index => MDMF_VERSION or SDMF_VERSION
 
     def __init__(self, storage_broker, secret_holder,
-                 default_encoding_parameters, history):
+                 default_encoding_parameters, history, all_contents):
+        self.all_contents = all_contents
+        self.file_types = {} # storage index => MDMF_VERSION or SDMF_VERSION
         self.init_from_cap(make_mutable_file_cap())
         self._k = default_encoding_parameters['k']
         self._segsize = default_encoding_parameters['max_segment_size']
@@ -285,7 +274,6 @@ class FakeMutableFileNode:
 
     def check(self, monitor, verify=False, add_lease=False):
         r = CheckResults(self.my_uri, self.storage_index)
-        is_bad = self.bad_shares.get(self.storage_index, None)
         data = {}
         data["count-shares-needed"] = 3
         data["count-shares-expected"] = 10
@@ -297,18 +285,10 @@ class FakeMutableFileNode:
         data["servers-responding"] = [nodeid]
         data["count-recoverable-versions"] = 1
         data["count-unrecoverable-versions"] = 0
-        if is_bad:
-            r.set_healthy(False)
-            r.set_recoverable(True)
-            data["count-shares-good"] = 9
-            r.problems = failure.Failure(CorruptShareError("peerid",
-                                                           0, # shnum
-                                                           is_bad))
-        else:
-            r.set_healthy(True)
-            r.set_recoverable(True)
-            data["count-shares-good"] = 10
-            r.problems = []
+        r.set_healthy(True)
+        r.set_recoverable(True)
+        data["count-shares-good"] = 10
+        r.problems = []
         r.set_data(data)
         r.set_needs_rebalancing(False)
         return defer.succeed(r)
@@ -420,7 +400,7 @@ def make_verifier_uri():
     return uri.SSKVerifierURI(storage_index=os.urandom(16),
                               fingerprint=os.urandom(32)).to_string()
 
-def create_mutable_filenode(contents, mdmf=False):
+def create_mutable_filenode(contents, mdmf=False, all_contents=None):
     # XXX: All of these arguments are kind of stupid. 
     if mdmf:
         cap = make_mdmf_mutable_file_cap()
@@ -431,7 +411,8 @@ def create_mutable_filenode(contents, mdmf=False):
     encoding_params['k'] = 3
     encoding_params['max_segment_size'] = 128*1024
 
-    filenode = FakeMutableFileNode(None, None, encoding_params, None)
+    filenode = FakeMutableFileNode(None, None, encoding_params, None,
+                                   all_contents)
     filenode.init_from_cap(cap)
     if mdmf:
         filenode.create(MutableData(contents), version=MDMF_VERSION)
@@ -439,14 +420,6 @@ def create_mutable_filenode(contents, mdmf=False):
         filenode.create(MutableData(contents), version=SDMF_VERSION)
     return filenode
 
-
-class FakeDirectoryNode(dirnode.DirectoryNode):
-    """This offers IDirectoryNode, but uses a FakeMutableFileNode for the
-    backing store, so it doesn't go to the grid. The child data is still
-    encrypted and serialized, so this isn't useful for tests that want to
-    look inside the dirnodes and check their contents.
-    """
-    filenode_class = FakeMutableFileNode
 
 class LoggingServiceParent(service.MultiService):
     def log(self, *args, **kwargs):
@@ -693,12 +666,12 @@ class SystemTestMixin(pollmixin.PollMixin, testutil.StallMixin):
             sb = c.get_storage_broker()
             if len(sb.get_connected_servers()) != self.numclients:
                 return False
+            up = c.getServiceNamed("uploader")
+            if up._helper_furl and not up._helper:
+                return False
         return True
 
     def wait_for_connections(self, ignored=None):
-        # TODO: replace this with something that takes a list of peerids and
-        # fires when they've all been heard from, instead of using a count
-        # and a threshold
         return self.poll(self._check_connections, timeout=200)
 
 

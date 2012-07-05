@@ -10,7 +10,7 @@ export PYTHON
 # itself. It will also create it in the beginning of the 'develop' command.
 
 TAHOE=$(PYTHON) bin/tahoe
-SOURCES=src/allmydata src/buildtest static misc/build_helpers bin/tahoe-script.template twisted setup.py
+SOURCES=src/allmydata src/buildtest static misc bin/tahoe-script.template twisted setup.py
 
 .PHONY: make-version build
 
@@ -120,13 +120,17 @@ upload-coverage:
 	false
 endif
 
-code-checks: build version-and-path check-interfaces -find-trailing-spaces -check-umids pyflakes
+code-checks: build version-and-path check-interfaces check-miscaptures -find-trailing-spaces -check-umids pyflakes
 
 version-and-path:
 	$(TAHOE) --version-and-path
 
 check-interfaces:
 	$(TAHOE) @misc/coding_tools/check-interfaces.py 2>&1 |tee violations.txt
+	@echo
+
+check-miscaptures:
+	$(PYTHON) misc/coding_tools/check-miscaptures.py $(SOURCES) 2>&1 |tee miscaptures.txt
 	@echo
 
 pyflakes:
@@ -141,13 +145,21 @@ check-umids:
 	-$(PYTHON) misc/coding_tools/check-umids.py `find $(SOURCES) -name '*.py'`
 	@echo
 
+doc-checks: check-rst
+
+check-rst:
+	@for x in `find *.rst docs -name "*.rst"`; do rst2html -v $${x} >/dev/null; done 2>&1 |grep -v 'Duplicate implicit target name:'
+	@echo
+
 count-lines:
 	@echo -n "files: "
-	@find src -name '*.py' |grep -v /build/ |wc --lines
+	@find src -name '*.py' |grep -v /build/ |wc -l
 	@echo -n "lines: "
-	@cat `find src -name '*.py' |grep -v /build/` |wc --lines
+	@cat `find src -name '*.py' |grep -v /build/` |wc -l
 	@echo -n "TODO: "
-	@grep TODO `find src -name '*.py' |grep -v /build/` | wc --lines
+	@grep TODO `find src -name '*.py' |grep -v /build/` | wc -l
+	@echo -n "XXX: "
+	@grep XXX `find src -name '*.py' |grep -v /build/` | wc -l
 
 check-memory: .built
 	rm -rf _test_memory
@@ -201,6 +213,10 @@ repl:
 test-darcs-boringfile:
 	$(MAKE)
 	$(PYTHON) misc/build_helpers/test-darcs-boringfile.py
+
+test-git-ignore:
+	$(MAKE)
+	$(PYTHON) misc/build_helpers/test-git-ignore.py
 
 test-clean:
 	find . |grep -vEe "_darcs|allfiles.tmp|src/allmydata/_(version|appname).py" |sort >allfiles.tmp.old

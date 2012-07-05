@@ -44,7 +44,9 @@ The item descriptions below use the following types:
     a Twisted listening-port specification string, like "``tcp:80``" or
     "``tcp:3456:interface=127.0.0.1``". For a full description of the format,
     see `the Twisted strports documentation
-    <http://twistedmatrix.com/documents/current/api/twisted.application.strports.html>`_.
+    <https://twistedmatrix.com/documents/current/api/twisted.application.strports.html>`_.
+    Please note, if interface= is not specified, Tahoe-LAFS will attempt to
+    bind the port specified on all interfaces.
 
 ``FURL string``
 
@@ -363,10 +365,13 @@ Client Configuration
     mutable-type parameter in the webapi. If you do not specify a value here,
     Tahoe-LAFS will use SDMF for all newly-created mutable files.
 
-    Note that this parameter only applies to mutable files. Mutable
-    directories, which are stored as mutable files, are not controlled by
-    this parameter and will always use SDMF. We may revisit this decision in
-    future versions of Tahoe-LAFS.
+    Note that this parameter applies only to files, not to directories.
+    Mutable directories, which are stored in mutable files, are not
+    controlled by this parameter and will always use SDMF. We may revisit
+    this decision in future versions of Tahoe-LAFS.
+
+    See `<frontends/specifications/mutable.rst>`_ for details about mutable
+    file formats.
 
 Frontend Configuration
 ======================
@@ -394,18 +399,18 @@ CLI
     filesystem, uploading/downloading files, and creating/running Tahoe
     nodes. See `<frontends/CLI.rst>`_ for details.
 
-FTP, SFTP
+SFTP, FTP
 
-    Tahoe can also run both FTP and SFTP servers, and map a username/password
+    Tahoe can also run both SFTP and FTP servers, and map a username/password
     pair to a top-level Tahoe directory. See `<frontends/FTP-and-SFTP.rst>`_
-    for instructions on configuring these services, and the ``[ftpd]`` and
-    ``[sftpd]`` sections of ``tahoe.cfg``.
+    for instructions on configuring these services, and the ``[sftpd]`` and
+    ``[ftpd]`` sections of ``tahoe.cfg``.
 
 Drop-Upload
 
     As of Tahoe-LAFS v1.9.0, a node running on Linux can be configured to
     automatically upload files that are created or changed in a specified
-    local directory. See `<frontends/drop_upload.rst>`_ for details.
+    local directory. See `<frontends/drop-upload.rst>`_ for details.
 
 
 
@@ -438,8 +443,9 @@ Storage Server Configuration
     If provided, this value defines how much disk space is reserved: the
     storage server will not accept any share that causes the amount of free
     disk space to drop below this value. (The free space is measured by a
-    call to statvfs(2) on Unix, or GetDiskFreeSpaceEx on Windows, and is the
-    space available to the user account under which the storage server runs.)
+    call to ``statvfs(2)`` on Unix, or ``GetDiskFreeSpaceEx`` on Windows, and
+    is the space available to the user account under which the storage server
+    runs.)
 
     This string contains a number, with an optional case-insensitive scale
     suffix like "K" or "M" or "G", and an optional "B" or "iB" suffix. So
@@ -659,19 +665,16 @@ a legal one.
   timeout.disconnect = 1800
   ssh.port = 8022
   ssh.authorized_keys_file = ~/.ssh/authorized_keys
-
-
+  
   [client]
   introducer.furl = pb://ok45ssoklj4y7eok5c3xkmj@tahoe.example:44801/ii3uumo
   helper.furl = pb://ggti5ssoklj4y7eok5c3xkmj@helper.tahoe.example:7054/kk8lhr
-
-
+  
   [storage]
   enabled = True
   readonly = True
-  sizelimit = 10000000000
-
-
+  reserved_space = 10000000000
+  
   [helper]
   enabled = True
 

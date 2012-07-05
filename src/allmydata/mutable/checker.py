@@ -1,20 +1,21 @@
 
 from allmydata.uri import from_string
-from allmydata.util import base32, idlib, log
+from allmydata.util import base32, log
 from allmydata.check_results import CheckAndRepairResults, CheckResults
 
-from allmydata.mutable.common import MODE_CHECK, CorruptShareError
+from allmydata.mutable.common import MODE_CHECK, MODE_WRITE, CorruptShareError
 from allmydata.mutable.servermap import ServerMap, ServermapUpdater
 from allmydata.mutable.retrieve import Retrieve # for verifying
 
 class MutableChecker:
+    SERVERMAP_MODE = MODE_CHECK
 
     def __init__(self, node, storage_broker, history, monitor):
         self._node = node
         self._storage_broker = storage_broker
         self._history = history
         self._monitor = monitor
-        self.bad_shares = [] # list of (nodeid,shnum,failure)
+        self.bad_shares = [] # list of (server,shnum,failure)
         self._storage_index = self._node.get_storage_index()
         self.results = CheckResults(from_string(node.get_uri()), self._storage_index)
         self.need_repair = False
@@ -26,7 +27,8 @@ class MutableChecker:
         # of finding all of the shares, and getting a good idea of
         # recoverability, etc, without verifying.
         u = ServermapUpdater(self._node, self._storage_broker, self._monitor,
-                             servermap, MODE_CHECK, add_lease=add_lease)
+                             servermap, self.SERVERMAP_MODE,
+                             add_lease=add_lease)
         if self._history:
             self._history.notify_mapupdate(u.get_status())
         d = u.update()
@@ -71,12 +73,12 @@ class MutableChecker:
         # downloader. I bet we could pass the downloader a flag that
         # makes it do this, and piggyback onto that instead of
         # duplicating a bunch of code.
-        # 
+        #
         # Like:
         #  r = Retrieve(blah, blah, blah, verify=True)
         #  d = r.download()
         #  (wait, wait, wait, d.callback)
-        #  
+        #
         #  Then, when it has finished, we can check the servermap (which
         #  we provided to Retrieve) to figure out which shares are bad,
         #  since the Retrieve process will have updated the servermap as
@@ -84,14 +86,15 @@ class MutableChecker:
         #
         #  By passing the verify=True flag to the constructor, we are
         #  telling the downloader a few things.
-        # 
+        #
         #  1. It needs to download all N shares, not just K shares.
         #  2. It doesn't need to decrypt or decode the shares, only
         #     verify them.
         if not self.best_version:
             return
 
-        r = Retrieve(self._node, servermap, self.best_version, verify=True)
+        r = Retrieve(self._node, self._storage_broker, servermap,
+                     self.best_version, verify=True)
         d = r.download()
         d.addCallback(self._process_bad_shares)
         return d
@@ -110,7 +113,7 @@ class MutableChecker:
         counters["count-shares-good"] = num_distinct_shares
         counters["count-shares-needed"] = k
         counters["count-shares-expected"] = N
-        good_hosts = smap.all_peers_for_version(version)
+        good_hosts = smap.all_servers_for_version(version)
         counters["count-good-share-hosts"] = len(good_hosts)
         vmap = smap.make_versionmap()
         counters["count-wrong-shares"] = sum([len(shares)
@@ -170,7 +173,7 @@ class MutableChecker:
                 report.append("Unhealthy: best version has only %d shares "
                               "(encoding is %d-of-%d)" % (s, k, N))
                 summary.append("%d shares (enc %d-of-%d)" % (s, k, N))
-            hosts = smap.all_peers_for_version(best_version)
+            hosts = smap.all_servers_for_version(best_version)
             needs_rebalancing = bool( len(hosts) < N )
         elif unrecoverable:
             healthy = False
@@ -193,21 +196,22 @@ class MutableChecker:
             data["list-corrupt-shares"] = locators = []
             report.append("Corrupt Shares:")
             summary.append("Corrupt Shares:")
-            for (peerid, shnum, f) in sorted(self.bad_shares):
-                locators.append( (peerid, self._storage_index, shnum) )
-                s = "%s-sh%d" % (idlib.shortnodeid_b2a(peerid), shnum)
+            for (server, shnum, f) in sorted(self.bad_shares):
+                serverid = server.get_serverid()
+                locators.append( (serverid, self._storage_index, shnum) )
+                s = "%s-sh%d" % (server.get_name(), shnum)
                 if f.check(CorruptShareError):
                     ft = f.value.reason
                 else:
                     ft = str(f)
                 report.append(" %s: %s" % (s, ft))
                 summary.append(s)
-                p = (peerid, self._storage_index, shnum, f)
+                p = (serverid, self._storage_index, shnum, f)
                 r.problems.append(p)
                 msg = ("CorruptShareError during mutable verify, "
-                       "peerid=%(peerid)s, si=%(si)s, shnum=%(shnum)d, "
+                       "serverid=%(serverid)s, si=%(si)s, shnum=%(shnum)d, "
                        "where=%(where)s")
-                log.msg(format=msg, peerid=idlib.nodeid_b2a(peerid),
+                log.msg(format=msg, serverid=server.get_name(),
                         si=base32.b2a(self._storage_index),
                         shnum=shnum,
                         where=ft,
@@ -218,13 +222,14 @@ class MutableChecker:
 
         sharemap = {}
         for verinfo in vmap:
-            for (shnum, peerid, timestamp) in vmap[verinfo]:
+            for (shnum, server, timestamp) in vmap[verinfo]:
                 shareid = "%s-sh%d" % (smap.summarize_version(verinfo), shnum)
                 if shareid not in sharemap:
                     sharemap[shareid] = []
-                sharemap[shareid].append(peerid)
+                sharemap[shareid].append(server.get_serverid())
         data["sharemap"] = sharemap
-        data["servers-responding"] = list(smap.reachable_peers)
+        data["servers-responding"] = [s.get_serverid() for s in
+                                      list(smap.get_reachable_servers())]
 
         r.set_healthy(healthy)
         r.set_recoverable(bool(recoverable))
@@ -238,6 +243,8 @@ class MutableChecker:
 
 
 class MutableCheckAndRepairer(MutableChecker):
+    SERVERMAP_MODE = MODE_WRITE # needed to get the privkey
+
     def __init__(self, node, storage_broker, history, monitor):
         MutableChecker.__init__(self, node, storage_broker, history, monitor)
         self.cr_results = CheckAndRepairResults(self._storage_index)
@@ -261,7 +268,7 @@ class MutableCheckAndRepairer(MutableChecker):
             self.cr_results.repair_attempted = False
             return
         self.cr_results.repair_attempted = True
-        d = self._node.repair(self.results)
+        d = self._node.repair(self.results, monitor=self._monitor)
         def _repair_finished(repair_results):
             self.cr_results.repair_successful = repair_results.get_successful()
             r = CheckResults(from_string(self._node.get_uri()), self._storage_index)

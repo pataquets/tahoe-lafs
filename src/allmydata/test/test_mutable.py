@@ -39,6 +39,12 @@ from allmydata.test.test_download import PausingConsumer, \
      PausingAndStoppingConsumer, StoppingConsumer, \
      ImmediatelyStoppingConsumer
 
+def eventuaaaaaly(res=None):
+    d = fireEventually(res)
+    d.addCallback(fireEventually)
+    d.addCallback(fireEventually)
+    return d
+
 
 # this "FakeStorage" exists to put the share data in RAM and avoid using real
 # network connections, both to speed up the tests and to reduce the amount of
@@ -69,7 +75,7 @@ class FakeStorage:
     def read(self, peerid, storage_index):
         shares = self._peers.get(peerid, {})
         if self._sequence is None:
-            return defer.succeed(shares)
+            return eventuaaaaaly(shares)
         d = defer.Deferred()
         if not self._pending:
             self._pending_timer = reactor.callLater(1.0, self._fire_readers)
@@ -231,11 +237,12 @@ def make_storagebroker(s=None, num_peers=10):
         storage_broker.test_add_rref(peerid, fss)
     return storage_broker
 
-def make_nodemaker(s=None, num_peers=10):
+def make_nodemaker(s=None, num_peers=10, keysize=TEST_RSA_KEY_SIZE):
     storage_broker = make_storagebroker(s, num_peers)
     sh = client.SecretHolder("lease secret", "convergence secret")
     keygen = client.KeyGenerator()
-    keygen.set_default_keysize(TEST_RSA_KEY_SIZE)
+    if keysize:
+        keygen.set_default_keysize(keysize)
     nodemaker = NodeMaker(storage_broker, sh, None,
                           None, None,
                           {"k": 3, "n": 10}, SDMF_VERSION, keygen)
@@ -955,6 +962,20 @@ class PublishMixin:
         d.addCallback(_created)
         return d
 
+    def publish_empty_sdmf(self):
+        self.CONTENTS = ""
+        self.uploadable = MutableData(self.CONTENTS)
+        self._storage = FakeStorage()
+        self._nodemaker = make_nodemaker(self._storage, keysize=None)
+        self._storage_broker = self._nodemaker.storage_broker
+        d = self._nodemaker.create_mutable_file(self.uploadable,
+                                                version=SDMF_VERSION)
+        def _created(node):
+            self._fn = node
+            self._fn2 = self._nodemaker.create_from_cap(node.get_uri())
+        d.addCallback(_created)
+        return d
+
 
     def publish_multiple(self, version=0):
         self.CONTENTS = ["Contents 0",
@@ -1042,10 +1063,10 @@ class Servermap(unittest.TestCase, PublishMixin):
         self.failUnlessEqual(sm.recoverable_versions(), set([best]))
         self.failUnlessEqual(len(sm.shares_available()), 1)
         self.failUnlessEqual(sm.shares_available()[best], (num_shares, 3, 10))
-        shnum, peerids = sm.make_sharemap().items()[0]
-        peerid = list(peerids)[0]
-        self.failUnlessEqual(sm.version_on_peer(peerid, shnum), best)
-        self.failUnlessEqual(sm.version_on_peer(peerid, 666), None)
+        shnum, servers = sm.make_sharemap().items()[0]
+        server = list(servers)[0]
+        self.failUnlessEqual(sm.version_on_server(server, shnum), best)
+        self.failUnlessEqual(sm.version_on_server(server, 666), None)
         return sm
 
     def test_basic(self):
@@ -1115,10 +1136,10 @@ class Servermap(unittest.TestCase, PublishMixin):
             # mark the first 5 shares as corrupt, then update the servermap.
             # The map should not have the marked shares it in any more, and
             # new shares should be found to replace the missing ones.
-            for (shnum, peerid, timestamp) in shares:
+            for (shnum, server, timestamp) in shares:
                 if shnum < 5:
-                    self._corrupted.add( (peerid, shnum) )
-                    sm.mark_bad_share(peerid, shnum, "")
+                    self._corrupted.add( (server, shnum) )
+                    sm.mark_bad_share(server, shnum, "")
             return self.update_servermap(sm, MODE_WRITE)
         d.addCallback(_made_map)
         def _check_map(sm):
@@ -1126,10 +1147,10 @@ class Servermap(unittest.TestCase, PublishMixin):
             v = sm.best_recoverable_version()
             vm = sm.make_versionmap()
             shares = list(vm[v])
-            for (peerid, shnum) in self._corrupted:
-                peer_shares = sm.shares_on_peer(peerid)
-                self.failIf(shnum in peer_shares,
-                            "%d was in %s" % (shnum, peer_shares))
+            for (server, shnum) in self._corrupted:
+                server_shares = sm.debug_shares_on_server(server)
+                self.failIf(shnum in server_shares,
+                            "%d was in %s" % (shnum, server_shares))
             self.failUnlessEqual(len(shares), 5)
         d.addCallback(_check_map)
         return d
@@ -1279,7 +1300,7 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
     def do_download(self, servermap, version=None):
         if version is None:
             version = servermap.best_recoverable_version()
-        r = Retrieve(self._fn, servermap, version)
+        r = Retrieve(self._fn, self._storage_broker, servermap, version)
         c = consumer.MemoryConsumer()
         d = r.download(consumer=c)
         d.addCallback(lambda mc: "".join(mc.chunks))
@@ -1320,7 +1341,7 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
                 shares.clear()
             d1 = self.shouldFail(NotEnoughSharesError,
                                  "test_all_shares_vanished",
-                                 "ran out of peers",
+                                 "ran out of servers",
                                  self.do_download, servermap)
             return d1
         d.addCallback(_remove_shares)
@@ -1335,7 +1356,7 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
             self.failUnlessEqual(servermap.best_recoverable_version(), None)
             self.failIf(servermap.recoverable_versions())
             self.failIf(servermap.unrecoverable_versions())
-            self.failIf(servermap.all_peers())
+            self.failIf(servermap.all_servers())
         d.addCallback(_check_servermap)
         return d
 
@@ -1377,7 +1398,7 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
                 # no recoverable versions == not succeeding. The problem
                 # should be noted in the servermap's list of problems.
                 if substring:
-                    allproblems = [str(f) for f in servermap.problems]
+                    allproblems = [str(f) for f in servermap.get_problems()]
                     self.failUnlessIn(substring, "".join(allproblems))
                 return servermap
             if should_succeed:
@@ -1501,7 +1522,7 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
             f = res[0]
             self.failUnless(f.check(NotEnoughSharesError))
             self.failUnless("uncoordinated write" in str(f))
-        return self._test_corrupt_all(1, "ran out of peers",
+        return self._test_corrupt_all(1, "ran out of servers",
                                       corrupt_early=False,
                                       failure_checker=_check)
 
@@ -1539,11 +1560,11 @@ class Roundtrip(unittest.TestCase, testutil.ShouldFailMixin, PublishMixin):
                       shnums_to_corrupt=range(0, N-k))
         d.addCallback(lambda res: self.make_servermap())
         def _do_retrieve(servermap):
-            self.failUnless(servermap.problems)
+            self.failUnless(servermap.get_problems())
             self.failUnless("pubkey doesn't match fingerprint"
-                            in str(servermap.problems[0]))
+                            in str(servermap.get_problems()[0]))
             ver = servermap.best_recoverable_version()
-            r = Retrieve(self._fn, servermap, ver)
+            r = Retrieve(self._fn, self._storage_broker, servermap, ver)
             c = consumer.MemoryConsumer()
             return r.download(c)
         d.addCallback(_do_retrieve)
@@ -1719,6 +1740,33 @@ class Checker(unittest.TestCase, CheckerMixin, PublishMixin):
         d.addCallback(lambda ignored:
             self._fn.check(Monitor()))
         d.addCallback(self.check_bad, "test_check_mdmf_all_bad_sig")
+        return d
+
+    def test_verify_mdmf_all_bad_sharedata(self):
+        d = self.publish_mdmf()
+        # On 8 of the shares, corrupt the beginning of the share data.
+        # The signature check during the servermap update won't catch this.
+        d.addCallback(lambda ignored:
+            corrupt(None, self._storage, "share_data", range(8)))
+        # On 2 of the shares, corrupt the end of the share data.
+        # The signature check during the servermap update won't catch
+        # this either, and the retrieval process will have to process
+        # all of the segments before it notices.
+        d.addCallback(lambda ignored:
+            # the block hash tree comes right after the share data, so if we
+            # corrupt a little before the block hash tree, we'll corrupt in the
+            # last block of each share.
+            corrupt(None, self._storage, "block_hash_tree", [8, 9], -5))
+        d.addCallback(lambda ignored:
+            self._fn.check(Monitor(), verify=True))
+        # The verifier should flag the file as unhealthy, and should
+        # list all 10 shares as bad.
+        d.addCallback(self.check_bad, "test_verify_mdmf_all_bad_sharedata")
+        def _check_num_bad(r):
+            self.failIf(r.is_recoverable())
+            smap = r.get_servermap()
+            self.failUnlessEqual(len(smap.get_bad_shares()), 10)
+        d.addCallback(_check_num_bad)
         return d
 
     def test_check_all_bad_blocks(self):
@@ -1924,101 +1972,77 @@ class Repair(unittest.TestCase, PublishMixin, ShouldFailMixin):
         self.failUnlessEqual(old_shares, current_shares)
 
 
-    def test_unrepairable_0shares(self):
-        d = self.publish_one()
-        def _delete_all_shares(ign):
-            shares = self._storage._peers
-            for peerid in shares:
-                shares[peerid] = {}
-        d.addCallback(_delete_all_shares)
-        d.addCallback(lambda ign: self._fn.check(Monitor()))
-        d.addCallback(lambda check_results: self._fn.repair(check_results))
-        def _check(crr):
-            self.failUnlessEqual(crr.get_successful(), False)
-        d.addCallback(_check)
-        return d
-
-    def test_mdmf_unrepairable_0shares(self):
-        d = self.publish_mdmf()
-        def _delete_all_shares(ign):
-            shares = self._storage._peers
-            for peerid in shares:
-                shares[peerid] = {}
-        d.addCallback(_delete_all_shares)
-        d.addCallback(lambda ign: self._fn.check(Monitor()))
-        d.addCallback(lambda check_results: self._fn.repair(check_results))
-        d.addCallback(lambda crr: self.failIf(crr.get_successful()))
-        return d
-
-
-    def test_unrepairable_1share(self):
-        d = self.publish_one()
-        def _delete_all_shares(ign):
-            shares = self._storage._peers
-            for peerid in shares:
-                for shnum in list(shares[peerid]):
-                    if shnum > 0:
-                        del shares[peerid][shnum]
-        d.addCallback(_delete_all_shares)
-        d.addCallback(lambda ign: self._fn.check(Monitor()))
-        d.addCallback(lambda check_results: self._fn.repair(check_results))
-        def _check(crr):
-            self.failUnlessEqual(crr.get_successful(), False)
-        d.addCallback(_check)
-        return d
-
-    def test_mdmf_unrepairable_1share(self):
-        d = self.publish_mdmf()
-        def _delete_all_shares(ign):
-            shares = self._storage._peers
-            for peerid in shares:
-                for shnum in list(shares[peerid]):
-                    if shnum > 0:
-                        del shares[peerid][shnum]
-        d.addCallback(_delete_all_shares)
-        d.addCallback(lambda ign: self._fn.check(Monitor()))
-        d.addCallback(lambda check_results: self._fn.repair(check_results))
-        def _check(crr):
-            self.failUnlessEqual(crr.get_successful(), False)
-        d.addCallback(_check)
-        return d
-
-    def test_repairable_5shares(self):
-        d = self.publish_mdmf()
-        def _delete_all_shares(ign):
-            shares = self._storage._peers
-            for peerid in shares:
-                for shnum in list(shares[peerid]):
-                    if shnum > 4:
-                        del shares[peerid][shnum]
-        d.addCallback(_delete_all_shares)
-        d.addCallback(lambda ign: self._fn.check(Monitor()))
-        d.addCallback(lambda check_results: self._fn.repair(check_results))
-        def _check(crr):
-            self.failUnlessEqual(crr.get_successful(), True)
-        d.addCallback(_check)
-        return d
-
-    def test_mdmf_repairable_5shares(self):
-        d = self.publish_mdmf()
+    def _test_whether_repairable(self, publisher, nshares, expected_result):
+        d = publisher()
         def _delete_some_shares(ign):
             shares = self._storage._peers
             for peerid in shares:
                 for shnum in list(shares[peerid]):
-                    if shnum > 5:
+                    if shnum >= nshares:
                         del shares[peerid][shnum]
         d.addCallback(_delete_some_shares)
         d.addCallback(lambda ign: self._fn.check(Monitor()))
         def _check(cr):
             self.failIf(cr.is_healthy())
-            self.failUnless(cr.is_recoverable())
+            self.failUnlessEqual(cr.is_recoverable(), expected_result)
             return cr
         d.addCallback(_check)
         d.addCallback(lambda check_results: self._fn.repair(check_results))
-        def _check1(crr):
-            self.failUnlessEqual(crr.get_successful(), True)
-        d.addCallback(_check1)
+        d.addCallback(lambda crr: self.failUnlessEqual(crr.get_successful(), expected_result))
         return d
+
+    def test_unrepairable_0shares(self):
+        return self._test_whether_repairable(self.publish_one, 0, False)
+
+    def test_mdmf_unrepairable_0shares(self):
+        return self._test_whether_repairable(self.publish_mdmf, 0, False)
+
+    def test_unrepairable_1share(self):
+        return self._test_whether_repairable(self.publish_one, 1, False)
+
+    def test_mdmf_unrepairable_1share(self):
+        return self._test_whether_repairable(self.publish_mdmf, 1, False)
+
+    def test_repairable_5shares(self):
+        return self._test_whether_repairable(self.publish_one, 5, True)
+
+    def test_mdmf_repairable_5shares(self):
+        return self._test_whether_repairable(self.publish_mdmf, 5, True)
+
+    def _test_whether_checkandrepairable(self, publisher, nshares, expected_result):
+        """
+        Like the _test_whether_repairable tests, but invoking check_and_repair
+        instead of invoking check and then invoking repair.
+        """
+        d = publisher()
+        def _delete_some_shares(ign):
+            shares = self._storage._peers
+            for peerid in shares:
+                for shnum in list(shares[peerid]):
+                    if shnum >= nshares:
+                        del shares[peerid][shnum]
+        d.addCallback(_delete_some_shares)
+        d.addCallback(lambda ign: self._fn.check_and_repair(Monitor()))
+        d.addCallback(lambda crr: self.failUnlessEqual(crr.get_repair_successful(), expected_result))
+        return d
+
+    def test_unrepairable_0shares_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_one, 0, False)
+
+    def test_mdmf_unrepairable_0shares_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_mdmf, 0, False)
+
+    def test_unrepairable_1share_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_one, 1, False)
+
+    def test_mdmf_unrepairable_1share_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_mdmf, 1, False)
+
+    def test_repairable_5shares_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_one, 5, True)
+
+    def test_mdmf_repairable_5shares_checkandrepair(self):
+        return self._test_whether_checkandrepairable(self.publish_mdmf, 5, True)
 
 
     def test_merge(self):
@@ -2126,6 +2150,26 @@ class Repair(unittest.TestCase, PublishMixin, ShouldFailMixin):
             self.failIf(crr.get_repair_attempted())
             self.failIf(crr.get_post_repair_results().is_healthy())
         d.addCallback(_check_results)
+        return d
+
+    def test_repair_empty(self):
+        # bug 1689: delete one share of an empty mutable file, then repair.
+        # In the buggy version, the check that precedes the retrieve+publish
+        # cycle uses MODE_READ, instead of MODE_REPAIR, and fails to get the
+        # privkey that repair needs.
+        d = self.publish_empty_sdmf()
+        def _delete_one_share(ign):
+            shares = self._storage._peers
+            for peerid in shares:
+                for shnum in list(shares[peerid]):
+                    if shnum == 0:
+                        del shares[peerid][shnum]
+        d.addCallback(_delete_one_share)
+        d.addCallback(lambda ign: self._fn2.check(Monitor()))
+        d.addCallback(lambda check_results: self._fn2.repair(check_results))
+        def _check(crr):
+            self.failUnlessEqual(crr.get_successful(), True)
+        d.addCallback(_check)
         return d
 
 class DevNullDictionary(dict):
@@ -2487,7 +2531,7 @@ class Problems(GridTestMixin, unittest.TestCase, testutil.ShouldFailMixin):
             d.addCallback(lambda res:
                           self.shouldFail(NotEnoughSharesError,
                                           "test_retrieve_surprise",
-                                          "ran out of peers: have 0 of 1",
+                                          "ran out of servers: have 0 of 1",
                                           n.download_version,
                                           self.old_map,
                                           self.old_map.best_recoverable_version(),
@@ -2514,7 +2558,7 @@ class Problems(GridTestMixin, unittest.TestCase, testutil.ShouldFailMixin):
                 # stash the old state of the file
                 self.old_map = smap
                 # now shut down one of the servers
-                peer0 = list(smap.make_sharemap()[0])[0]
+                peer0 = list(smap.make_sharemap()[0])[0].get_serverid()
                 self.g.remove_server(peer0)
                 # then modify the file, leaving the old map untouched
                 log.msg("starting winning write")
@@ -2531,6 +2575,44 @@ class Problems(GridTestMixin, unittest.TestCase, testutil.ShouldFailMixin):
                                           MutableData("contents 2a"), self.old_map))
             return d
         d.addCallback(_created)
+        return d
+
+    def test_multiply_placed_shares(self):
+        self.basedir = "mutable/Problems/test_multiply_placed_shares"
+        self.set_up_grid()
+        nm = self.g.clients[0].nodemaker
+        d = nm.create_mutable_file(MutableData("contents 1"))
+        # remove one of the servers and reupload the file.
+        def _created(n):
+            self._node = n
+
+            servers = self.g.get_all_serverids()
+            self.ss = self.g.remove_server(servers[len(servers)-1])
+
+            new_server = self.g.make_server(len(servers)-1)
+            self.g.add_server(len(servers)-1, new_server)
+
+            return self._node.download_best_version()
+        d.addCallback(_created)
+        d.addCallback(lambda data: MutableData(data))
+        d.addCallback(lambda data: self._node.overwrite(data))
+
+        # restore the server we removed earlier, then download+upload
+        # the file again
+        def _overwritten(ign):
+            self.g.add_server(len(self.g.servers_by_number), self.ss)
+            return self._node.download_best_version()
+        d.addCallback(_overwritten)
+        d.addCallback(lambda data: MutableData(data))
+        d.addCallback(lambda data: self._node.overwrite(data))
+        d.addCallback(lambda ignored:
+            self._node.get_servermap(MODE_CHECK))
+        def _overwritten_again(smap):
+            # Make sure that all shares were updated by making sure that
+            # there aren't any other versions in the sharemap.
+            self.failUnlessEqual(len(smap.recoverable_versions()), 1)
+            self.failUnlessEqual(len(smap.unrecoverable_versions()), 0)
+        d.addCallback(_overwritten_again)
         return d
 
     def test_bad_server(self):
@@ -2785,7 +2867,7 @@ class Problems(GridTestMixin, unittest.TestCase, testutil.ShouldFailMixin):
         # probably because the servers are queried in a fixed order. So I'm
         # ok with relying upon that.
         d = self.shouldFail(NotEnoughSharesError, "test #1654 share corruption",
-                            "ran out of peers",
+                            "ran out of servers",
                             n.download_best_version)
         return d
 

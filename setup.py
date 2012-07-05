@@ -1,9 +1,10 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
+u"Tahoe-LAFS does not run under Python 3. Please use a version of Python between 2.4.4 and 2.7.x inclusive."
 
 # Tahoe-LAFS -- secure, distributed storage grid
 #
-# Copyright © 2008-2011 Allmydata, Inc.
+# Copyright © 2006-2012 The Tahoe-LAFS Software Foundation
 #
 # This file is part of Tahoe-LAFS.
 #
@@ -166,7 +167,9 @@ tests_require=[]
 class Trial(Command):
     description = "run trial (use 'bin%stahoe debug trial' for the full set of trial options)" % (os.sep,)
     # This is just a subset of the most useful options, for compatibility.
-    user_options = [ ("rterrors", "e", "Print out tracebacks as soon as they occur."),
+    user_options = [ ("no-rterrors", None, "Don't print out tracebacks as they occur."),
+                     ("rterrors", "e", "Print out tracebacks as they occur (default, so ignored)."),
+                     ("until-failure", "u", "Repeat a test (specified by -s) until it fails."),
                      ("reporter=", None, "The reporter to use for this test run."),
                      ("suite=", "s", "Specify the test suite."),
                      ("quiet", None, "Don't display version numbers and paths of Tahoe dependencies."),
@@ -174,6 +177,8 @@ class Trial(Command):
 
     def initialize_options(self):
         self.rterrors = False
+        self.no_rterrors = False
+        self.until_failure = False
         self.reporter = None
         self.suite = "allmydata"
         self.quiet = False
@@ -186,8 +191,12 @@ class Trial(Command):
         if not self.quiet:
             args.append('--version-and-path')
         args += ['debug', 'trial']
-        if self.rterrors:
+        if self.rterrors and self.no_rterrors:
+            raise AssertionError("--rterrors and --no-rterrors conflict.")
+        if not self.no_rterrors:
             args.append('--rterrors')
+        if self.until_failure:
+            args.append('--until-failure')
         if self.reporter:
             args.append('--reporter=' + self.reporter)
         if self.suite:
@@ -422,7 +431,11 @@ class MySdist(sdist.sdist):
                 return fullname + "-SUMO"
             self.distribution.get_fullname = get_fullname
 
-        return sdist.sdist.make_distribution(self)
+        try:
+            old_mask = os.umask(int("022", 8))
+            return sdist.sdist.make_distribution(self)
+        finally:
+            os.umask(old_mask)
 
 
 setup_args = {}
@@ -453,13 +466,15 @@ setup(name=APPNAME,
                 'allmydata.test',
                 'allmydata.util',
                 'allmydata.web',
+                'allmydata.web.static',
                 'allmydata.windows',
                 'buildtest'],
       classifiers=trove_classifiers,
       test_suite="allmydata.test",
       install_requires=install_requires,
       tests_require=tests_require,
-      package_data={"allmydata.web": ["*.xhtml", "*.js", "*.png", "*.css"],
+      package_data={"allmydata.web": ["*.xhtml"],
+                    "allmydata.web.static": ["*.js", "*.png", "*.css"],
                     },
       setup_requires=setup_requires,
       entry_points = { 'console_scripts': [ 'tahoe = allmydata.scripts.runner:run' ] },

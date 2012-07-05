@@ -1,0 +1,29 @@
+--- docs/performance.rst	2012-06-17 19:38:52.624294554 -0300
++++ docs/performance.rst	2012-06-17 19:38:52.990959790 -0300
+@@ -202,8 +202,24 @@
+ 
+ notes: To verify a file, Tahoe-LAFS downloads all of the ciphertext shares
+ that were originally uploaded to the grid and integrity checks them. This is
+-(for well-behaved grids) more expensive than downloading an A-byte file,
+-since only a fraction of these shares are necessary to recover the file.
++(for grids with good redundancy) more expensive than downloading an A-byte
++file, since only a fraction of these shares would be necessary to recover the
++file.
++
++Verifying an A-byte file (mutable)
++==================================
++
++cpu: ~N/K*A
++
++network: N/K*A
++
++memory footprint: N/K*A
++
++notes: To verify a file, Tahoe-LAFS downloads all of the ciphertext shares
++that were originally uploaded to the grid and integrity checks them. This is
++(for grids with good redundancy) more expensive than downloading an A-byte
++file, since only a fraction of these shares would be necessary to recover the
++file.
+ 
+ Repairing an ``A``-byte file (mutable or immutable)
+ ===================================================

@@ -325,6 +325,13 @@ class Server(unittest.TestCase):
         sv1 = ver['http://allmydata.org/tahoe/protocols/storage/v1']
         self.failUnless(sv1.get('prevents-read-past-end-of-share-data'), sv1)
 
+    def test_declares_maximum_share_sizes(self):
+        ss = self.create("test_declares_maximum_share_sizes")
+        ver = ss.remote_get_version()
+        sv1 = ver['http://allmydata.org/tahoe/protocols/storage/v1']
+        self.failUnlessIn('maximum-immutable-share-size', sv1)
+        self.failUnlessIn('maximum-mutable-share-size', sv1)
+
     def allocate(self, ss, storage_index, sharenums, size, canary=None):
         renew_secret = hashutil.tagged_hash("blah", "%d" % self._lease_secret.next())
         cancel_secret = hashutil.tagged_hash("blah", "%d" % self._lease_secret.next())
@@ -3966,13 +3973,16 @@ class WebStatus(unittest.TestCase, pollmixin.PollMixin, WebRenderingMixin):
     def test_status(self):
         basedir = "storage/WebStatus/status"
         fileutil.make_dirs(basedir)
-        ss = StorageServer(basedir, "\x00" * 20)
+        nodeid = "\x00" * 20
+        ss = StorageServer(basedir, nodeid)
         ss.setServiceParent(self.s)
-        w = StorageStatus(ss)
+        w = StorageStatus(ss, "nickname")
         d = self.render1(w)
         def _check_html(html):
             self.failUnlessIn("<h1>Storage Server Status</h1>", html)
             s = remove_tags(html)
+            self.failUnlessIn("Server Nickname: nickname", s)
+            self.failUnlessIn("Server Nodeid: %s"  % base32.b2a(nodeid), s)
             self.failUnlessIn("Accepting new shares: Yes", s)
             self.failUnlessIn("Reserved space: - 0 B (0)", s)
         d.addCallback(_check_html)

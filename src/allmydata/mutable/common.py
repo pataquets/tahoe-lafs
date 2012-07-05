@@ -1,5 +1,4 @@
 
-from allmydata.util import idlib
 from allmydata.util.spans import DataSpans
 
 MODE_CHECK = "MODE_CHECK" # query all peers
@@ -7,11 +6,18 @@ MODE_ANYTHING = "MODE_ANYTHING" # one recoverable version
 MODE_WRITE = "MODE_WRITE" # replace all shares, probably.. not for initial
                           # creation
 MODE_READ = "MODE_READ"
+MODE_REPAIR = "MODE_REPAIR" # query all peers, get the privkey
 
 class NotWriteableError(Exception):
     pass
 
-class NeedMoreDataError(Exception):
+class BadShareError(Exception):
+    """This represents an error discovered in a particular share, during
+    retrieve, from which we can recover by using some other share. This does
+    *not* include local coding errors.
+    """
+
+class NeedMoreDataError(BadShareError):
     def __init__(self, needed_bytes, encprivkey_offset, encprivkey_length):
         Exception.__init__(self)
         self.needed_bytes = needed_bytes # up through EOF
@@ -41,19 +47,17 @@ class NotEnoughServersError(Exception):
         Exception.__init__(self, why, first_error)
         self.first_error = first_error
 
-class CorruptShareError(Exception):
-    def __init__(self, peerid, shnum, reason):
-        self.args = (peerid, shnum, reason)
-        self.peerid = peerid
+class CorruptShareError(BadShareError):
+    def __init__(self, server, shnum, reason):
+        self.args = (server, shnum, reason)
+        self.server = server
         self.shnum = shnum
         self.reason = reason
     def __str__(self):
-        short_peerid = idlib.nodeid_b2a(self.peerid)[:8]
-        return "<CorruptShareError peerid=%s shnum[%d]: %s" % (short_peerid,
-                                                               self.shnum,
-                                                               self.reason)
+        return "<CorruptShareError server=%s shnum[%d]: %s" % \
+               (self.server.get_name(), self.shnum, self.reason)
 
-class UnknownVersionError(Exception):
+class UnknownVersionError(BadShareError):
     """The share we received was of a version we don't recognize."""
 
 class ResponseCache:

@@ -185,19 +185,22 @@ class MutableFileNode:
     def _read_from_cache(self, verinfo, shnum, offset, length):
         return self._cache.read(verinfo, shnum, offset, length)
 
-    def get_write_enabler(self, peerid):
-        assert len(peerid) == 20
-        return hashutil.ssk_write_enabler_hash(self._writekey, peerid)
-    def get_renewal_secret(self, peerid):
-        assert len(peerid) == 20
+    def get_write_enabler(self, server):
+        seed = server.get_foolscap_write_enabler_seed()
+        assert len(seed) == 20
+        return hashutil.ssk_write_enabler_hash(self._writekey, seed)
+    def get_renewal_secret(self, server):
         crs = self._secret_holder.get_renewal_secret()
         frs = hashutil.file_renewal_secret_hash(crs, self._storage_index)
-        return hashutil.bucket_renewal_secret_hash(frs, peerid)
-    def get_cancel_secret(self, peerid):
-        assert len(peerid) == 20
+        lease_seed = server.get_lease_seed()
+        assert len(lease_seed) == 20
+        return hashutil.bucket_renewal_secret_hash(frs, lease_seed)
+    def get_cancel_secret(self, server):
         ccs = self._secret_holder.get_cancel_secret()
         fcs = hashutil.file_cancel_secret_hash(ccs, self._storage_index)
-        return hashutil.bucket_cancel_secret_hash(fcs, peerid)
+        lease_seed = server.get_lease_seed()
+        assert len(lease_seed) == 20
+        return hashutil.bucket_cancel_secret_hash(fcs, lease_seed)
 
     def get_writekey(self):
         return self._writekey
@@ -305,9 +308,10 @@ class MutableFileNode:
     #################################
     # IRepairable
 
-    def repair(self, check_results, force=False):
+    def repair(self, check_results, force=False, monitor=None):
         assert ICheckResults(check_results)
-        r = Repairer(self, check_results)
+        r = Repairer(self, check_results, self._storage_broker,
+                     self._history, monitor)
         d = r.start(force)
         return d
 
@@ -387,7 +391,7 @@ class MutableFileNode:
         recoverable version that I can find in there.
         """
         # XXX: wording ^^^^
-        if servermap and servermap.last_update_mode == mode:
+        if servermap and servermap.get_last_update()[0] == mode:
             d = defer.succeed(servermap)
         else:
             d = self._get_servermap(mode)
@@ -639,7 +643,7 @@ class MutableFileNode:
     #def set_version(self, version):
         # I can be set in two ways:
         #  1. When the node is created.
-        #  2. (for an existing share) when the Servermap is updated 
+        #  2. (for an existing share) when the Servermap is updated
         #     before I am read.
     #    assert version in (MDMF_VERSION, SDMF_VERSION)
     #    self._protocol_version = version
@@ -780,7 +784,7 @@ class MutableFileVersion:
 
     def _overwrite(self, new_contents):
         assert IMutableUploadable.providedBy(new_contents)
-        assert self._servermap.last_update_mode == MODE_WRITE
+        assert self._servermap.get_last_update()[0] == MODE_WRITE
 
         return self._upload(new_contents)
 
@@ -874,7 +878,7 @@ class MutableFileVersion:
         I attempt to apply a modifier to the contents of the mutable
         file.
         """
-        assert self._servermap.last_update_mode != MODE_READ
+        assert self._servermap.get_last_update()[0] != MODE_READ
 
         # download_to_data is serialized, so we have to call this to
         # avoid deadlock.
@@ -974,7 +978,8 @@ class MutableFileVersion:
         """
         I am the serialized companion of read.
         """
-        r = Retrieve(self._node, self._servermap, self._version, fetch_privkey)
+        r = Retrieve(self._node, self._storage_broker, self._servermap,
+                     self._version, fetch_privkey)
         if self._history:
             self._history.notify_retrieve(r.get_status())
         d = r.download(consumer, offset, size)
@@ -1049,7 +1054,7 @@ class MutableFileVersion:
         log.msg("got %d old segments, %d new segments" % \
                         (num_old_segments, num_new_segments))
 
-        # We do a whole file re-encode if the file is an SDMF file. 
+        # We do a whole file re-encode if the file is an SDMF file.
         if self._version[2]: # version[2] == SDMF salt, which MDMF lacks
             log.msg("doing re-encode instead of in-place update")
             return self._do_modify_update(data, offset)
@@ -1122,7 +1127,8 @@ class MutableFileVersion:
         used by the new uploadable. I return a Deferred that fires with
         the segments.
         """
-        r = Retrieve(self._node, self._servermap, self._version)
+        r = Retrieve(self._node, self._storage_broker, self._servermap,
+                     self._version)
         # decode: takes in our blocks and salts from the servermap,
         # returns a Deferred that fires with the corresponding plaintext
         # segments. Does not download -- simply takes advantage of
@@ -1138,6 +1144,7 @@ class MutableFileVersion:
         blockhashes = {} # shnum -> blockhash tree
         for (shnum, original_data) in update_data.iteritems():
             data = [d[1] for d in original_data if d[0] == self._version]
+            # data is [(blockhashes,start,end)..]
 
             # Every data entry in our list should now be share shnum for
             # a particular version of the mutable file, so all of the
@@ -1145,8 +1152,9 @@ class MutableFileVersion:
             datum = data[0]
             assert [x for x in data if x != datum] == []
 
+            # datum is (blockhashes,start,end)
             blockhashes[shnum] = datum[0]
-            start_segments[shnum] = datum[1]
+            start_segments[shnum] = datum[1] # (block,salt) bytestrings
             end_segments[shnum] = datum[2]
 
         d1 = r.decode(start_segments, self._start_segment)

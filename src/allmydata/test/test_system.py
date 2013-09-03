@@ -1,6 +1,7 @@
-from base64 import b32encode
-import os, sys, time, simplejson
+
+import os, re, sys, time, simplejson
 from cStringIO import StringIO
+
 from twisted.trial import unittest
 from twisted.internet import defer
 from twisted.internet import threads # CLI tests use deferToThread
@@ -125,7 +126,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             return d1
         d.addCallback(_do_upload)
         def _upload_done(results):
-            theuri = results.uri
+            theuri = results.get_uri()
             log.msg("upload finished: uri is %s" % (theuri,))
             self.uri = theuri
             assert isinstance(self.uri, str), self.uri
@@ -227,7 +228,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             u = upload.Data(HELPER_DATA, convergence=convergence)
             d = self.extra_node.upload(u)
             def _uploaded(results):
-                n = self.clients[1].create_node_from_uri(results.uri)
+                n = self.clients[1].create_node_from_uri(results.get_uri())
                 return download_to_data(n)
             d.addCallback(_uploaded)
             def _check(newdata):
@@ -241,7 +242,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             u.debug_stash_RemoteEncryptedUploadable = True
             d = self.extra_node.upload(u)
             def _uploaded(results):
-                n = self.clients[1].create_node_from_uri(results.uri)
+                n = self.clients[1].create_node_from_uri(results.get_uri())
                 return download_to_data(n)
             d.addCallback(_uploaded)
             def _check(newdata):
@@ -326,13 +327,13 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
             d.addCallback(lambda res: self.extra_node.upload(u2))
 
             def _uploaded(results):
-                cap = results.uri
+                cap = results.get_uri()
                 log.msg("Second upload complete", level=log.NOISY,
                         facility="tahoe.test.test_system")
 
                 # this is really bytes received rather than sent, but it's
                 # convenient and basically measures the same thing
-                bytes_sent = results.ciphertext_fetched
+                bytes_sent = results.get_ciphertext_fetched()
                 self.failUnless(isinstance(bytes_sent, (int, long)), bytes_sent)
 
                 # We currently don't support resumption of upload if the data is
@@ -789,7 +790,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
                 newappverstr = "%s: %s" % (allmydata.__appname__, altverstr)
 
                 self.failUnless((appverstr in res) or (newappverstr in res), (appverstr, newappverstr, res))
-                self.failUnless("Announcement Summary: storage: 5, stub_client: 5" in res)
+                self.failUnless("Announcement Summary: storage: 5" in res)
                 self.failUnless("Subscription Summary: storage: 5" in res)
                 self.failUnless("tahoe.css" in res)
             except unittest.FailTest:
@@ -810,9 +811,9 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
                 self.failUnlessEqual(data["subscription_summary"],
                                      {"storage": 5})
                 self.failUnlessEqual(data["announcement_summary"],
-                                     {"storage": 5, "stub_client": 5})
+                                     {"storage": 5})
                 self.failUnlessEqual(data["announcement_distinct_hosts"],
-                                     {"storage": 1, "stub_client": 1})
+                                     {"storage": 1})
             except unittest.FailTest:
                 print
                 print "GET %s?t=json output was:" % self.introweb_url
@@ -1096,16 +1097,15 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         public = "uri/" + self._root_directory_uri
         d = getPage(base)
         def _got_welcome(page):
-            # XXX This test is oversensitive to formatting
-            expected = "Connected to <span>%d</span>\n     of <span>%d</span> known storage servers:" % (self.numclients, self.numclients)
-            self.failUnless(expected in page,
-                            "I didn't see the right 'connected storage servers'"
-                            " message in: %s" % page
-                            )
-            expected = "<th>My nodeid:</th> <td class=\"nodeid mine data-chars\">%s</td>" % (b32encode(self.clients[0].nodeid).lower(),)
-            self.failUnless(expected in page,
-                            "I didn't see the right 'My nodeid' message "
-                            "in: %s" % page)
+            html = page.replace('\n', ' ')
+            connected_re = r'Connected to <span>%d</span>\s*of <span>%d</span> known storage servers' % (self.numclients, self.numclients)
+            self.failUnless(re.search(connected_re, html),
+                            "I didn't see the right '%s' message in:\n%s" % (connected_re, page))
+            # nodeids/tubids don't have any regexp-special characters
+            nodeid_re = r'<th>Node ID:</th>\s*<td title="TubID: %s">%s</td>' % (
+                self.clients[0].get_long_tubid(), self.clients[0].get_long_nodeid())
+            self.failUnless(re.search(nodeid_re, html),
+                            "I didn't see the right '%s' message in:\n%s" % (nodeid_re, page))
             self.failUnless("Helper: 0 active uploads" in page)
         d.addCallback(_got_welcome)
         d.addCallback(self.log, "done with _got_welcome")
@@ -1113,9 +1113,9 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         # get the welcome page from the node that uses the helper too
         d.addCallback(lambda res: getPage(self.helper_webish_url))
         def _got_welcome_helper(page):
-            self.failUnless("Connected to helper?: <span>yes</span>" in page,
-                            page)
-            self.failUnless("Not running helper" in page)
+            html = page.replace('\n', ' ')
+            self.failUnless(re.search(r'<div class="status-indicator connected-yes"></div>\s*<div>Helper</div>', html), page)
+            self.failUnlessIn("Not running helper", page)
         d.addCallback(_got_welcome_helper)
 
         d.addCallback(lambda res: getPage(base + public))
@@ -1273,7 +1273,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         # itself) doesn't explode when you ask for its status
         d.addCallback(lambda res: getPage(self.helper_webish_url + "status/"))
         def _got_non_helper_status(res):
-            self.failUnless("Upload and Download Status" in res)
+            self.failUnlessIn("Recent and Active Operations", res)
         d.addCallback(_got_non_helper_status)
 
         # or for helper status with t=json
@@ -1287,8 +1287,8 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         # see if the statistics page exists
         d.addCallback(lambda res: self.GET("statistics"))
         def _got_stats(res):
-            self.failUnless("Node Statistics" in res)
-            self.failUnless("  'downloader.files_downloaded': 5," in res, res)
+            self.failUnlessIn("Operational Statistics", res)
+            self.failUnlessIn("  'downloader.files_downloaded': 5,", res)
         d.addCallback(_got_stats)
         d.addCallback(lambda res: self.GET("statistics?t=json"))
         def _got_stats_json(res):
@@ -1441,7 +1441,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
 
         def run(ignored, verb, *args, **kwargs):
             stdin = kwargs.get("stdin", "")
-            newargs = [verb] + nodeargs + list(args)
+            newargs = nodeargs + [verb] + list(args)
             return self._run_cli(newargs, stdin=stdin)
 
         def _check_ls((out,err), expected_children, unexpected_children=[]):
@@ -1746,7 +1746,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         # tahoe_ls doesn't currently handle the error correctly: it tries to
         # JSON-parse a traceback.
 ##         def _ls_missing(res):
-##             argv = ["ls"] + nodeargs + ["bogus"]
+##             argv = nodeargs + ["ls", "bogus"]
 ##             return self._run_cli(argv)
 ##         d.addCallback(_ls_missing)
 ##         def _check_ls_missing((out,err)):
@@ -1770,7 +1770,7 @@ class SystemTest(SystemTestMixin, RunBinTahoeMixin, unittest.TestCase):
         def _run_in_subprocess(ignored, verb, *args, **kwargs):
             stdin = kwargs.get("stdin")
             env = kwargs.get("env")
-            newargs = [verb, "--node-directory", self.getdir("client0")] + list(args)
+            newargs = ["--node-directory", self.getdir("client0"), verb] + list(args)
             return self.run_bintahoe(newargs, stdin=stdin, env=env)
 
         def _check_succeeded(res, check_stderr=True):

@@ -209,14 +209,43 @@ class Node(service.MultiService):
         # TODO: merge this with allmydata.get_package_versions
         return dict(app_versions.versions)
 
+    def get_config_from_file(self, name, required=False):
+        """Get the (string) contents of a config file, or None if the file
+        did not exist. If required=True, raise an exception rather than
+        returning None. Any leading or trailing whitespace will be stripped
+        from the data."""
+        fn = os.path.join(self.basedir, name)
+        try:
+            return fileutil.read(fn).strip()
+        except EnvironmentError:
+            if not required:
+                return None
+            raise
+
     def write_private_config(self, name, value):
         """Write the (string) contents of a private config file (which is a
         config file that resides within the subdirectory named 'private'), and
-        return it. Any leading or trailing whitespace will be stripped from
-        the data.
+        return it.
         """
         privname = os.path.join(self.basedir, "private", name)
-        open(privname, "w").write(value.strip())
+        open(privname, "w").write(value)
+
+    def get_private_config(self, name, default=_None):
+        """Read the (string) contents of a private config file (which is a
+        config file that resides within the subdirectory named 'private'),
+        and return it. Return a default, or raise an error if one was not
+        given.
+        """
+        privname = os.path.join(self.basedir, "private", name)
+        try:
+            return fileutil.read(privname)
+        except EnvironmentError:
+            if os.path.exists(privname):
+                raise
+            if default is _None:
+                raise MissingConfigEntry("The required configuration file %s is missing."
+                                         % (quote_output(privname),))
+            return default
 
     def get_or_create_private_config(self, name, default=_None):
         """Try to get the (string) contents of a private config file (which
@@ -250,7 +279,7 @@ class Node(service.MultiService):
         """Write a string to a config file."""
         fn = os.path.join(self.basedir, name)
         try:
-            open(fn, mode).write(value)
+            fileutil.write(fn, value, mode)
         except EnvironmentError, e:
             self.log("Unable to write config file '%s'" % fn)
             self.log(e)
@@ -347,7 +376,7 @@ class Node(service.MultiService):
         portnum = l.getPortnum()
         # record which port we're listening on, so we can grab the same one
         # next time
-        open(self._portnumfile, "w").write("%d\n" % portnum)
+        fileutil.write_atomically(self._portnumfile, "%d\n" % portnum, mode="")
 
         base_location = ",".join([ "%s:%d" % (addr, portnum)
                                    for addr in local_addresses ])

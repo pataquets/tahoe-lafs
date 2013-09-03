@@ -1,4 +1,4 @@
-import os.path, re, urllib, time
+import os.path, re, urllib, time, cgi
 import simplejson
 from StringIO import StringIO
 
@@ -11,11 +11,12 @@ from twisted.python import failure, log
 
 from foolscap.api import fireEventually, flushEventualQueue
 
+from nevow.util import escapeToXML
 from nevow import rend
 
 from allmydata import interfaces, uri, webish, dirnode
 from allmydata.storage.shares import get_share_file
-from allmydata.storage_client import StorageFarmBroker
+from allmydata.storage_client import StorageFarmBroker, StubServer
 from allmydata.immutable import upload
 from allmydata.immutable.downloader.status import DownloadStatus
 from allmydata.dirnode import DirectoryNode
@@ -79,33 +80,40 @@ class FakeNodeMaker(NodeMaker):
 
 class FakeUploader(service.Service):
     name = "uploader"
+    helper_furl = None
+    helper_connected = False
+
     def upload(self, uploadable):
         d = uploadable.get_size()
         d.addCallback(lambda size: uploadable.read(size))
         def _got_data(datav):
             data = "".join(datav)
             n = create_chk_filenode(data, self.all_contents)
-            results = upload.UploadResults()
-            results.uri = n.get_uri()
-            return results
+            ur = upload.UploadResults(file_size=len(data),
+                                      ciphertext_fetched=0,
+                                      preexisting_shares=0,
+                                      pushed_shares=10,
+                                      sharemap={},
+                                      servermap={},
+                                      timings={},
+                                      uri_extension_data={},
+                                      uri_extension_hash="fake",
+                                      verifycapstr="fakevcap")
+            ur.set_uri(n.get_uri())
+            return ur
         d.addCallback(_got_data)
         return d
-    def get_helper_info(self):
-        return (None, False)
 
-class FakeIServer:
-    def __init__(self, binaryserverid):
-        self.binaryserverid = binaryserverid
-    def get_name(self): return "short"
-    def get_longname(self): return "long"
-    def get_serverid(self): return self.binaryserverid
+    def get_helper_info(self):
+        return (self.helper_furl, self.helper_connected)
+
 
 def build_one_ds():
     ds = DownloadStatus("storage_index", 1234)
     now = time.time()
 
-    serverA = FakeIServer(hashutil.tagged_hash("foo", "serverid_a")[:20])
-    serverB = FakeIServer(hashutil.tagged_hash("foo", "serverid_b")[:20])
+    serverA = StubServer(hashutil.tagged_hash("foo", "serverid_a")[:20])
+    serverB = StubServer(hashutil.tagged_hash("foo", "serverid_b")[:20])
     storage_index = hashutil.storage_index_hash("SI")
     e0 = ds.add_segment_request(0, now)
     e0.activate(now+0.5)
@@ -163,6 +171,59 @@ class FakeHistory:
     def list_all_helper_statuses(self):
         return []
 
+class FakeDisplayableServer(StubServer):
+    def __init__(self, serverid, nickname):
+        StubServer.__init__(self, serverid)
+        self.announcement = {"my-version": "allmydata-tahoe-fake",
+                             "service-name": "storage",
+                             "nickname": nickname}
+    def is_connected(self):
+        return True
+    def get_permutation_seed(self):
+        return ""
+    def get_remote_host(self):
+        return ""
+    def get_last_loss_time(self):
+        return None
+    def get_announcement_time(self):
+        return None
+    def get_announcement(self):
+        return self.announcement
+    def get_nickname(self):
+        return self.announcement["nickname"]
+
+class FakeBucketCounter(object):
+    def get_state(self):
+        return {"last-complete-bucket-count": 0}
+    def get_progress(self):
+        return {"estimated-time-per-cycle": 0,
+                "cycle-in-progress": False,
+                "remaining-wait-time": 0}
+
+class FakeLeaseChecker(object):
+    def __init__(self):
+        self.expiration_enabled = False
+        self.mode = "age"
+        self.override_lease_duration = None
+        self.sharetypes_to_expire = {}
+    def get_state(self):
+        return {"history": None}
+    def get_progress(self):
+        return {"estimated-time-per-cycle": 0,
+                "cycle-in-progress": False,
+                "remaining-wait-time": 0}
+
+class FakeStorageServer(service.MultiService):
+    name = 'storage'
+    def __init__(self, nodeid, nickname):
+        service.MultiService.__init__(self)
+        self.my_nodeid = nodeid
+        self.nickname = nickname
+        self.bucket_counter = FakeBucketCounter()
+        self.lease_checker = FakeLeaseChecker()
+    def get_stats(self):
+        return {"storage_server.accepting_immutable_shares": False}
+
 class FakeClient(Client):
     def __init__(self):
         # don't upcall to Client.__init__, since we only want to initialize a
@@ -170,13 +231,16 @@ class FakeClient(Client):
         service.MultiService.__init__(self)
         self.all_contents = {}
         self.nodeid = "fake_nodeid"
-        self.nickname = "fake_nickname"
+        self.nickname = u"fake_nickname \u263A"
         self.introducer_furl = "None"
         self.stats_provider = FakeStatsProvider()
         self._secret_holder = SecretHolder("lease secret", "convergence secret")
         self.helper = None
         self.convergence = "some random string"
         self.storage_broker = StorageFarmBroker(None, permute_peers=True)
+        # fake knowledge of another server
+        self.storage_broker.test_add_server("other_nodeid",
+                                            FakeDisplayableServer("other_nodeid", u"other_nickname \u263B"))
         self.introducer_client = None
         self.history = FakeHistory()
         self.uploader = FakeUploader()
@@ -188,6 +252,12 @@ class FakeClient(Client):
                                        None, None, None)
         self.nodemaker.all_contents = self.all_contents
         self.mutable_file_default = SDMF_VERSION
+        self.addService(FakeStorageServer(self.nodeid, self.nickname))
+
+    def get_long_nodeid(self):
+        return "v0-nodeid"
+    def get_long_tubid(self):
+        return "tubid"
 
     def startService(self):
         return service.MultiService.startService(self)
@@ -249,16 +319,27 @@ class WebMixin(object):
             self._sub_uri = sub_uri
             foo.set_uri(u"sub", sub_uri, sub_uri)
             sub = self.s.create_node_from_uri(sub_uri)
+            self._sub_node = sub
 
             _ign, n, blocking_uri = self.makefile(1)
             foo.set_uri(u"blockingfile", blocking_uri, blocking_uri)
+
+            # filenode to test for html encoding issues
+            self._htmlname_unicode = u"<&weirdly'named\"file>>>_<iframe />.txt"
+            self._htmlname_raw = self._htmlname_unicode.encode('utf-8')
+            self._htmlname_urlencoded = urllib.quote(self._htmlname_raw, '')
+            self._htmlname_escaped = escapeToXML(self._htmlname_raw)
+            self._htmlname_escaped_attr = cgi.escape(self._htmlname_raw, quote=True)
+            self._htmlname_escaped_double = escapeToXML(cgi.escape(self._htmlname_raw, quote=True))
+            self.HTMLNAME_CONTENTS, n, self._htmlname_txt_uri = self.makefile(0)
+            foo.set_uri(self._htmlname_unicode, self._htmlname_txt_uri, self._htmlname_txt_uri)
 
             unicode_filename = u"n\u00fc.txt" # n u-umlaut . t x t
             # ok, unicode calls it LATIN SMALL LETTER U WITH DIAERESIS but I
             # still think of it as an umlaut
             foo.set_uri(unicode_filename, self._bar_txt_uri, self._bar_txt_uri)
 
-            _ign, n, baz_file = self.makefile(2)
+            self.SUBBAZ_CONTENTS, n, baz_file = self.makefile(2)
             self._baz_file_uri = baz_file
             sub.set_uri(u"baz.txt", baz_file, baz_file)
 
@@ -277,6 +358,7 @@ class WebMixin(object):
             # public/foo/baz.txt
             # public/foo/quux.txt
             # public/foo/blockingfile
+            # public/foo/<&weirdly'named\"file>>>_<iframe />.txt
             # public/foo/empty/
             # public/foo/sub/
             # public/foo/sub/baz.txt
@@ -315,6 +397,9 @@ class WebMixin(object):
 
     def failUnlessIsBazDotTxt(self, res):
         self.failUnlessReallyEqual(res, self.BAZ_CONTENTS, res)
+
+    def failUnlessIsSubBazDotTxt(self, res):
+        self.failUnlessReallyEqual(res, self.SUBBAZ_CONTENTS, res)
 
     def failUnlessIsBarJSON(self, res):
         data = simplejson.loads(res)
@@ -359,8 +444,8 @@ class WebMixin(object):
 
         kidnames = sorted([unicode(n) for n in data[1]["children"]])
         self.failUnlessEqual(kidnames,
-                             [u"bar.txt", u"baz.txt", u"blockingfile",
-                              u"empty", u"n\u00fc.txt", u"quux.txt", u"sub"])
+                             [self._htmlname_unicode, u"bar.txt", u"baz.txt",
+                              u"blockingfile", u"empty", u"n\u00fc.txt", u"quux.txt", u"sub"])
         kids = dict( [(unicode(name),value)
                       for (name,value)
                       in data[1]["children"].iteritems()] )
@@ -483,8 +568,10 @@ class WebMixin(object):
                 res.trap(expected_failure)
                 if substring:
                     self.failUnlessIn(substring, str(res),
-                                      "'%s' not in '%s' for test '%s'" % \
-                                      (substring, str(res), which))
+                                      "'%s' not in '%s' (response is '%s') for test '%s'" % \
+                                      (substring, str(res),
+                                       getattr(res.value, "response", ""),
+                                       which))
                 if response_substring:
                     self.failUnlessIn(response_substring, res.value.response,
                                       "'%s' not in '%s' for test '%s'" % \
@@ -520,9 +607,15 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
     def test_welcome(self):
         d = self.GET("/")
         def _check(res):
-            self.failUnlessIn('Welcome to Tahoe-LAFS', res)
+            self.failUnlessIn('<title>Tahoe-LAFS - Welcome</title>', res)
             self.failUnlessIn(FAVICON_MARKUP, res)
-            self.failUnlessIn('href="https://tahoe-lafs.org/"', res)
+            self.failUnlessIn('<a href="status">Recent and Active Operations</a>', res)
+            self.failUnlessIn('<a href="statistics">Operational Statistics</a>', res)
+            self.failUnlessIn('<input type="hidden" name="t" value="report-incident" />', res)
+            res_u = res.decode('utf-8')
+            self.failUnlessIn(u'<td>fake_nickname \u263A</td>', res_u)
+            self.failUnlessIn(u'<div class="nickname">other_nickname \u263B</div>', res_u)
+            self.failUnlessIn(u'\u00A9 <a href="https://tahoe-lafs.org/">Tahoe-LAFS Software Foundation', res_u)
 
             self.s.basedir = 'web/test_welcome'
             fileutil.make_dirs("web/test_welcome")
@@ -531,88 +624,102 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(_check)
         return d
 
-    def test_provisioning(self):
-        d = self.GET("/provisioning/")
-        def _check(res):
-            self.failUnlessIn('Provisioning Tool', res)
-            self.failUnlessIn(FAVICON_MARKUP, res)
+    def test_introducer_status(self):
+        class MockIntroducerClient(object):
+            def __init__(self, connected):
+                self.connected = connected
+            def connected_to_introducer(self):
+                return self.connected
 
-            fields = {'filled': True,
-                      "num_users": int(50e3),
-                      "files_per_user": 1000,
-                      "space_per_user": int(1e9),
-                      "sharing_ratio": 1.0,
-                      "encoding_parameters": "3-of-10-5",
-                      "num_servers": 30,
-                      "ownership_mode": "A",
-                      "download_rate": 100,
-                      "upload_rate": 10,
-                      "delete_rate": 10,
-                      "lease_timer": 7,
-                      }
-            return self.POST("/provisioning/", **fields)
+        d = defer.succeed(None)
 
-        d.addCallback(_check)
-        def _check2(res):
-            self.failUnlessIn('Provisioning Tool', res)
-            self.failUnlessIn(FAVICON_MARKUP, res)
-            self.failUnlessIn("Share space consumed: 167.01TB", res)
+        # introducer not connected, unguessable furl
+        def _set_introducer_not_connected_unguessable(ign):
+            self.s.introducer_furl = "pb://someIntroducer/secret"
+            self.s.introducer_client = MockIntroducerClient(False)
+            return self.GET("/")
+        d.addCallback(_set_introducer_not_connected_unguessable)
+        def _check_introducer_not_connected_unguessable(res):
+            html = res.replace('\n', ' ')
+            self.failUnlessIn('<div class="furl">pb://someIntroducer/[censored]</div>', html)
+            self.failIfIn('pb://someIntroducer/secret', html)
+            self.failUnless(re.search('<div class="status-indicator connected-no"></div>[ ]*<div>Introducer not connected</div>', html), res)
+        d.addCallback(_check_introducer_not_connected_unguessable)
 
-            fields = {'filled': True,
-                      "num_users": int(50e6),
-                      "files_per_user": 1000,
-                      "space_per_user": int(5e9),
-                      "sharing_ratio": 1.0,
-                      "encoding_parameters": "25-of-100-50",
-                      "num_servers": 30000,
-                      "ownership_mode": "E",
-                      "drive_failure_model": "U",
-                      "drive_size": 1000,
-                      "download_rate": 1000,
-                      "upload_rate": 100,
-                      "delete_rate": 100,
-                      "lease_timer": 7,
-                      }
-            return self.POST("/provisioning/", **fields)
-        d.addCallback(_check2)
-        def _check3(res):
-            self.failUnlessIn("Share space consumed: huge!", res)
-            fields = {'filled': True}
-            return self.POST("/provisioning/", **fields)
-        d.addCallback(_check3)
-        def _check4(res):
-            self.failUnlessIn("Share space consumed:", res)
-        d.addCallback(_check4)
+        # introducer connected, unguessable furl
+        def _set_introducer_connected_unguessable(ign):
+            self.s.introducer_furl = "pb://someIntroducer/secret"
+            self.s.introducer_client = MockIntroducerClient(True)
+            return self.GET("/")
+        d.addCallback(_set_introducer_connected_unguessable)
+        def _check_introducer_connected_unguessable(res):
+            html = res.replace('\n', ' ')
+            self.failUnlessIn('<div class="furl">pb://someIntroducer/[censored]</div>', html)
+            self.failIfIn('pb://someIntroducer/secret', html)
+            self.failUnless(re.search('<div class="status-indicator connected-yes"></div>[ ]*<div>Introducer</div>', html), res)
+        d.addCallback(_check_introducer_connected_unguessable)
+
+        # introducer connected, guessable furl
+        def _set_introducer_connected_guessable(ign):
+            self.s.introducer_furl = "pb://someIntroducer/introducer"
+            self.s.introducer_client = MockIntroducerClient(True)
+            return self.GET("/")
+        d.addCallback(_set_introducer_connected_guessable)
+        def _check_introducer_connected_guessable(res):
+            html = res.replace('\n', ' ')
+            self.failUnlessIn('<div class="furl">pb://someIntroducer/introducer</div>', html)
+            self.failUnless(re.search('<div class="status-indicator connected-yes"></div>[ ]*<div>Introducer</div>', html), res)
+        d.addCallback(_check_introducer_connected_guessable)
         return d
 
-    def test_reliability_tool(self):
-        try:
-            from allmydata import reliability
-            _hush_pyflakes = reliability
-            del _hush_pyflakes
-        except:
-            raise unittest.SkipTest("reliability tool requires NumPy")
+    def test_helper_status(self):
+        d = defer.succeed(None)
 
-        d = self.GET("/reliability/")
+        # set helper furl to None
+        def _set_no_helper(ign):
+            self.s.uploader.helper_furl = None
+            return self.GET("/")
+        d.addCallback(_set_no_helper)
+        def _check_no_helper(res):
+            html = res.replace('\n', ' ')
+            self.failUnless(re.search('<div class="status-indicator connected-not-configured"></div>[ ]*<div>Helper</div>', html), res)
+        d.addCallback(_check_no_helper)
+
+        # enable helper, not connected
+        def _set_helper_not_connected(ign):
+            self.s.uploader.helper_furl = "pb://someHelper/secret"
+            self.s.uploader.helper_connected = False
+            return self.GET("/")
+        d.addCallback(_set_helper_not_connected)
+        def _check_helper_not_connected(res):
+            html = res.replace('\n', ' ')
+            self.failUnlessIn('<div class="furl">pb://someHelper/[censored]</div>', html)
+            self.failIfIn('pb://someHelper/secret', html)
+            self.failUnless(re.search('<div class="status-indicator connected-no"></div>[ ]*<div>Helper not connected</div>', html), res)
+        d.addCallback(_check_helper_not_connected)
+
+        # enable helper, connected
+        def _set_helper_connected(ign):
+            self.s.uploader.helper_furl = "pb://someHelper/secret"
+            self.s.uploader.helper_connected = True
+            return self.GET("/")
+        d.addCallback(_set_helper_connected)
+        def _check_helper_connected(res):
+            html = res.replace('\n', ' ')
+            self.failUnlessIn('<div class="furl">pb://someHelper/[censored]</div>', html)
+            self.failIfIn('pb://someHelper/secret', html)
+            self.failUnless(re.search('<div class="status-indicator connected-yes"></div>[ ]*<div>Helper</div>', html), res)
+        d.addCallback(_check_helper_connected)
+        return d
+
+    def test_storage(self):
+        d = self.GET("/storage")
         def _check(res):
-            self.failUnlessIn('Reliability Tool', res)
-            fields = {'drive_lifetime': "8Y",
-                      "k": "3",
-                      "R": "7",
-                      "N": "10",
-                      "delta": "100000",
-                      "check_period": "1M",
-                      "report_period": "3M",
-                      "report_span": "5Y",
-                      }
-            return self.POST("/reliability/", **fields)
-
+            self.failUnlessIn('Storage Server Status', res)
+            self.failUnlessIn(FAVICON_MARKUP, res)
+            res_u = res.decode('utf-8')
+            self.failUnlessIn(u'<li>Server Nickname: <span class="nickname mine">fake_nickname \u263A</span></li>', res_u)
         d.addCallback(_check)
-        def _check2(res):
-            self.failUnlessIn('Reliability Tool', res)
-            r = r'Probability of loss \(no maintenance\):\s+<span>0.033591'
-            self.failUnless(re.search(r, res), res)
-        d.addCallback(_check2)
         return d
 
     def test_status(self):
@@ -624,7 +731,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         ret_num = h.list_all_retrieve_statuses()[0].get_counter()
         d = self.GET("/status", followRedirect=True)
         def _check(res):
-            self.failUnlessIn('Upload and Download Status', res)
+            self.failUnlessIn('Recent and Active Operations', res)
             self.failUnlessIn('"down-%d"' % dl_num, res)
             self.failUnlessIn('"up-%d"' % ul_num, res)
             self.failUnlessIn('"mapupdate-%d"' % mu_num, res)
@@ -657,11 +764,15 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             cmpu_id = base32.b2a(hashutil.tagged_hash("foo", "serverid_b")[:20])
             # serverids[] keys are strings, since that's what JSON does, but
             # we'd really like them to be ints
-            self.failUnlessEqual(data["serverids"]["0"], "phwr")
-            self.failUnless(data["serverids"].has_key("1"), data["serverids"])
-            self.failUnlessEqual(data["serverids"]["1"], "cmpu", data["serverids"])
-            self.failUnlessEqual(data["server_info"][phwr_id]["short"], "phwr")
-            self.failUnlessEqual(data["server_info"][cmpu_id]["short"], "cmpu")
+            self.failUnlessEqual(data["serverids"]["0"], "phwrsjte")
+            self.failUnless(data["serverids"].has_key("1"),
+                            str(data["serverids"]))
+            self.failUnlessEqual(data["serverids"]["1"], "cmpuvkjm",
+                                 str(data["serverids"]))
+            self.failUnlessEqual(data["server_info"][phwr_id]["short"],
+                                 "phwrsjte")
+            self.failUnlessEqual(data["server_info"][cmpu_id]["short"],
+                                 "cmpuvkjm")
             self.failUnlessIn("dyhb", data)
             self.failUnlessIn("misc", data)
         d.addCallback(_check_dl_json)
@@ -987,6 +1098,90 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                              self.PUT, base, "new_data"))
         return d
 
+    def test_GET_etags(self):
+
+        def _check_etags(uri):
+            d1 = _get_etag(uri)
+            d2 = _get_etag(uri, 'json')
+            d = defer.DeferredList([d1, d2], consumeErrors=True)
+            def _check(results):
+                # All deferred must succeed
+                self.failUnless(all([r[0] for r in results]))
+                # the etag for the t=json form should be just like the etag
+                # fo the default t='' form, but with a 'json' suffix
+                self.failUnlessEqual(results[0][1] + 'json', results[1][1])
+            d.addCallback(_check)
+            return d
+
+        def _get_etag(uri, t=''):
+            targetbase = "/uri/%s?t=%s" % (urllib.quote(uri.strip()), t)
+            d = self.GET(targetbase, return_response=True, followRedirect=True)
+            def _just_the_etag(result):
+                data, response, headers = result
+                etag = headers['etag'][0]
+                if uri.startswith('URI:DIR'):
+                    self.failUnless(etag.startswith('DIR:'), etag)
+                return etag
+            return d.addCallback(_just_the_etag)
+
+        # Check that etags work with immutable directories
+        (newkids, caps) = self._create_immutable_children()
+        d = self.POST2(self.public_url + "/foo/newdir?t=mkdir-immutable",
+                      simplejson.dumps(newkids))
+        def _stash_immdir_uri(uri):
+            self._immdir_uri = uri
+            return uri
+        d.addCallback(_stash_immdir_uri)
+        d.addCallback(_check_etags)
+
+        # Check that etags work with immutable files
+        d.addCallback(lambda _: _check_etags(self._bar_txt_uri))
+
+        # use the ETag on GET
+        def _check_match(ign):
+            uri = "/uri/%s" % self._bar_txt_uri
+            d = self.GET(uri, return_response=True)
+            # extract the ETag
+            d.addCallback(lambda (data, code, headers):
+                          headers['etag'][0])
+            # do a GET that's supposed to match the ETag
+            d.addCallback(lambda etag:
+                          self.GET(uri, return_response=True,
+                                   headers={"If-None-Match": etag}))
+            # make sure it short-circuited (304 instead of 200)
+            d.addCallback(lambda (data, code, headers):
+                          self.failUnlessEqual(int(code), http.NOT_MODIFIED))
+            return d
+        d.addCallback(_check_match)
+
+        def _no_etag(uri, t):
+            target = "/uri/%s?t=%s" % (uri, t)
+            d = self.GET(target, return_response=True, followRedirect=True)
+            d.addCallback(lambda (data, code, headers):
+                          self.failIf("etag" in headers, target))
+            return d
+        def _yes_etag(uri, t):
+            target = "/uri/%s?t=%s" % (uri, t)
+            d = self.GET(target, return_response=True, followRedirect=True)
+            d.addCallback(lambda (data, code, headers):
+                          self.failUnless("etag" in headers, target))
+            return d
+
+        d.addCallback(lambda ign: _yes_etag(self._bar_txt_uri, ""))
+        d.addCallback(lambda ign: _yes_etag(self._bar_txt_uri, "json"))
+        d.addCallback(lambda ign: _yes_etag(self._bar_txt_uri, "uri"))
+        d.addCallback(lambda ign: _yes_etag(self._bar_txt_uri, "readonly-uri"))
+        d.addCallback(lambda ign: _no_etag(self._bar_txt_uri, "info"))
+
+        d.addCallback(lambda ign: _yes_etag(self._immdir_uri, ""))
+        d.addCallback(lambda ign: _yes_etag(self._immdir_uri, "json"))
+        d.addCallback(lambda ign: _yes_etag(self._immdir_uri, "uri"))
+        d.addCallback(lambda ign: _yes_etag(self._immdir_uri, "readonly-uri"))
+        d.addCallback(lambda ign: _no_etag(self._immdir_uri, "info"))
+        d.addCallback(lambda ign: _no_etag(self._immdir_uri, "rename-form"))
+
+        return d
+
     # TODO: version of this with a Unicode filename
     def test_GET_FILEURL_save(self):
         d = self.GET(self.public_url + "/foo/bar.txt?filename=bar.txt&save=true",
@@ -1309,16 +1504,16 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         # We should have a form to create a file, with radio buttons that allow
         # the user to toggle whether it is a CHK/LIT (default), SDMF, or MDMF file.
         self.failUnlessIn('name="t" value="upload"', html)
-        self.failUnlessIn('input checked="checked" type="radio" id="upload-chk" value="chk" name="format"', html)
-        self.failUnlessIn('input type="radio" id="upload-sdmf" value="sdmf" name="format"', html)
-        self.failUnlessIn('input type="radio" id="upload-mdmf" value="mdmf" name="format"', html)
+        self.failUnless(re.search('<input [^/]*id="upload-chk"', html), html)
+        self.failUnless(re.search('<input [^/]*id="upload-sdmf"', html), html)
+        self.failUnless(re.search('<input [^/]*id="upload-mdmf"', html), html)
 
         # We should also have the ability to create a mutable directory, with
         # radio buttons that allow the user to toggle whether it is an SDMF (default)
         # or MDMF directory.
         self.failUnlessIn('name="t" value="mkdir"', html)
-        self.failUnlessIn('input checked="checked" type="radio" id="mkdir-sdmf" value="sdmf" name="format"', html)
-        self.failUnlessIn('input type="radio" id="mkdir-mdmf" value="mdmf" name="format"', html)
+        self.failUnless(re.search('<input [^/]*id="mkdir-sdmf"', html), html)
+        self.failUnless(re.search('<input [^/]*id="mkdir-mdmf"', html), html)
 
         self.failUnlessIn(FAVICON_MARKUP, html)
 
@@ -1328,6 +1523,24 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnlessIn('<div class="toolbar-item"><a href="../../..">Return to Welcome page</a></div>', html)
             self._check_upload_and_mkdir_forms(html)
             self.failUnlessIn("quux", html)
+        d.addCallback(_check)
+        return d
+
+    def test_GET_DIRECTORY_html_filenode_encoding(self):
+        d = self.GET(self.public_url + "/foo", followRedirect=True)
+        def _check(html):
+            # Check if encoded entries are there
+            self.failUnlessIn('@@named=/' + self._htmlname_urlencoded + '">'
+                              + self._htmlname_escaped + '</a>', html)
+            self.failUnlessIn('value="' + self._htmlname_escaped_attr + '"', html)
+            self.failIfIn(self._htmlname_escaped_double, html)
+            # Make sure that Nevow escaping actually works by checking for unsafe characters
+            # and that '&' is escaped.
+            for entity in '<>':
+                self.failUnlessIn(entity, self._htmlname_raw)
+                self.failIfIn(entity, self._htmlname_escaped)
+            self.failUnlessIn('&', re.sub(r'&(amp|lt|gt|quot|apos);', '', self._htmlname_raw))
+            self.failIfIn('&', re.sub(r'&(amp|lt|gt|quot|apos);', '', self._htmlname_escaped))
         d.addCallback(_check)
         return d
 
@@ -1354,7 +1567,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                r'\s+<td align="right">%d</td>' % len(self.BAR_CONTENTS),
                                ])
             self.failUnless(re.search(get_bar, res), res)
-            for label in ['unlink', 'rename']:
+            for label in ['unlink', 'rename/relink']:
                 for line in res.split("\n"):
                     # find the line that contains the relevant button for bar.txt
                     if ("form action" in line and
@@ -1372,7 +1585,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                             self.failUnlessIn('method="post"', line)
                         break
                 else:
-                    self.fail("unable to find '%s bar.txt' line" % (label,), res)
+                    self.fail("unable to find '%s bar.txt' line" % (label,))
 
             # the DIR reference just points to a URI
             sub_url = ("%s/uri/%s/" % (ROOT, urllib.quote(self._sub_uri)))
@@ -1553,16 +1766,16 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.wait_for_operation, "127")
         d.addCallback(self.get_operation_results, "127", "json")
         def _got_json(stats):
-            expected = {"count-immutable-files": 3,
+            expected = {"count-immutable-files": 4,
                         "count-mutable-files": 2,
                         "count-literal-files": 0,
-                        "count-files": 5,
+                        "count-files": 6,
                         "count-directories": 3,
-                        "size-immutable-files": 57,
+                        "size-immutable-files": 76,
                         "size-literal-files": 0,
                         #"size-directories": 1912, # varies
                         #"largest-directory": 1590,
-                        "largest-directory-children": 7,
+                        "largest-directory-children": 8,
                         "largest-immutable-file": 19,
                         }
             for k,v in expected.iteritems():
@@ -1570,7 +1783,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                                            "stats[%s] was %s, not %s" %
                                            (k, stats[k], v))
             self.failUnlessReallyEqual(stats["size-files-histogram"],
-                                       [ [11, 31, 3] ])
+                                       [ [11, 31, 4] ])
         d.addCallback(_got_json)
         return d
 
@@ -1579,7 +1792,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         def _check(res):
             self.failUnless(res.endswith("\n"))
             units = [simplejson.loads(t) for t in res[:-1].split("\n")]
-            self.failUnlessReallyEqual(len(units), 9)
+            self.failUnlessReallyEqual(len(units), 10)
             self.failUnlessEqual(units[-1]["type"], "stats")
             first = units[0]
             self.failUnlessEqual(first["path"], [])
@@ -2077,10 +2290,11 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnlessReallyEqual(statuscode, str(http.FOUND))
             self.failUnless(target.startswith(self.webish_url), target)
             return client.getPage(target, method="GET")
+        # We encode "uri" as "%75ri" to exercise a case affected by ticket #1860.
         d = self.shouldRedirect2("test_POST_upload_no_link_whendone_results",
                                  check,
                                  self.POST, "/uri", t="upload",
-                                 when_done="/uri/%(uri)s",
+                                 when_done="/%75ri/%(uri)s",
                                  file=("new.txt", self.NEWFILE_CONTENTS))
         d.addCallback(lambda res:
                       self.failUnlessReallyEqual(res, self.NEWFILE_CONTENTS))
@@ -2424,7 +2638,8 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         # make sure that nothing was added
         d.addCallback(lambda res:
                       self.failUnlessNodeKeysAre(self._foo_node,
-                                                 [u"bar.txt", u"baz.txt", u"blockingfile",
+                                                 [self._htmlname_unicode,
+                                                  u"bar.txt", u"baz.txt", u"blockingfile",
                                                   u"empty", u"n\u00fc.txt", u"quux.txt",
                                                   u"sub"]))
         return d
@@ -2616,13 +2831,13 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.wait_for_operation, "123")
         def _check_json(data):
             self.failUnlessReallyEqual(data["finished"], True)
-            self.failUnlessReallyEqual(data["count-objects-checked"], 10)
-            self.failUnlessReallyEqual(data["count-objects-healthy"], 10)
+            self.failUnlessReallyEqual(data["count-objects-checked"], 11)
+            self.failUnlessReallyEqual(data["count-objects-healthy"], 11)
         d.addCallback(_check_json)
         d.addCallback(self.get_operation_results, "123", "html")
         def _check_html(res):
-            self.failUnlessIn("Objects Checked: <span>10</span>", res)
-            self.failUnlessIn("Objects Healthy: <span>10</span>", res)
+            self.failUnlessIn("Objects Checked: <span>11</span>", res)
+            self.failUnlessIn("Objects Healthy: <span>11</span>", res)
             self.failUnlessIn(FAVICON_MARKUP, res)
         d.addCallback(_check_html)
 
@@ -2652,22 +2867,22 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.wait_for_operation, "124")
         def _check_json(data):
             self.failUnlessReallyEqual(data["finished"], True)
-            self.failUnlessReallyEqual(data["count-objects-checked"], 10)
-            self.failUnlessReallyEqual(data["count-objects-healthy-pre-repair"], 10)
+            self.failUnlessReallyEqual(data["count-objects-checked"], 11)
+            self.failUnlessReallyEqual(data["count-objects-healthy-pre-repair"], 11)
             self.failUnlessReallyEqual(data["count-objects-unhealthy-pre-repair"], 0)
             self.failUnlessReallyEqual(data["count-corrupt-shares-pre-repair"], 0)
             self.failUnlessReallyEqual(data["count-repairs-attempted"], 0)
             self.failUnlessReallyEqual(data["count-repairs-successful"], 0)
             self.failUnlessReallyEqual(data["count-repairs-unsuccessful"], 0)
-            self.failUnlessReallyEqual(data["count-objects-healthy-post-repair"], 10)
+            self.failUnlessReallyEqual(data["count-objects-healthy-post-repair"], 11)
             self.failUnlessReallyEqual(data["count-objects-unhealthy-post-repair"], 0)
             self.failUnlessReallyEqual(data["count-corrupt-shares-post-repair"], 0)
         d.addCallback(_check_json)
         d.addCallback(self.get_operation_results, "124", "html")
         def _check_html(res):
-            self.failUnlessIn("Objects Checked: <span>10</span>", res)
+            self.failUnlessIn("Objects Checked: <span>11</span>", res)
 
-            self.failUnlessIn("Objects Healthy (before repair): <span>10</span>", res)
+            self.failUnlessIn("Objects Healthy (before repair): <span>11</span>", res)
             self.failUnlessIn("Objects Unhealthy (before repair): <span>0</span>", res)
             self.failUnlessIn("Corrupt Shares (before repair): <span>0</span>", res)
 
@@ -2675,7 +2890,7 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
             self.failUnlessIn("Repairs Successful: <span>0</span>", res)
             self.failUnlessIn("Repairs Unsuccessful: <span>0</span>", res)
 
-            self.failUnlessIn("Objects Healthy (after repair): <span>10</span>", res)
+            self.failUnlessIn("Objects Healthy (after repair): <span>11</span>", res)
             self.failUnlessIn("Objects Unhealthy (after repair): <span>0</span>", res)
             self.failUnlessIn("Corrupt Shares (after repair): <span>0</span>", res)
 
@@ -3037,12 +3252,13 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d = self.GET("/")
         def _after_get_welcome_page(res):
             MKDIR_BUTTON_RE = re.compile(
-                '<form action="([^"]*)" method="post".*?'
-                '<input type="hidden" name="t" value="([^"]*)" />'
-                '<input type="hidden" name="([^"]*)" value="([^"]*)" />'
-                '<input type="submit" value="Create a directory" />',
-                re.I)
-            mo = MKDIR_BUTTON_RE.search(res)
+                '<form action="([^"]*)" method="post".*'
+                '<input type="hidden" name="t" value="([^"]*)" />[ ]*'
+                '<input type="hidden" name="([^"]*)" value="([^"]*)" />[ ]*'
+                '<input type="submit" class="btn" value="Create a directory[^"]*" />')
+            html = res.replace('\n', ' ')
+            mo = MKDIR_BUTTON_RE.search(html)
+            self.failUnless(mo, html)
             formaction = mo.group(1)
             formt = mo.group(2)
             formaname = mo.group(3)
@@ -3292,18 +3508,64 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         d.addCallback(self.failUnlessIsEmptyJSON)
         return d
 
+    def test_POST_rename_file_no_replace_same_link(self):
+        d = self.POST(self.public_url + "/foo", t="rename",
+                      replace="false", from_name="bar.txt", to_name="bar.txt")
+        d.addCallback(lambda res: self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_rename_file_replace_only_files(self):
+        d = self.POST(self.public_url + "/foo", t="rename",
+                      replace="only-files", from_name="bar.txt",
+                      to_name="baz.txt")
+        d.addCallback(lambda res: self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/baz.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/baz.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_rename_file_replace_only_files_conflict(self):
+        d = self.shouldFail2(error.Error, "POST_relink_file_replace_only_files_conflict",
+                             "409 Conflict",
+                             "There was already a child by that name, and you asked me to not replace it.",
+                             self.POST, self.public_url + "/foo", t="relink",
+                             replace="only-files", from_name="bar.txt",
+                             to_name="empty")
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
     def failUnlessIsEmptyJSON(self, res):
         data = simplejson.loads(res)
         self.failUnlessEqual(data[0], "dirnode", data)
         self.failUnlessReallyEqual(len(data[1]["children"]), 0)
 
-    def test_POST_rename_file_slash_fail(self):
+    def test_POST_rename_file_to_slash_fail(self):
         d = self.POST(self.public_url + "/foo", t="rename",
                       from_name="bar.txt", to_name='kirk/spock.txt')
         d.addBoth(self.shouldFail, error.Error,
-                  "test_POST_rename_file_slash_fail",
+                  "test_POST_rename_file_to_slash_fail",
                   "400 Bad Request",
                   "to_name= may not contain a slash",
+                  )
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        return d
+
+    def test_POST_rename_file_from_slash_fail(self):
+        d = self.POST(self.public_url + "/foo", t="rename",
+                      from_name="sub/bar.txt", to_name='spock.txt')
+        d.addBoth(self.shouldFail, error.Error,
+                  "test_POST_rename_from_file_slash_fail",
+                  "400 Bad Request",
+                  "from_name= may not contain a slash",
                   )
         d.addCallback(lambda res:
                       self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
@@ -3318,6 +3580,241 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
                       self.failUnlessNodeHasChild(self.public_root, u"plunk"))
         d.addCallback(lambda res: self.GET(self.public_url + "/plunk?t=json"))
         d.addCallback(self.failUnlessIsFooJSON)
+        return d
+
+    def test_POST_relink_file(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._sub_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_new_name(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_name="wibble.txt", to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._sub_node, u"bar.txt"))
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._sub_node, u"wibble.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/wibble.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/wibble.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_replace(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_name="baz.txt", to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/baz.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/baz.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_no_replace(self):
+        d = self.shouldFail2(error.Error, "POST_relink_file_no_replace",
+                             "409 Conflict",
+                             "There was already a child by that name, and you asked me to not replace it",
+                             self.POST, self.public_url + "/foo", t="relink",
+                             replace="false", from_name="bar.txt",
+                             to_name="baz.txt", to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/baz.txt"))
+        d.addCallback(self.failUnlessIsSubBazDotTxt)
+        return d
+
+    def test_POST_relink_file_no_replace_explicitly_same_link(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      replace="false", from_name="bar.txt",
+                      to_name="bar.txt", to_dir=self.public_root.get_uri() + "/foo")
+        d.addCallback(lambda res: self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_replace_only_files(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      replace="only-files", from_name="bar.txt",
+                      to_name="baz.txt", to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/baz.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/baz.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_replace_only_files_conflict(self):
+        d = self.shouldFail2(error.Error, "POST_relink_file_replace_only_files_conflict",
+                             "409 Conflict",
+                             "There was already a child by that name, and you asked me to not replace it.",
+                             self.POST, self.public_url + "/foo", t="relink",
+                             replace="only-files", from_name="bar.txt",
+                             to_name="sub", to_dir=self.public_root.get_uri() + "/foo")
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_to_slash_fail(self):
+        d = self.shouldFail2(error.Error, "test_POST_rename_file_slash_fail",
+                             "400 Bad Request",
+                             "to_name= may not contain a slash",
+                             self.POST, self.public_url + "/foo", t="relink",
+                             from_name="bar.txt",
+                             to_name="slash/fail.txt", to_dir=self.public_root.get_uri() + "/foo/sub")
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._sub_node, u"slash/fail.txt"))
+        d.addCallback(lambda ign:
+                      self.shouldFail2(error.Error,
+                                       "test_POST_rename_file_slash_fail2",
+                                       "400 Bad Request",
+                                       "from_name= may not contain a slash",
+                                       self.POST, self.public_url + "/foo",
+                                       t="relink",
+                                       from_name="nope/bar.txt",
+                                       to_name="fail.txt",
+                                       to_dir=self.public_root.get_uri() + "/foo/sub"))
+        return d
+
+    def test_POST_relink_file_explicitly_same_link(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_name="bar.txt", to_dir=self.public_root.get_uri() + "/foo")
+        d.addCallback(lambda res: self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_implicitly_same_link(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt")
+        d.addCallback(lambda res: self.failUnlessNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_same_dir(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_name="baz.txt", to_dir=self.public_root.get_uri() + "/foo")
+        d.addCallback(lambda res: self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.failUnlessNodeHasChild(self._sub_node, u"baz.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/baz.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/baz.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_bad_replace(self):
+        d = self.shouldFail2(error.Error, "test_POST_relink_file_bad_replace",
+                             "400 Bad Request", "invalid replace= argument: 'boogabooga'",
+                             self.POST,
+                             self.public_url + "/foo", t="relink",
+                             replace="boogabooga", from_name="bar.txt",
+                             to_dir=self.public_root.get_uri() + "/foo/sub")
+        return d
+
+    def test_POST_relink_file_multi_level(self):
+        d = self.POST(self.public_url + "/foo/sub/level2?t=mkdir", "")
+        d.addCallback(lambda res: self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt", to_dir=self.public_root.get_uri() + "/foo/sub/level2"))
+        d.addCallback(lambda res: self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.failIfNodeHasChild(self._sub_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/level2/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/level2/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_to_uri(self):
+        d = self.POST(self.public_url + "/foo", t="relink", target_type="uri",
+                      from_name="bar.txt", to_dir=self._sub_uri)
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"bar.txt"))
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/sub/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_to_nonexistent_dir(self):
+        d = self.shouldFail2(error.Error, "POST_relink_file_to_nonexistent_dir",
+                            "404 Not Found", "No such child: nopechucktesta",
+                            self.POST, self.public_url + "/foo", t="relink",
+                            from_name="bar.txt",
+                            to_dir=self.public_root.get_uri() + "/nopechucktesta")
+        return d
+
+    def test_POST_relink_file_into_file(self):
+        d = self.shouldFail2(error.Error, "POST_relink_file_into_file",
+                             "400 Bad Request", "to_dir is not a directory",
+                             self.POST, self.public_url + "/foo", t="relink",
+                             from_name="bar.txt",
+                             to_dir=self.public_root.get_uri() + "/foo/baz.txt")
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/baz.txt"))
+        d.addCallback(self.failUnlessIsBazDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_file_to_bad_uri(self):
+        d =  self.shouldFail2(error.Error, "POST_relink_file_to_bad_uri",
+                              "400 Bad Request", "to_dir is not a directory",
+                              self.POST, self.public_url + "/foo", t="relink",
+                              from_name="bar.txt",
+                              to_dir="URI:DIR2:mn5jlyjnrjeuydyswlzyui72i:rmneifcj6k6sycjljjhj3f6majsq2zqffydnnul5hfa4j577arma")
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
+        d.addCallback(lambda res: self.GET(self.public_url + "/foo/bar.txt?t=json"))
+        d.addCallback(self.failUnlessIsBarJSON)
+        return d
+
+    def test_POST_relink_dir(self):
+        d = self.POST(self.public_url + "/foo", t="relink",
+                      from_name="bar.txt",
+                      to_dir=self.public_root.get_uri() + "/foo/empty")
+        d.addCallback(lambda res: self.POST(self.public_url + "/foo",
+                      t="relink", from_name="empty",
+                      to_dir=self.public_root.get_uri() + "/foo/sub"))
+        d.addCallback(lambda res:
+                      self.failIfNodeHasChild(self._foo_node, u"empty"))
+        d.addCallback(lambda res:
+                      self.failUnlessNodeHasChild(self._sub_node, u"empty"))
+        d.addCallback(lambda res:
+                      self._sub_node.get_child_at_path(u"empty"))
+        d.addCallback(lambda node:
+                      self.failUnlessNodeHasChild(node, u"bar.txt"))
+        d.addCallback(lambda res:
+                      self.GET(self.public_url + "/foo/sub/empty/bar.txt"))
+        d.addCallback(self.failUnlessIsBarDotTxt)
         return d
 
     def shouldRedirect(self, res, target=None, statuscode=None, which=""):
@@ -3496,12 +3993,12 @@ class Web(WebMixin, WebErrorMixin, testutil.StallMixin, testutil.ReallyEqualMixi
         return d
 
     def test_PUT_NEWFILEURL_bad_format(self):
-       new_contents = self.NEWFILE_CONTENTS * 300000
-       return self.shouldHTTPError("PUT_NEWFILEURL_bad_format",
-                                   400, "Bad Request", "Unknown format: foo",
-                                   self.PUT, self.public_url + \
-                                   "/foo/foo.txt?format=foo",
-                                   new_contents)
+        new_contents = self.NEWFILE_CONTENTS * 300000
+        return self.shouldHTTPError("PUT_NEWFILEURL_bad_format",
+                                    400, "Bad Request", "Unknown format: foo",
+                                    self.PUT, self.public_url + \
+                                    "/foo/foo.txt?format=foo",
+                                    new_contents)
 
     def test_PUT_NEWFILEURL_uri_replace(self):
         contents, n, new_uri = self.makefile(8)
@@ -3954,8 +4451,7 @@ class Util(ShouldFailMixin, testutil.ReallyEqualMixin, unittest.TestCase):
         self.failUnlessReallyEqual(common.parse_replace_arg("false"), False)
         self.failUnlessReallyEqual(common.parse_replace_arg("only-files"),
                                    "only-files")
-        self.shouldFail(AssertionError, "test_parse_replace_arg", "",
-                        common.parse_replace_arg, "only_fles")
+        self.failUnlessRaises(common.WebError, common.parse_replace_arg, "only_fles")
 
     def test_abbreviate_time(self):
         self.failUnlessReallyEqual(common.abbreviate_time(None), "")
@@ -4022,7 +4518,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         DATA = "data" * 100
         d = c0.upload(upload.Data(DATA, convergence=""))
         def _stash_uri(ur, which):
-            self.uris[which] = ur.uri
+            self.uris[which] = ur.get_uri()
         d.addCallback(_stash_uri, "good")
         d.addCallback(lambda ign:
                       c0.upload(upload.Data(DATA+"1", convergence="")))
@@ -4167,7 +4663,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         DATA = "data" * 100
         d = c0.upload(upload.Data(DATA, convergence=""))
         def _stash_uri(ur, which):
-            self.uris[which] = ur.uri
+            self.uris[which] = ur.get_uri()
         d.addCallback(_stash_uri, "good")
         d.addCallback(lambda ign:
                       c0.upload(upload.Data(DATA+"1", convergence="")))
@@ -4248,7 +4744,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         DATA = "data" * 100
         d = c0.upload(upload.Data(DATA+"1", convergence=""))
         def _stash_uri(ur, which):
-            self.uris[which] = ur.uri
+            self.uris[which] = ur.get_uri()
         d.addCallback(_stash_uri, "sick")
 
         def _compute_fileurls(ignored):
@@ -4834,7 +5330,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         DATA = "data" * 100
         d = c0.upload(upload.Data(DATA, convergence=""))
         def _stash_uri(ur, which):
-            self.uris[which] = ur.uri
+            self.uris[which] = ur.get_uri()
         d.addCallback(_stash_uri, "one")
         d.addCallback(lambda ign:
                       c0.upload(upload.Data(DATA+"1", convergence="")))
@@ -5003,10 +5499,10 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_stash_root)
         d.addCallback(lambda ign: c0.upload(upload.Data(DATA, convergence="")))
         def _stash_bad(ur):
-            self.fileurls["1share"] = "uri/" + urllib.quote(ur.uri)
-            self.delete_shares_numbered(ur.uri, range(1,10))
+            self.fileurls["1share"] = "uri/" + urllib.quote(ur.get_uri())
+            self.delete_shares_numbered(ur.get_uri(), range(1,10))
 
-            u = uri.from_string(ur.uri)
+            u = uri.from_string(ur.get_uri())
             u.key = testutil.flip_bit(u.key, 0)
             baduri = u.to_string()
             self.fileurls["0shares"] = "uri/" + urllib.quote(baduri)
@@ -5217,7 +5713,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d = c0.upload(upload.Data(DATA, convergence=""))
         def _stash_uri_and_create_dir(ur):
-            self.uri = ur.uri
+            self.uri = ur.get_uri()
             self.url = "uri/"+self.uri
             u = uri.from_string_filenode(self.uri)
             self.si = u.get_storage_index()

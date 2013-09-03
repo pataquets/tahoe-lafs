@@ -75,6 +75,18 @@ test-coverage: build
 quicktest:
 	$(TAHOE) debug trial $(TRIALARGS) $(TEST)
 
+# "make tmpfstest" may be a faster way of running tests on Linux. It works best when you have
+# at least 330 MiB of free physical memory (to run the whole test suite). Since it uses sudo
+# to mount/unmount the tmpfs filesystem, it might prompt for your password.
+tmpfstest:
+	time make _tmpfstest 'TMPDIR=$(shell mktemp -d --tmpdir=.)'
+
+_tmpfstest:
+	sudo mount -t tmpfs -o size=400m tmpfs '$(TMPDIR)'
+	-$(TAHOE) debug trial --rterrors '--temp-directory=$(TMPDIR)/_trial_temp' $(TRIALARGS) $(TEST)
+	sudo umount '$(TMPDIR)'
+	rmdir '$(TMPDIR)'
+
 # code-coverage: install the "coverage" package from PyPI, do "make
 # quicktest-coverage" to do a unit test run with coverage-gathering enabled,
 # then use "make coverate-output-text" for a brief report, or "make
@@ -134,15 +146,15 @@ check-miscaptures:
 	@echo
 
 pyflakes:
-	$(PYTHON) -OOu `which pyflakes` $(SOURCES) |sort |uniq
+	@$(PYTHON) -OOu `which pyflakes` $(SOURCES) |sort |uniq
 	@echo
 
 check-umids:
-	$(PYTHON) misc/coding_tools/check-umids.py `find $(SOURCES) -name '*.py'`
+	$(PYTHON) misc/coding_tools/check-umids.py `find $(SOURCES) -name '*.py' -not -name 'old.py'`
 	@echo
 
 -check-umids:
-	-$(PYTHON) misc/coding_tools/check-umids.py `find $(SOURCES) -name '*.py'`
+	-$(PYTHON) misc/coding_tools/check-umids.py `find $(SOURCES) -name '*.py' -not -name 'old.py'`
 	@echo
 
 doc-checks: check-rst
@@ -205,6 +217,10 @@ check-grid: .built
 bench-dirnode: .built
 	$(TAHOE) @src/allmydata/test/bench_dirnode.py
 
+# the provisioning tool runs as a stand-alone webapp server
+run-provisioning-tool: .built
+	$(TAHOE) @misc/operations_helpers/provisioning/run.py
+
 # 'make repl' is a simple-to-type command to get a Python interpreter loop
 # from which you can type 'import allmydata'
 repl:
@@ -254,9 +270,9 @@ find-trailing-spaces:
 # support/lib/ directory is gone.
 
 fetch-and-unpack-deps:
-	test -f tahoe-deps.tar.gz || wget https://tahoe-lafs.org/source/tahoe/deps/tahoe-deps.tar.gz
+	test -f tahoe-deps.tar.gz || wget https://tahoe-lafs.org/source/tahoe-lafs/deps/tahoe-lafs-deps.tar.gz
 	rm -rf tahoe-deps
-	tar xzf tahoe-deps.tar.gz
+	tar xzf tahoe-lafs-deps.tar.gz
 
 test-desert-island:
 	$(MAKE) fetch-and-unpack-deps
@@ -272,4 +288,4 @@ tarballs:
 	$(PYTHON) setup.py sdist --sumo --formats=bztar,gztar,zip
 
 upload-tarballs:
-	@if [ "X${BB_BRANCH}" = "Xtrunk" ] || [ "X${BB_BRANCH}" = "X" ]; then for f in dist/allmydata-tahoe-*; do flappclient --furlfile ~/.tahoe-tarball-upload.furl upload-file $$f; done ; else echo not uploading tarballs because this is not trunk but is branch \"${BB_BRANCH}\" ; fi
+	@if [ "X${BB_BRANCH}" = "Xmaster" ] || [ "X${BB_BRANCH}" = "X" ]; then for f in dist/allmydata-tahoe-*; do flappclient --furlfile ~/.tahoe-tarball-upload.furl upload-file $$f; done ; else echo not uploading tarballs because this is not trunk but is branch \"${BB_BRANCH}\" ; fi

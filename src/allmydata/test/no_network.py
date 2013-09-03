@@ -43,6 +43,10 @@ class LocalWrapper:
         self.hung_until = None
         self.post_call_notifier = None
         self.disconnectors = {}
+        self.counter_by_methname = {}
+
+    def _clear_counters(self):
+        self.counter_by_methname = {}
 
     def callRemoteOnly(self, methname, *args, **kwargs):
         d = self.callRemote(methname, *args, **kwargs)
@@ -62,6 +66,8 @@ class LocalWrapper:
         kwargs = dict([(k,wrap(kwargs[k])) for k in kwargs])
 
         def _really_call():
+            def incr(d, k): d[k] = d.setdefault(k, 0) + 1
+            incr(self.counter_by_methname, methname)
             meth = getattr(self.original, "remote_" + methname)
             return meth(*args, **kwargs)
 
@@ -319,6 +325,13 @@ class NoNetworkGrid(service.MultiService):
         assert ss.hung_until is not None
         ss.hung_until.callback(None)
         ss.hung_until = None
+
+    def nuke_from_orbit(self):
+        """ Empty all share directories in this grid. It's the only way to be sure ;-) """
+        for server in self.servers_by_number.values():
+            for prefixdir in os.listdir(server.sharedir):
+                if prefixdir != 'incoming':
+                    fileutil.rm_dir(os.path.join(server.sharedir, prefixdir))
 
 
 class GridTestMixin:

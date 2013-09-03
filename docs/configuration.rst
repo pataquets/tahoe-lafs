@@ -294,9 +294,9 @@ Client Configuration
 
     This FURL tells the client how to connect to the introducer. Each
     Tahoe-LAFS grid is defined by an introducer. The introducer's FURL is
-    created by the introducer node and written into its base directory when
-    it starts, whereupon it should be published to everyone who wishes to
-    attach a client to that grid
+    created by the introducer node and written into its private base
+    directory when it starts, whereupon it should be published to everyone
+    who wishes to attach a client to that grid
 
 ``helper.furl = (FURL string, optional)``
 
@@ -346,8 +346,13 @@ Client Configuration
     guarantee the availability of the uploaded file. This value should not be
     larger than the number of servers on your grid.
 
-    A value of ``shares.happy`` <= ``k`` is allowed, but does not provide any
-    redundancy if some servers fail or lose shares.
+    A value of ``shares.happy`` <= ``k`` is allowed, but this is not
+    guaranteed to provide any redundancy if some servers fail or lose shares.
+    It may still provide redundancy in practice if ``N`` is greater than
+    the number of connected servers, because in that case there will typically
+    be more than one share on at least some storage nodes. However, since a
+    successful upload only guarantees that at least ``shares.happy`` shares
+    have been stored, the worst case is still that there is no redundancy.
 
     (Mutable files use a different share placement algorithm that does not
     currently consider this parameter.)
@@ -370,8 +375,8 @@ Client Configuration
     controlled by this parameter and will always use SDMF. We may revisit
     this decision in future versions of Tahoe-LAFS.
 
-    See `<frontends/specifications/mutable.rst>`_ for details about mutable
-    file formats.
+    See `<specifications/mutable.rst>`_ for details about mutable file
+    formats.
 
 Frontend Configuration
 ======================
@@ -448,10 +453,11 @@ Storage Server Configuration
     runs.)
 
     This string contains a number, with an optional case-insensitive scale
-    suffix like "K" or "M" or "G", and an optional "B" or "iB" suffix. So
-    "100MB", "100M", "100000000B", "100000000", and "100000kb" all mean the
-    same thing. Likewise, "1MiB", "1024KiB", and "1048576B" all mean the same
-    thing.
+    suffix, optionally followed by "B" or "iB". The supported scale suffixes
+    are "K", "M", "G", "T", "P" and "E", and a following "i" indicates to use
+    powers of 1024 rather than 1000. So "100MB", "100 M", "100000000B",
+    "100000000", and "100000kb" all mean the same thing. Likewise, "1MiB",
+    "1024KiB", "1024 Ki", and "1048576 B" all mean the same thing.
 
     "``tahoe create-node``" generates a tahoe.cfg with
     "``reserved_space=1G``", but you may wish to raise, lower, or remove the
@@ -501,7 +507,7 @@ the others.
 
 The Introducer node maintains some different state than regular client nodes.
 
-``BASEDIR/introducer.furl``
+``BASEDIR/private/introducer.furl``
 
   This is generated the first time the introducer node is started, and used
   again on subsequent runs, to give the introduction service a persistent

@@ -78,6 +78,22 @@ class Basic(testutil.ReallyEqualMixin, unittest.TestCase):
         cancel_secret = c.get_cancel_secret()
         self.failUnless(base32.b2a(cancel_secret))
 
+    def test_nodekey_yes_storage(self):
+        basedir = "test_client.Basic.test_nodekey_yes_storage"
+        os.mkdir(basedir)
+        fileutil.write(os.path.join(basedir, "tahoe.cfg"),
+                       BASECONFIG)
+        c = client.Client(basedir)
+        self.failUnless(c.get_long_nodeid().startswith("v0-"))
+
+    def test_nodekey_no_storage(self):
+        basedir = "test_client.Basic.test_nodekey_no_storage"
+        os.mkdir(basedir)
+        fileutil.write(os.path.join(basedir, "tahoe.cfg"),
+                       BASECONFIG + "[storage]\n" + "enabled = false\n")
+        c = client.Client(basedir)
+        self.failUnless(c.get_long_nodeid().startswith("v0-"))
+
     def test_reserved_1(self):
         basedir = "client.Basic.test_reserved_1"
         os.mkdir(basedir)
@@ -132,16 +148,17 @@ class Basic(testutil.ReallyEqualMixin, unittest.TestCase):
                            "[storage]\n" + \
                            "enabled = true\n" + \
                            "reserved_space = bogus\n")
-        c = client.Client(basedir)
-        self.failUnlessEqual(c.getServiceNamed("storage").reserved_space, 0)
+        self.failUnlessRaises(ValueError, client.Client, basedir)
 
     def _permute(self, sb, key):
-        return [ s.get_serverid() for s in sb.get_servers_for_psi(key) ]
+        return [ s.get_longname() for s in sb.get_servers_for_psi(key) ]
 
     def test_permute(self):
         sb = StorageFarmBroker(None, True)
         for k in ["%d" % i for i in range(5)]:
-            sb.test_add_rref(k, "rref")
+            ann = {"anonymous-storage-FURL": "pb://abcde@nowhere/fake",
+                   "permutation-seed-base32": base32.b2a(k) }
+            sb.test_add_rref(k, "rref", ann)
 
         self.failUnlessReallyEqual(self._permute(sb, "one"), ['3','1','0','4','2'])
         self.failUnlessReallyEqual(self._permute(sb, "two"), ['0','4','2','1','3'])
@@ -169,6 +186,24 @@ class Basic(testutil.ReallyEqualMixin, unittest.TestCase):
         stats = c.get_stats()
         self.failUnless("node.uptime" in stats)
         self.failUnless(isinstance(stats["node.uptime"], float))
+
+    def test_helper_furl(self):
+        basedir = "test_client.Basic.test_helper_furl"
+        os.mkdir(basedir)
+
+        def _check(config, expected_furl):
+            fileutil.write(os.path.join(basedir, "tahoe.cfg"),
+                           BASECONFIG + config)
+            c = client.Client(basedir)
+            uploader = c.getServiceNamed("uploader")
+            furl, connected = uploader.get_helper_info()
+            self.failUnlessEqual(furl, expected_furl)
+
+        _check("", None)
+        _check("helper.furl =\n", None)
+        _check("helper.furl = \n", None)
+        _check("helper.furl = None", None)
+        _check("helper.furl = pb://blah\n", "pb://blah")
 
     @mock.patch('allmydata.util.log.msg')
     @mock.patch('allmydata.frontends.drop_upload.DropUploader')
@@ -310,6 +345,18 @@ class NodeMaker(testutil.ReallyEqualMixin, unittest.TestCase):
         self.failIf(IDirectoryNode.providedBy(n))
         self.failUnless(n.is_readonly())
         self.failIf(n.is_mutable())
+
+        # Testing #1679. There was a bug that would occur when downloader was
+        # downloading the same readcap more than once concurrently, so the
+        # filenode object was cached, and there was a failure from one of the
+        # servers in one of the download attempts. No subsequent download
+        # attempt would attempt to use that server again, which would lead to
+        # the file being undownloadable until the gateway was restarted. The
+        # current fix for this (hopefully to be superceded by a better fix
+        # eventually) is to prevent re-use of filenodes, so the NodeMaker is
+        # hereby required *not* to cache and re-use filenodes for CHKs.
+        other_n = c.create_node_from_uri("URI:CHK:6nmrpsubgbe57udnexlkiwzmlu:bjt7j6hshrlmadjyr7otq3dc24end5meo5xcr5xe5r663po6itmq:3:10:7277")
+        self.failIf(n is other_n, (n, other_n))
 
         n = c.create_node_from_uri("URI:LIT:n5xgk")
         self.failUnless(IFilesystemNode.providedBy(n))

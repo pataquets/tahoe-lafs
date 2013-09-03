@@ -2,18 +2,17 @@ import time, os
 
 from twisted.internet import address
 from twisted.web import http
-from nevow import rend, url, loaders, tags as T
+from nevow import rend, url, tags as T
 from nevow.inevow import IRequest
 from nevow.static import File as nevow_File # TODO: merge with static.File?
 from nevow.util import resource_filename
 
 import allmydata # to display import path
 from allmydata import get_package_versions_string
-from allmydata import provisioning
-from allmydata.util import idlib, log
+from allmydata.util import log
 from allmydata.interfaces import IFileNode
 from allmydata.web import filenode, directory, unlinked, status, operations
-from allmydata.web import reliability, storage
+from allmydata.web import storage
 from allmydata.web.common import abbreviate_size, getxmlfile, WebError, \
      get_arg, RenderMixin, get_format, get_mutable_type
 
@@ -126,20 +125,6 @@ class IncidentReporter(RenderMixin, rend.Page):
         req.setHeader("content-type", "text/plain")
         return "Thank you for your report!"
 
-class NoReliability(rend.Page):
-    docFactory = loaders.xmlstr('''\
-<html xmlns:n="http://nevow.com/ns/nevow/0.1">
-  <head>
-    <title>AllMyData - Tahoe</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  </head>
-  <body>
-  <h2>"Reliability" page not available</h2>
-  <p>Please install the python "NumPy" module to enable this page.</p>
-  </body>
-</html>
-''')
-
 SPACE = u"\u00A0"*2
 
 class Root(rend.Page):
@@ -175,12 +160,6 @@ class Root(rend.Page):
         # needs to created on each request
         return status.HelperStatus(self.client.helper)
 
-    child_provisioning = provisioning.ProvisioningTool()
-    if reliability.is_available():
-        child_reliability = reliability.ReliabilityTool()
-    else:
-        child_reliability = NoReliability()
-
     child_report_incident = IncidentReporter()
     #child_server # let's reserve this for storage-server-over-HTTP
 
@@ -189,8 +168,9 @@ class Root(rend.Page):
         return get_package_versions_string()
     def data_import_path(self, ctx, data):
         return str(allmydata)
-    def data_my_nodeid(self, ctx, data):
-        return idlib.nodeid_b2a(self.client.nodeid)
+    def render_my_nodeid(self, ctx, data):
+        tubid_s = "TubID: "+self.client.get_long_tubid()
+        return T.td(title=tubid_s)[self.client.get_long_nodeid()]
     def data_my_nickname(self, ctx, data):
         return self.client.nickname
 
@@ -219,26 +199,53 @@ class Root(rend.Page):
 
         return ctx.tag[ul]
 
-    def data_introducer_furl(self, ctx, data):
-        return self.client.introducer_furl
+    def data_introducer_furl_prefix(self, ctx, data):
+        ifurl = self.client.introducer_furl
+        # trim off the secret swissnum
+        (prefix, _, swissnum) = ifurl.rpartition("/")
+        if not ifurl:
+            return None
+        if swissnum == "introducer":
+            return ifurl
+        else:
+            return "%s/[censored]" % (prefix,)
+
+    def data_introducer_description(self, ctx, data):
+        if self.data_connected_to_introducer(ctx, data) == "no":
+            return "Introducer not connected"
+        return "Introducer"
+
     def data_connected_to_introducer(self, ctx, data):
         if self.client.connected_to_introducer():
             return "yes"
         return "no"
 
-    def data_helper_furl(self, ctx, data):
+    def data_helper_furl_prefix(self, ctx, data):
         try:
             uploader = self.client.getServiceNamed("uploader")
         except KeyError:
             return None
         furl, connected = uploader.get_helper_info()
-        return furl
+        if not furl:
+            return None
+        # trim off the secret swissnum
+        (prefix, _, swissnum) = furl.rpartition("/")
+        return "%s/[censored]" % (prefix,)
+
+    def data_helper_description(self, ctx, data):
+        if self.data_connected_to_helper(ctx, data) == "no":
+            return "Helper not connected"
+        return "Helper"
+
     def data_connected_to_helper(self, ctx, data):
         try:
             uploader = self.client.getServiceNamed("uploader")
         except KeyError:
             return "no" # we don't even have an Uploader
         furl, connected = uploader.get_helper_info()
+
+        if furl is None:
+            return "not-configured"
         if connected:
             return "yes"
         return "no"
@@ -268,10 +275,12 @@ class Root(rend.Page):
                 rhost_s = "%s:%d" % (rhost.host, rhost.port)
             else:
                 rhost_s = str(rhost)
-            connected = "Yes: to " + rhost_s
+            addr = rhost_s
+            connected = "yes"
             since = server.get_last_connect_time()
         else:
-            connected = "No"
+            addr = "N/A"
+            connected = "no"
             since = server.get_last_loss_time()
         announced = server.get_announcement_time()
         announcement = server.get_announcement()
@@ -279,6 +288,7 @@ class Root(rend.Page):
         service_name = announcement["service-name"]
 
         TIME_FORMAT = "%H:%M:%S %d-%b-%Y"
+        ctx.fillSlots("address", addr)
         ctx.fillSlots("connected", connected)
         ctx.fillSlots("connected-bool", bool(rhost))
         ctx.fillSlots("since", time.strftime(TIME_FORMAT,
@@ -370,10 +380,9 @@ class Root(rend.Page):
         form = T.form(action="report_incident", method="post",
                       enctype="multipart/form-data")[
             T.fieldset[
-            T.legend(class_="freeform-form-label")["Report an Incident"],
             T.input(type="hidden", name="t", value="report-incident"),
-            "What went wrong?:"+SPACE,
+            "What went wrong?"+SPACE,
             T.input(type="text", name="details"), SPACE,
-            T.input(type="submit", value="Report!"),
+            T.input(type="submit", value=u"Report \u00BB"),
             ]]
         return T.div[form]

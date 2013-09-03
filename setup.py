@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-u"Tahoe-LAFS does not run under Python 3. Please use a version of Python between 2.4.4 and 2.7.x inclusive."
+import sys; assert sys.version_info < (3,), ur"Tahoe-LAFS does not run under Python 3. Please use a version of Python between 2.6 and 2.7.x inclusive."
 
 # Tahoe-LAFS -- secure, distributed storage grid
 #
@@ -10,7 +10,7 @@ u"Tahoe-LAFS does not run under Python 3. Please use a version of Python between
 #
 # See the docs/about.rst file for licensing information.
 
-import glob, os, stat, subprocess, sys, re
+import glob, os, stat, subprocess, re
 
 ##### sys.path management
 
@@ -49,7 +49,7 @@ except EnvironmentError:
     open(APPNAMEFILE, "w").write(APPNAMEFILESTR)
 else:
     if curappnamefilestr.strip() != APPNAMEFILESTR:
-        print "Error -- this setup.py file is configured with the 'application name' to be '%s', but there is already a file in place in '%s' which contains the contents '%s'.  If the file is wrong, please remove it and setup.py will regenerate it and write '%s' into it." % (APPNAME, APPNAMEFILE, curappnamefilestr, APPNAMEFILESTR)
+        print("Error -- this setup.py file is configured with the 'application name' to be '%s', but there is already a file in place in '%s' which contains the contents '%s'.  If the file is wrong, please remove it and setup.py will regenerate it and write '%s' into it." % (APPNAME, APPNAMEFILE, curappnamefilestr, APPNAMEFILESTR))
         sys.exit(-1)
 
 # setuptools/zetuptoolz looks in __main__.__requires__ for a list of
@@ -71,8 +71,6 @@ if len(sys.argv) > 1 and sys.argv[1] == '--fakedependency':
 __requires__ = install_requires[:]
 
 egg = os.path.realpath(glob.glob('setuptools-*.egg')[0])
-sys.path.insert(0, egg)
-egg = os.path.realpath(glob.glob('darcsver-*.egg')[0])
 sys.path.insert(0, egg)
 import setuptools; setuptools.bootstrap_install_from = egg
 
@@ -119,20 +117,6 @@ trove_classifiers=[
 
 
 setup_requires = []
-
-# The darcsver command from the darcsver plugin is needed to initialize the
-# distribution's .version attribute correctly. (It does this either by
-# examining darcs history, or if that fails by reading the
-# src/allmydata/_version.py file). darcsver will also write a new version
-# stamp in src/allmydata/_version.py, with a version number derived from
-# darcs history. Note that the setup.cfg file has an "[aliases]" section
-# which enumerates commands that you might run and specifies that it will run
-# darcsver before each one. If you add different commands (or if I forgot
-# some that are already in use), you may need to add it to setup.cfg and
-# configure it to run darcsver before your command, if you want the version
-# number to be correct when that command runs.
-# http://pypi.python.org/pypi/darcsver
-setup_requires.append('darcsver >= 1.7.2')
 
 # Nevow imports itself when building, which causes Twisted and zope.interface
 # to be imported. We need to make sure that the versions of Twisted and
@@ -256,15 +240,6 @@ class MakeExecutable(Command):
                 raise
 
 
-DARCS_VERSION_BODY = '''
-# This _version.py is generated from darcs metadata by the tahoe setup.py
-# and the "darcsver" package.
-
-__pkgname__ = "%(pkgname)s"
-verstr = "%(pkgversion)s"
-__version__ = verstr
-'''
-
 GIT_VERSION_BODY = '''
 # This _version.py is generated from git metadata by the tahoe setup.py.
 
@@ -279,15 +254,15 @@ def run_command(args, cwd=None, verbose=False):
     try:
         # remember shell=False, so use git.cmd on windows, not just git
         p = subprocess.Popen(args, stdout=subprocess.PIPE, cwd=cwd)
-    except EnvironmentError, e:
+    except EnvironmentError as e:  # if this gives a SyntaxError, note that Tahoe-LAFS requires Python 2.6+
         if verbose:
-            print "unable to run %s" % args[0]
-            print e
+            print("unable to run %s" % args[0])
+            print(e)
         return None
     stdout = p.communicate()[0].strip()
     if p.returncode != 0:
         if verbose:
-            print "unable to run %s (error)" % args[0]
+            print("unable to run %s (error)" % args[0])
         return None
     return stdout
 
@@ -326,7 +301,7 @@ def versions_from_git(tag_prefix, verbose=False):
         return {}
     if not stdout.startswith(tag_prefix):
         if verbose:
-            print "tag '%s' doesn't start with prefix '%s'" % (stdout, tag_prefix)
+            print("tag '%s' doesn't start with prefix '%s'" % (stdout, tag_prefix))
         return {}
     version = stdout[len(tag_prefix):]
     pieces = version.split("-")
@@ -343,6 +318,11 @@ def versions_from_git(tag_prefix, verbose=False):
         normalized_version += ".dev0"
     return {"version": version, "normalized": normalized_version, "full": full}
 
+# setup.cfg has an [aliases] section which runs "update_version" before many
+# commands (like "build" and "sdist") that need to know our package version
+# ahead of time. If you add different commands (or if we forgot some), you
+# may need to add it to setup.cfg and configure it to run update_version
+# before your command.
 
 class UpdateVersion(Command):
     description = "update _version.py from revision-control metadata"
@@ -353,38 +333,26 @@ class UpdateVersion(Command):
     def finalize_options(self):
         pass
     def run(self):
-        target = self.distribution.versionfiles[0]
-        if os.path.isdir(os.path.join(basedir, "_darcs")):
-            verstr = self.try_from_darcs(target)
-        elif os.path.isdir(os.path.join(basedir, ".git")):
-            verstr = self.try_from_git(target)
+        if os.path.isdir(os.path.join(basedir, ".git")):
+            verstr = self.try_from_git()
         else:
-            print "no version-control data found, leaving _version.py alone"
+            print("no version-control data found, leaving _version.py alone")
             return
         if verstr:
             self.distribution.metadata.version = verstr
 
-    def try_from_darcs(self, target):
-        from darcsver.darcsvermodule import update
-        (rc, verstr) = update(pkgname=self.distribution.get_name(),
-                              verfilename=self.distribution.versionfiles,
-                              revision_number=True,
-                              version_body=DARCS_VERSION_BODY)
-        if rc == 0:
-            return verstr
-
-    def try_from_git(self, target):
+    def try_from_git(self):
         versions = versions_from_git("allmydata-tahoe-", verbose=True)
         if versions:
-            for fn in self.distribution.versionfiles:
-                f = open(fn, "wb")
-                f.write(GIT_VERSION_BODY %
-                        { "pkgname": self.distribution.get_name(),
-                          "version": versions["version"],
-                          "normalized": versions["normalized"],
-                          "full": versions["full"] })
-                f.close()
-                print "git-version: wrote '%s' into '%s'" % (versions["version"], fn)
+            fn = 'src/allmydata/_version.py'
+            f = open(fn, "wb")
+            f.write(GIT_VERSION_BODY %
+                    { "pkgname": self.distribution.get_name(),
+                      "version": versions["version"],
+                      "normalized": versions["normalized"],
+                      "full": versions["full"] })
+            f.close()
+            print("git-version: wrote '%s' into '%s'" % (versions["version"], fn))
         return versions.get("normalized", None)
 
 
@@ -467,6 +435,7 @@ setup(name=APPNAME,
                 'allmydata.util',
                 'allmydata.web',
                 'allmydata.web.static',
+                'allmydata.web.static.css',
                 'allmydata.windows',
                 'buildtest'],
       classifiers=trove_classifiers,
@@ -475,10 +444,10 @@ setup(name=APPNAME,
       tests_require=tests_require,
       package_data={"allmydata.web": ["*.xhtml"],
                     "allmydata.web.static": ["*.js", "*.png", "*.css"],
+                    "allmydata.web.static.css": ["*.css"],
                     },
       setup_requires=setup_requires,
       entry_points = { 'console_scripts': [ 'tahoe = allmydata.scripts.runner:run' ] },
       zip_safe=False, # We prefer unzipped for easier access.
-      versionfiles=['src/allmydata/_version.py',],
       **setup_args
       )

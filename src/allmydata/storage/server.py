@@ -281,10 +281,15 @@ class StorageServer(service.MultiService, Referenceable):
             sf = ShareFile(fn)
             sf.add_or_renew_lease(lease_info)
 
+        max_shares = max(0, 1 - len(alreadygot))
+
         for shnum in sharenums:
             incominghome = os.path.join(self.incomingdir, si_dir, "%d" % shnum)
             finalhome = os.path.join(self.sharedir, si_dir, "%d" % shnum)
-            if os.path.exists(finalhome):
+            if len(bucketwriters) >= max_shares:
+                # don't accept too many shares.
+                pass
+            elif os.path.exists(finalhome):
                 # great! we already have it. easy.
                 pass
             elif os.path.exists(incominghome):

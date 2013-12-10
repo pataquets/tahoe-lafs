@@ -1,0 +1,33 @@
+Source: tahoe-lafs
+Section: utils
+Priority: optional
+Maintainer: Bert Agaz <bertagaz@ptitcanardnoir.org>
+Uploaders: Micah Anderson <micah@debian.org>
+Build-Depends: debhelper (>= 9), python-setuptools, python-all (>= 2.6.6-3~),
+ python-twisted
+Standards-Version: 3.9.5
+Vcs-Git: git://anonscm.debian.org/tahoe/tahoe.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=tahoe/tahoe.git
+Homepage: http://tahoe-lafs.org/trac/tahoe
+
+Package: tahoe-lafs
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}, python-pyasn1, python-crypto,
+ python-foolscap (>= 0.6.3), python-openssl, python-nevow, python-simplejson,
+ python-zfec, python-pycryptopp (>= 0.5.29), python-setuptools, python-mock,
+ python-twisted, net-tools
+Description: Secure distributed filesystem
+ Tahoe, the Least Authority File System, is a distributed filesystem that
+ features high reliability, strong security properties, and a fine-grained
+ sharing model. Files are encrypted, signed, erasure-coded, then distributed
+ over multiple servers, such that any (configurable) subset of the servers
+ will be sufficient to recover the data. The default 3-of-10 configuration
+ tolerates up to 7 server failures before data becomes unrecoverable.
+ .
+ Tahoe offers "provider-independent security": the confidentiality and
+ integrity of your data do not depend upon the behavior of the servers. The
+ use of erasure-coding means that reliability and availability depend only
+ upon a subset of the servers.
+ .
+ Tahoe files are accessed through a RESTful web API, a human-oriented web
+ server interface, and CLI tools.

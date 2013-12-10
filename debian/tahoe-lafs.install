@@ -1,0 +1,2 @@
+misc/operations_helpers/munin/tahoe_* usr/share/munin/plugins/
+bin/tahoe usr/bin/

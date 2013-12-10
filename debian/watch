@@ -1,0 +1,8 @@
+version=3
+
+# The "SUMO" releases are the same as the normal releases, except they
+# ship with the Python dependencies bundled. Obviously because Debian
+# can specify dependencies, this is redundant, so we filter SUMO out.
+
+opts="dversionmangle=s/allmydata-tahoe/tahoe-lafs/,uversionmangle=s/-SUMO//" \
+ http://tahoe-lafs.org/source/tahoe-lafs/releases/allmydata-tahoe-(.+)\.tar\.gz

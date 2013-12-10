@@ -1,0 +1,21 @@
+Description: Add kFreeBSD support for automatic ip detection.
+ This patch temporary enable tahoe v1.10.0 to support kFreeBSD when trying to
+ guess the ip address. This is fixed in upstream trunk and this patch should be
+ removed when packaging tahoe-lafs v1.11.
+Forwarded: yes
+Bug-Debian: http://bugs.debian.org/700239
+Bug: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/1918
+Author: Gonéri Le Bouder <goneri@rulezlan.org>
+Index: tahoe.git/src/allmydata/util/iputil.py
+===================================================================
+--- tahoe.git.orig/src/allmydata/util/iputil.py	2013-09-04 10:52:16.381111327 +0200
++++ tahoe.git/src/allmydata/util/iputil.py	2013-09-04 13:13:55.697104935 +0200
+@@ -161,6 +161,8 @@
+     "netbsd4": "bsd",
+     "netbsd5": "bsd",
+     "netbsd6": "bsd",
++    "gnukfreebsd8": "bsd",
++    "gnukfreebsd9": "bsd",
+     "sunos5": "sunos",
+     "cygwin": "cygwin",
+     }

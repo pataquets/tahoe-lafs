@@ -1,0 +1,164 @@
+tahoe-lafs (1.10.0-1) unstable; urgency=low
+
+  [Bert Agaz]
+  * New upstream release.
+  * Add missing dependency on net-tools (Closes: #683331).
+  * Import upstream patch to support kFreeBSD. (Closes: #700239).
+  * Standards version bump.
+  * Add sysvinit script (Closes: #652003).
+  * Include a README.Debian to document how to manage nodes in Debian.
+  * Use dh_installchangelogs to properly install upstream NEWS.rst.
+
+ -- Micah Anderson <micah@debian.org>  Wed, 04 Sep 2013 10:33:09 +0200
+
+tahoe-lafs (1.9.2-1) unstable; urgency=low
+
+  [ Bert Agaz ]
+  * New upstream release (Closes: #680083).
+  * Use manpage shipped within upstream release.
+  * Stick to upstream dependency on foolscap >= 0.6.3.
+
+ -- Micah Anderson <micah@debian.org>  Wed, 04 Jul 2012 17:52:21 +0200
+
+tahoe-lafs (1.9.1-1) unstable; urgency=high
+
+  [ Bert Agaz ]
+  * New upstream release (Closes: #652002).
+  * Set urgency to high due to RC bug fix.
+  * Update debian/patches/.
+  * Install munin plugin configuration as examples (Closes: #652106).
+  * Remove old deps version numbers from debian/control.
+  * Update debian/copyright to follow DEP-5.
+  * Bump debian standard version to 3.9.3.
+  * Add manpage.
+  * Switch to dh_python2.
+  * Bump debian/compat.
+  * Fix setuptools egg_info mess with upstream sources. (Closes: #653312)
+
+ -- Micah Anderson <micah@debian.org>  Tue, 12 Jun 2012 09:35:12 +0200
+
+tahoe-lafs (1.8.3-2) unstable; urgency=high
+
+  [ Bert Agaz ]
+  * Fix dependency regression against python-twisted (Closes: #641649).
+
+ -- Micah Anderson <micah@debian.org>  Thu, 15 Sep 2011 17:20:56 +0200
+
+tahoe-lafs (1.8.3-1) unstable; urgency=high
+
+  [ Bert Agaz ]
+  * New upstream release (Closes: #641540), urgency high due to security fix
+  * Refresh Debian patches.
+  * Add header to Debian patches.
+  * Remove Debian version of python-pycryptopp dependency (Closes: #630825).
+  * Remove python-twisted dependency.
+    python-foolscap already depends on the needed twisted packages.
+  * Remove link to /usr/share/common-licenses/BSD.
+  * Add Vcs-{Git,Browser} to debian/control.
+  * Add a patch to reduce Twisted dependencies (Closes: #631163).
+    (credit goes to Julian Taylor <jtaylor.debian@googlemail.com>).
+
+ -- Micah Anderson <micah@debian.org>  Tue, 21 Jun 2011 14:01:31 +0200
+
+tahoe-lafs (1.8.2-3) unstable; urgency=low
+
+  * Update debian/copyright to have complete licensing information
+
+ -- Micah Anderson <micah@debian.org>  Thu, 16 Jun 2011 13:33:31 -0400
+
+tahoe-lafs (1.8.2-2) unstable; urgency=low
+
+  * Raise dependency on python-pycryptopp version, now upgraded in Debian. 
+
+ -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Wed, 15 Jun 2011 00:41:24 +0200
+
+tahoe-lafs (1.8.2-1) unstable; urgency=low
+
+  [ bertagaz ]
+  * Initial release (Closes: #544338).
+  * Remove ubuntu's specific XSBC-Original-Maintainer field a in debian/control.
+  * Remove deprecated XB-Python-Version field in debian/control.
+  * Add install dependency on python-mock.
+  * Update homepage in debian/control.
+  * Ignore quilt dir.
+  * Remove upstream custom build dependencies.
+  * Include munin plugins.
+  * Use upstream trick to install a clean bin/tahoe.
+  * Bump versions of several install dependencies.
+  * Bump compatibility version.
+  * Exclude buildtest python package from the debian one.
+
+  [ Micah Anderson]
+  * switch dh_clean -k to dh_prep
+  * add myself to Uploaders
+  * Update Standards-Version: no changes
+
+ -- Bert Agaz <bertagaz@ptitcanardnoir.org>  Wed, 13 Apr 2011 21:35:26 +0200
+
+tahoe-lafs (1.8.2-0ubuntu1) natty; urgency=low
+
+  * Update to version 1.8.2 (LP: #719092)
+    - Improved performance and fault tolerance of downloads
+    - Increased logging 
+    - Fixed Twisted 10.2 compatitibility
+  * Update standards version to 3.9.1
+
+ -- Paul Hummer <paul@ubuntu.com>  Wed, 23 Feb 2011 13:58:35 -0700
+
+tahoe-lafs (1.7.1-0ubuntu1) maverick; urgency=low
+
+  * Update to version 1.7.1 (LP: #609755).
+    - SFTP support
+    - support for non-ASCII character encodings
+    - more checks to make sure file hunks are more sufficiently distributed
+    - many bugfixes
+
+ -- Paul Hummer <paul@ubuntu.com>  Tue, 10 Aug 2010 17:48:58 -0600
+
+tahoe-lafs (1.6.1-0ubuntu2) lucid; urgency=low
+
+  * Restore files to the binary package by re-instating the package= from
+    debian/rules that was deleted too hastily. The empty substiution variable
+    meant that python setup.py was told to install the files outside the
+    package tmpdir. (LP: #551333)
+
+ -- James Westby <james.westby@ubuntu.com>  Tue, 30 Mar 2010 10:19:27 -0400
+
+tahoe-lafs (1.6.1-0ubuntu1) lucid; urgency=low
+
+  [Jeremy Visser]
+  * Update to bugfix release 1.6.1 (LP: #529350).
+    - Correct handling of small immutable directories.
+    - Improved user interface messages and error reporting.
+  * debian/control: bump standards-version to 3.8.4. No changes required.
+  * debian/gbp.conf: deleted as it's a temporary file left over
+  * debian/watch: fixed to have the correct tarball name and avoid SUMO version
+
+  [Fabrice Coutadeur]
+  * Switch to dpkg-source 3.0 (quilt) format
+  * debian/reduce_build_dependencies.patch: converted from direct source
+    changes done in 1.6.0 to reduce the required dependencies and not download
+    them at build time.
+  * debian/rules: deleted get-orig-source target as the watch file has been
+    fixed
+
+ -- Jeremy Visser <jeremy@visser.name>  Thu, 04 Mar 2010 19:37:54 +1100
+
+tahoe-lafs (1.6.0-0ubuntu1) lucid; urgency=low
+
+  * Update to version 1.6 (LP: #516744).
+    - Deep immutable directories.
+    - `tahoe backup` now creates immutable directories.
+    - `create-node` command added.
+    - `create-client` now implies --no-storage.
+  * debian/rules: fix find call.
+
+ -- Paul Hummer <paul@ubuntu.com>  Wed, 03 Feb 2010 19:36:39 -0700
+
+tahoe-lafs (1.5.0-0ubuntu1) karmic; urgency=low
+
+  * Initial release (LP: #417136).
+  * Relax pycryptopp dependency to 0.5.14, to help it get into Karmic.
+  * Add missing license statements.
+
+ -- Zooko O'Whielacronx (Hacker) <zooko@zooko.com>  Thu, 24 Sep 2009 00:00:05 -0600

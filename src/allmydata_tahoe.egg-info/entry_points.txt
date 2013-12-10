@@ -1,0 +1,3 @@
+[console_scripts]
+tahoe = allmydata.scripts.runner:run
+

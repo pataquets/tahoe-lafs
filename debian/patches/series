@@ -1,0 +1,5 @@
+remove_upstream_setup_deps.diff
+customize_setupcfg_aliases.diff
+create_proper_tahoe_script_from_template.diff
+exclude_buildtest_package.diff
+add_kFreeBSD_in_supported_os.diff

@@ -1,0 +1,35 @@
+Description: Remove upstream setup dependencies.
+ Tahoe-LAFS uses a custom setuptools included in its sources as python egg.
+ We need to patch setup.py so that it uses Debian's setuptools package at build
+ time.
+Forwarded: not-needed
+Author: bertagaz <bertagaz@ptitcanardnoir.org>
+Index: tahoe.git/setup.py
+===================================================================
+--- tahoe.git.orig/setup.py	2013-10-09 14:41:43.909073001 +0200
++++ tahoe.git/setup.py	2013-10-10 14:04:02.709073003 +0200
+@@ -68,11 +68,11 @@
+     del sys.argv[1]
+     install_requires += ["fakedependency >= 1.0.0"]
+ 
+-__requires__ = install_requires[:]
++#__requires__ = install_requires[:]
+ 
+-egg = os.path.realpath(glob.glob('setuptools-*.egg')[0])
+-sys.path.insert(0, egg)
+-import setuptools; setuptools.bootstrap_install_from = egg
++#egg = os.path.realpath(glob.glob('setuptools-*.egg')[0])
++#sys.path.insert(0, egg)
++#import setuptools; setuptools.bootstrap_install_from = egg
+ 
+ from setuptools import setup
+ from setuptools.command import sdist
+@@ -446,7 +446,7 @@
+                     "allmydata.web.static": ["*.js", "*.png", "*.css"],
+                     "allmydata.web.static.css": ["*.css"],
+                     },
+-      setup_requires=setup_requires,
++      #setup_requires=setup_requires,
+       entry_points = { 'console_scripts': [ 'tahoe = allmydata.scripts.runner:run' ] },
+       zip_safe=False, # We prefer unzipped for easier access.
+       **setup_args

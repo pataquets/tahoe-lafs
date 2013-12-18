@@ -2518,7 +2518,7 @@ class Backup(GridTestMixin, CLITestMixin, StallMixin, unittest.TestCase):
 
         d.addCallback(lambda res: do_backup())
         def _check0((rc, out, err)):
-            self.failUnlessReallyEqual(err, "")
+            self.failUnlessReallyEqual(out, "")
             self.failUnlessReallyEqual(rc, 0)
             fu, fr, fs, dc, dr, ds = self.count_output(out)
             # foo.txt, bar.txt, blah.txt

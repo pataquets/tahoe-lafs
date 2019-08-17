@@ -291,6 +291,81 @@ class RIStorageServer(RemoteInterface):
         """
 
 
+class IStorageServer(Interface):
+    """
+    An object capable of storing shares for a storage client.
+    """
+    def get_version():
+        """
+        :see: ``RIStorageServer.get_version``
+        """
+
+    def allocate_buckets(
+            storage_index,
+            renew_secret,
+            cancel_secret,
+            sharenums,
+            allocated_size,
+            canary,
+    ):
+        """
+        :see: ``RIStorageServer.allocate_buckets``
+        """
+
+    def add_lease(
+            storage_index,
+            renew_secret,
+            cancel_secret,
+    ):
+        """
+        :see: ``RIStorageServer.add_lease``
+        """
+
+    def renew_lease(
+            storage_index,
+            renew_secret,
+    ):
+        """
+        :see: ``RIStorageServer.renew_lease``
+        """
+
+    def get_buckets(
+            storage_index,
+    ):
+        """
+        :see: ``RIStorageServer.get_buckets``
+        """
+
+    def slot_readv(
+            storage_index,
+            shares,
+            readv,
+    ):
+        """
+        :see: ``RIStorageServer.slot_readv``
+        """
+
+    def slot_testv_and_readv_and_writev(
+            storage_index,
+            secrets,
+            tw_vectors,
+            r_vector,
+    ):
+        """
+        :see: ``RIStorageServer.slot_testv_readv_and_writev``
+        """
+
+    def advise_corrupt_share(
+            share_type,
+            storage_index,
+            shnum,
+            reason,
+    ):
+        """
+        :see: ``RIStorageServer.advise_corrupt_share``
+        """
+
+
 class IStorageBucketWriter(Interface):
     """
     Objects of this kind live on the client side.
@@ -463,12 +538,25 @@ class IServer(IDisplayableServer):
         pass
 
     def get_rref():
-        """Once a server is connected, I return a RemoteReference.
+        """Obsolete.  Use ``get_storage_server`` instead.
+
+        Once a server is connected, I return a RemoteReference.
         Before a server is connected for the first time, I return None.
 
         Note that the rref I return will start producing DeadReferenceErrors
         once the connection is lost.
         """
+
+    def get_storage_server():
+        """
+        Once a server is connected, I return an ``IStorageServer``.
+        Before a server is connected for the first time, I return None.
+
+        Note that the ``IStorageServer`` I return will start producing
+        DeadReferenceErrors once the connection is lost.
+        """
+
+
 
 
 class IMutableSlotWriter(Interface):
@@ -728,6 +816,59 @@ class IReadable(Interface):
 
         See src/allmydata/util/consumer.py for an example of a simple
         download-to-memory consumer.
+        """
+
+class IPeerSelector(Interface):
+    """
+    I select peers for an upload, maximizing some measure of health.
+
+    I keep track of the state of a grid relative to a file. This means
+    that I know about all of the peers that parts of that file could be
+    placed on, and about shares that have been placed on those peers.
+    Given this, I assign shares to peers in a way that maximizes the
+    file's health according to whichever definition of health I am
+    programmed with. I tell the uploader whether or not my assignment is
+    healthy. I keep track of failures during the process and update my
+    conclusions appropriately.
+    """
+    def add_peer_with_share(peerid, shnum):
+        """
+        Update my internal state to reflect the fact that peer peerid
+        holds share shnum. Called for shares that are detected before
+        peer selection begins.
+        """
+
+    def confirm_share_allocation(peerid, shnum):
+        """
+        Confirm that an allocated peer=>share pairing has been
+        successfully established.
+        """
+
+    def add_peers(peerids=set):
+        """
+        Update my internal state to include the peers in peerids as
+        potential candidates for storing a file.
+        """
+
+    def mark_readonly_peer(peerid):
+        """
+        Mark the peer peerid as full. This means that any
+        peer-with-share relationships I know about for peerid remain
+        valid, but that peerid will not be assigned any new shares.
+        """
+
+    def mark_bad_peer(peerid):
+        """
+        Mark the peer peerid as bad. This is typically called when an
+        error is encountered when communicating with a peer. I will
+        disregard any existing peer => share relationships associated
+        with peerid, and will not attempt to assign it any more shares.
+        """
+
+    def get_share_placements():
+        """
+        Return the share-placement map (a dict) which maps shares to
+        server-ids
         """
 
 
@@ -2830,3 +2971,55 @@ class InsufficientVersionError(Exception):
 
 class EmptyPathnameComponentError(Exception):
     """The webapi disallows empty pathname components."""
+
+class IConnectionStatus(Interface):
+    """
+    I hold information about the 'connectedness' for some reference.
+    Connections are an illusion, of course: only messages hold any meaning,
+    and they are fleeting. But for status displays, it is useful to pretend
+    that 'recently contacted' means a connection is established, and
+    'recently failed' means it is not.
+
+    This object is not 'live': it is created and populated when requested
+    from the connection manager, and it does not change after that point.
+    """
+
+    connected = Attribute(
+        """
+        True if we appear to be connected: we've been successful in
+        communicating with our target at some point in the past, and we
+        haven't experienced any errors since then.""")
+
+    last_connection_time = Attribute(
+        """
+        If is_connected() is True, this is a timestamp (seconds-since-epoch)
+        when we last transitioned from 'not connected' to 'connected', such
+        as when a TCP connect() operation completed and subsequent
+        negotiation was successful. Otherwise it is None.
+        """)
+
+    summary = Attribute(
+        """
+        A string with a brief summary of the current status, suitable for
+        display on an informational page. The more complete text from
+        last_connection_description would be appropriate for a tool-tip
+        popup.
+        """)
+
+    last_received_time = Attribute(
+        """
+        A timestamp (seconds-since-epoch) describing the last time we heard
+        anything (including low-level keep-alives or inbound requests) from
+        the other side.
+        """)
+
+    non_connected_statuses = Attribute(
+        """
+        A dictionary, describing all connections that are not (yet)
+        successful. When connected is True, this will only be the losing
+        attempts. When connected is False, this will include all attempts.
+
+        This maps a connection description string (for foolscap this is a
+        connection hint and the handler it is using) to the status string
+        (pending, connected, refused, or other errors).
+        """)

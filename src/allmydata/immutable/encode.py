@@ -1,7 +1,7 @@
 # -*- test-case-name: allmydata.test.test_encode -*-
 
 import time
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from foolscap.api import fireEventually
 from allmydata import uri
@@ -13,6 +13,9 @@ from allmydata.codec import CRSEncoder
 from allmydata.interfaces import IEncoder, IStorageBucketWriter, \
      IEncryptedUploadable, IUploadStatus, UploadUnhappinessError
 
+from ..util.eliotutil import (
+    log_call_deferred,
+)
 
 """
 The goal of the encoder is to turn the original file into a series of
@@ -71,8 +74,8 @@ GiB=1024*MiB
 TiB=1024*GiB
 PiB=1024*TiB
 
+@implementer(IEncoder)
 class Encoder(object):
-    implements(IEncoder)
 
     def __init__(self, log_parent=None, upload_status=None, progress=None):
         object.__init__(self)
@@ -100,6 +103,7 @@ class Encoder(object):
             kwargs["facility"] = "tahoe.encoder"
         return log.msg(*args, **kwargs)
 
+    @log_call_deferred(action_type=u"immutable:encode:set-encrypted-uploadable")
     def set_encrypted_uploadable(self, uploadable):
         eu = self._uploadable = IEncryptedUploadable(uploadable)
         d = eu.get_size()
@@ -122,7 +126,7 @@ class Encoder(object):
         assert not self._codec
         k, happy, n, segsize = params
         self.required_shares = k
-        self.servers_of_happiness = happy
+        self.min_happiness = happy
         self.num_shares = n
         self.segment_size = segsize
         self.log("got encoding parameters: %d/%d/%d %d" % (k,happy,n, segsize))
@@ -180,7 +184,7 @@ class Encoder(object):
         if name == "storage_index":
             return self._storage_index
         elif name == "share_counts":
-            return (self.required_shares, self.servers_of_happiness,
+            return (self.required_shares, self.min_happiness,
                     self.num_shares)
         elif name == "num_segments":
             return self.num_segments
@@ -205,6 +209,7 @@ class Encoder(object):
             assert isinstance(v, set)
         self.servermap = servermap.copy()
 
+    @log_call_deferred(action_type=u"immutable:encode:start")
     def start(self):
         """ Returns a Deferred that will fire with the verify cap (an instance of
         uri.CHKFileVerifierURI)."""
@@ -420,12 +425,13 @@ class Encoder(object):
         d.addCallback(_got)
         return d
 
-    def _send_segment(self, (shares, shareids), segnum):
+    def _send_segment(self, shares_and_shareids, segnum):
         # To generate the URI, we must generate the roothash, so we must
         # generate all shares, even if we aren't actually giving them to
         # anybody. This means that the set of shares we create will be equal
         # to or larger than the set of landlords. If we have any landlord who
         # *doesn't* have a share, that's an error.
+        (shares, shareids) = shares_and_shareids
         _assert(set(self.landlords.keys()).issubset(set(shareids)),
                 shareids=shareids, landlords=self.landlords)
         start = time.time()
@@ -503,17 +509,17 @@ class Encoder(object):
             self.log("they weren't in our list of landlords", parent=ln,
                      level=log.WEIRD, umid="TQGFRw")
         happiness = happinessutil.servers_of_happiness(self.servermap)
-        if happiness < self.servers_of_happiness:
+        if happiness < self.min_happiness:
             peerids = set(happinessutil.shares_by_server(self.servermap).keys())
             msg = happinessutil.failure_message(len(peerids),
                                                 self.required_shares,
-                                                self.servers_of_happiness,
+                                                self.min_happiness,
                                                 happiness)
             msg = "%s: %s" % (msg, why)
             raise UploadUnhappinessError(msg)
         self.log("but we can still continue with %s shares, we'll be happy "
                  "with at least %s" % (happiness,
-                                       self.servers_of_happiness),
+                                       self.min_happiness),
                  parent=ln)
 
     def _gather_responses(self, dl):

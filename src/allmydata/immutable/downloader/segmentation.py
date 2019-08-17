@@ -1,7 +1,7 @@
 
 import time
 now = time.time
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.internet.interfaces import IPushProducer
 from foolscap.api import eventually
@@ -11,14 +11,14 @@ from allmydata.interfaces import DownloadStopped
 
 from common import BadSegmentNumberError, WrongSegmentError
 
-class Segmentation:
+@implementer(IPushProducer)
+class Segmentation(object):
     """I am responsible for a single offset+size read of the file. I handle
     segmentation: I figure out which segments are necessary, request them
     (from my CiphertextDownloader) in order, and trim the segments down to
     match the offset+size span. I use the Producer/Consumer interface to only
     request one segment at a time.
     """
-    implements(IPushProducer)
     def __init__(self, node, offset, size, consumer, read_ev, logparent=None):
         self._node = node
         self._hungry = True
@@ -90,7 +90,8 @@ class Segmentation:
         self._cancel_segment_request = None
         return res
 
-    def _got_segment(self, (segment_start,segment,decodetime), wanted_segnum):
+    def _got_segment(self, segment_args, wanted_segnum):
+        (segment_start, segment, decodetime) = segment_args
         self._cancel_segment_request = None
         # we got file[segment_start:segment_start+len(segment)]
         # we want file[self._offset:self._offset+self._size]

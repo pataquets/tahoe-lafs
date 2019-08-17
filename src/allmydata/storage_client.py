@@ -30,17 +30,25 @@ the foolscap-based server implemented in src/allmydata/storage/*.py .
 
 
 import re, time, hashlib
-from zope.interface import implements
+import attr
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.application import service
-
+from eliot import (
+    log_call,
+)
 from foolscap.api import eventually
-from allmydata.interfaces import IStorageBroker, IDisplayableServer, IServer
-from allmydata.util import log, base32
+from allmydata.interfaces import (
+    IStorageBroker,
+    IDisplayableServer,
+    IServer,
+    IStorageServer,
+)
+from allmydata.util import log, base32, connection_status
 from allmydata.util.assertutil import precondition
 from allmydata.util.observer import ObserverList
 from allmydata.util.rrefutil import add_version_to_remote_reference
-from allmydata.util.hashutil import sha1
+from allmydata.util.hashutil import permute_server_hash
 
 # who is responsible for de-duplication?
 #  both?
@@ -59,8 +67,8 @@ from allmydata.util.hashutil import sha1
 #  don't pass signatures: only pass validated blessed-objects
 
 
+@implementer(IStorageBroker)
 class StorageFarmBroker(service.MultiService):
-    implements(IStorageBroker)
     """I live on the client, and know about storage servers. For each server
     that is participating in a grid, I either maintain a connection to it or
     remember enough information to establish a connection to it on demand.
@@ -84,18 +92,36 @@ class StorageFarmBroker(service.MultiService):
         self._threshold_listeners = [] # tuples of (threshold, Deferred)
         self._connected_high_water_mark = 0
 
+    @log_call(action_type=u"storage-client:broker:set-static-servers")
     def set_static_servers(self, servers):
-        for (server_id, server) in servers.items():
-            assert isinstance(server_id, unicode) # from YAML
-            server_id = server_id.encode("ascii")
-            self._static_server_ids.add(server_id)
-            handler_overrides = server.get("connections", {})
-            s = NativeStorageServer(server_id, server["ann"],
-                                    self._tub_maker, handler_overrides)
-            s.on_status_changed(lambda _: self._got_connection())
-            s.setServiceParent(self)
-            self.servers[server_id] = s
-            s.start_connecting(self._trigger_connections)
+        # Sorting the items gives us a deterministic processing order.  This
+        # doesn't really matter but it makes the logging behavior more
+        # predictable and easier to test (and at least one test does depend on
+        # this sorted order).
+        for (server_id, server) in sorted(servers.items()):
+            try:
+                storage_server = self._make_storage_server(server_id, server)
+            except Exception:
+                pass
+            else:
+                self._static_server_ids.add(server_id)
+                self.servers[server_id] = storage_server
+                storage_server.setServiceParent(self)
+                storage_server.start_connecting(self._trigger_connections)
+
+    @log_call(
+        action_type=u"storage-client:broker:make-storage-server",
+        include_args=["server_id"],
+        include_result=False,
+    )
+    def _make_storage_server(self, server_id, server):
+        assert isinstance(server_id, unicode) # from YAML
+        server_id = server_id.encode("ascii")
+        handler_overrides = server.get("connections", {})
+        s = NativeStorageServer(server_id, server["ann"],
+                                self._tub_maker, handler_overrides)
+        s.on_status_changed(lambda _: self._got_connection())
+        return s
 
     def when_connected_enough(self, threshold):
         """
@@ -111,7 +137,7 @@ class StorageFarmBroker(service.MultiService):
     # these two are used in unit tests
     def test_add_rref(self, serverid, rref, ann):
         s = NativeStorageServer(serverid, ann.copy(), self._tub_maker, {})
-        s.rref = rref
+        s._rref = rref
         s._is_connected = True
         self.servers[serverid] = s
 
@@ -200,7 +226,8 @@ class StorageFarmBroker(service.MultiService):
         def _permuted(server):
             seed = server.get_permutation_seed()
             is_unpreferred = server not in preferred_servers
-            return (is_unpreferred, sha1(peer_selection_index + seed).digest())
+            return (is_unpreferred,
+                    permute_server_hash(peer_selection_index, seed))
         return sorted(connected_servers, key=_permuted)
 
     def get_all_serverids(self):
@@ -234,8 +261,8 @@ class StorageFarmBroker(service.MultiService):
                     return s
         return StubServer(serverid)
 
-class StubServer:
-    implements(IDisplayableServer)
+@implementer(IDisplayableServer)
+class StubServer(object):
     def __init__(self, serverid):
         self.serverid = serverid # binary tubid
     def get_serverid(self):
@@ -247,6 +274,8 @@ class StubServer:
     def get_nickname(self):
         return "?"
 
+
+@implementer(IServer)
 class NativeStorageServer(service.MultiService):
     """I hold information about a storage server that we want to connect to.
     If we are connected, I hold the RemoteReference, their host address, and
@@ -262,7 +291,6 @@ class NativeStorageServer(service.MultiService):
     @ivar rref: the RemoteReference, if connected, otherwise None
     @ivar remote_host: the IAddress, if connected, otherwise None
     """
-    implements(IServer)
 
     VERSION_DEFAULTS = {
         "http://allmydata.org/tahoe/protocols/storage/v1" :
@@ -314,7 +342,7 @@ class NativeStorageServer(service.MultiService):
         self.last_connect_time = None
         self.last_loss_time = None
         self.remote_host = None
-        self.rref = None
+        self._rref = None
         self._is_connected = False
         self._reconnector = None
         self._trigger_cb = None
@@ -343,8 +371,8 @@ class NativeStorageServer(service.MultiService):
     def get_permutation_seed(self):
         return self._permutation_seed
     def get_version(self):
-        if self.rref:
-            return self.rref.version
+        if self._rref:
+            return self._rref.version
         return None
     def get_name(self): # keep methodname short
         # TODO: decide who adds [] in the short description. It should
@@ -363,17 +391,16 @@ class NativeStorageServer(service.MultiService):
         return self.announcement
     def get_remote_host(self):
         return self.remote_host
+
+    def get_connection_status(self):
+        last_received = None
+        if self._rref:
+            last_received = self._rref.getDataLastReceivedAt()
+        return connection_status.from_foolscap_reconnector(self._reconnector,
+                                                           last_received)
+
     def is_connected(self):
         return self._is_connected
-    def get_last_connect_time(self):
-        return self.last_connect_time
-    def get_last_loss_time(self):
-        return self.last_loss_time
-    def get_last_received_data_time(self):
-        if self.rref is None:
-            return None
-        else:
-            return self.rref.getDataLastReceivedAt()
 
     def get_available_space(self):
         version = self.get_version()
@@ -414,18 +441,30 @@ class NativeStorageServer(service.MultiService):
 
         self.last_connect_time = time.time()
         self.remote_host = rref.getLocationHints()
-        self.rref = rref
+        self._rref = rref
         self._is_connected = True
         rref.notifyOnDisconnect(self._lost)
 
     def get_rref(self):
-        return self.rref
+        return self._rref
+
+    def get_storage_server(self):
+        """
+        See ``IServer.get_storage_server``.
+        """
+        if self._rref is None:
+            return None
+        # Pass in an accessor for our _rref attribute.  The value of the
+        # attribute may change over time as connections are lost and
+        # re-established.  The _StorageServer should always be able to get the
+        # most up-to-date value.
+        return _StorageServer(get_rref=self.get_rref)
 
     def _lost(self):
         log.msg(format="lost connection to %(name)s", name=self.get_name(),
                 facility="tahoe.storage_broker", umid="zbRllw")
         self.last_loss_time = time.time()
-        # self.rref is now stale: all callRemote()s will get a
+        # self._rref is now stale: all callRemote()s will get a
         # DeadReferenceError. We leave the stale reference in place so that
         # uploader/downloader code (which received this IServer through
         # get_connected_servers() or get_servers_for_psi()) can continue to
@@ -443,3 +482,117 @@ class NativeStorageServer(service.MultiService):
 
 class UnknownServerTypeError(Exception):
     pass
+
+
+@implementer(IStorageServer)
+@attr.s
+class _StorageServer(object):
+    """
+    ``_StorageServer`` is a direct pass-through to an ``RIStorageServer`` via
+    a ``RemoteReference``.
+    """
+    _get_rref = attr.ib()
+
+    @property
+    def _rref(self):
+        return self._get_rref()
+
+    def get_version(self):
+        return self._rref.callRemote(
+            "get_version",
+        )
+
+    def allocate_buckets(
+            self,
+            storage_index,
+            renew_secret,
+            cancel_secret,
+            sharenums,
+            allocated_size,
+            canary,
+    ):
+        return self._rref.callRemote(
+            "allocate_buckets",
+            storage_index,
+            renew_secret,
+            cancel_secret,
+            sharenums,
+            allocated_size,
+            canary,
+        )
+
+    def add_lease(
+            self,
+            storage_index,
+            renew_secret,
+            cancel_secret,
+    ):
+        return self._rref.callRemote(
+            "add_lease",
+            storage_index,
+            renew_secret,
+            cancel_secret,
+        )
+
+    def renew_lease(
+            self,
+            storage_index,
+            renew_secret,
+    ):
+        return self._rref.callRemote(
+            "renew_lease",
+            storage_index,
+            renew_secret,
+        )
+
+    def get_buckets(
+            self,
+            storage_index,
+    ):
+        return self._rref.callRemote(
+            "get_buckets",
+            storage_index,
+        )
+
+    def slot_readv(
+            self,
+            storage_index,
+            shares,
+            readv,
+    ):
+        return self._rref.callRemote(
+            "slot_readv",
+            storage_index,
+            shares,
+            readv,
+        )
+
+    def slot_testv_and_readv_and_writev(
+            self,
+            storage_index,
+            secrets,
+            tw_vectors,
+            r_vector,
+    ):
+        return self._rref.callRemote(
+            "slot_testv_and_readv_and_writev",
+            storage_index,
+            secrets,
+            tw_vectors,
+            r_vector,
+        )
+
+    def advise_corrupt_share(
+            self,
+            share_type,
+            storage_index,
+            shnum,
+            reason,
+    ):
+        return self._rref.callRemoteOnly(
+            "advise_corrupt_share",
+            share_type,
+            storage_index,
+            shnum,
+            reason,
+        )

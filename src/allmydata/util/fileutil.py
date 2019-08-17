@@ -1,8 +1,11 @@
+from __future__ import print_function
+
 """
 Futz with files like a pro.
 """
 
 import sys, exceptions, os, stat, tempfile, time, binascii
+import six
 from collections import namedtuple
 from errno import ENOENT
 
@@ -13,8 +16,7 @@ if sys.platform == "win32":
 
 from twisted.python import log
 
-from pycryptopp.cipher.aes import AES
-
+from allmydata.crypto import aes
 from allmydata.util.assertutil import _assert
 
 
@@ -35,7 +37,7 @@ def rename(src, dst, tries=4, basedelay=0.1):
     for i in range(tries-1):
         try:
             return os.rename(src, dst)
-        except EnvironmentError, le:
+        except EnvironmentError as le:
             # XXX Tighten this to check if this is a permission denied error (possibly due to another Windows process having the file open and execute the superkludge only in this case.
             log.msg("XXX KLUDGE Attempting to move file %s => %s; got %s; sleeping %s seconds" % (src, dst, le, basedelay,))
             time.sleep(basedelay)
@@ -63,7 +65,7 @@ def remove(f, tries=4, basedelay=0.1):
     for i in range(tries-1):
         try:
             return os.remove(f)
-        except EnvironmentError, le:
+        except EnvironmentError as le:
             # XXX Tighten this to check if this is a permission denied error (possibly due to another Windows process having the file open and execute the superkludge only in this case.
             if not os.path.exists(f):
                 return
@@ -72,7 +74,7 @@ def remove(f, tries=4, basedelay=0.1):
             basedelay *= 2
     return os.remove(f) # The last try.
 
-class ReopenableNamedTemporaryFile:
+class ReopenableNamedTemporaryFile(object):
     """
     This uses tempfile.mkstemp() to generate a secure temp file.  It then closes
     the file, leaving a zero-length file as a placeholder.  You can get the
@@ -96,7 +98,7 @@ class ReopenableNamedTemporaryFile:
     def shutdown(self):
         remove(self.name)
 
-class EncryptedTemporaryFile:
+class EncryptedTemporaryFile(object):
     # not implemented: next, readline, readlines, xreadlines, writelines
 
     def __init__(self):
@@ -107,9 +109,10 @@ class EncryptedTemporaryFile:
         offset_big = offset // 16
         offset_small = offset % 16
         iv = binascii.unhexlify("%032x" % offset_big)
-        cipher = AES(self.key, iv=iv)
-        cipher.process("\x00"*offset_small)
-        return cipher.process(data)
+        cipher = aes.create_encryptor(self.key, iv)
+        # this is just to advance the counter
+        aes.encrypt_data(cipher, b"\x00" * offset_small)
+        return aes.encrypt_data(cipher, data)
 
     def close(self):
         self.file.close()
@@ -170,7 +173,7 @@ def is_ancestor_path(parent, dirname):
             return False
     return True
 
-def make_dirs(dirname, mode=0777):
+def make_dirs(dirname, mode=0o777):
     """
     An idempotent version of os.makedirs().  If the dir already exists, do
     nothing and return without raising an exception.  If this call creates the
@@ -181,13 +184,13 @@ def make_dirs(dirname, mode=0777):
     tx = None
     try:
         os.makedirs(dirname, mode)
-    except OSError, x:
+    except OSError as x:
         tx = x
 
     if not os.path.isdir(dirname):
         if tx:
             raise tx
-        raise exceptions.IOError, "unknown error prevented creation of directory, or deleted the directory immediately after creation: %s" % dirname # careful not to construct an IOError with a 2-tuple, as that has a special meaning...
+        raise exceptions.IOError("unknown error prevented creation of directory, or deleted the directory immediately after creation: %s" % dirname) # careful not to construct an IOError with a 2-tuple, as that has a special meaning...
 
 def rm_dir(dirname):
     """
@@ -208,7 +211,7 @@ def rm_dir(dirname):
             else:
                 remove(fullname)
         os.rmdir(dirname)
-    except Exception, le:
+    except Exception as le:
         # Ignore "No such file or directory"
         if (not isinstance(le, OSError)) or le.args[0] != 2:
             excs.append(le)
@@ -220,8 +223,8 @@ def rm_dir(dirname):
         if len(excs) == 1:
             raise excs[0]
         if len(excs) == 0:
-            raise OSError, "Failed to remove dir for unknown reason."
-        raise OSError, excs
+            raise OSError("Failed to remove dir for unknown reason.")
+        raise OSError(excs)
 
 
 def remove_if_possible(f):
@@ -243,7 +246,9 @@ def du(basedir):
 def move_into_place(source, dest):
     """Atomically replace a file, or as near to it as the platform allows.
     The dest file may or may not exist."""
-    if "win32" in sys.platform.lower():
+    if "win32" in sys.platform.lower() and os.path.exists(source):
+        # we check for source existing since we don't want to nuke the
+        # dest unless we'll succeed at moving the target into place
         remove_if_possible(dest)
     os.rename(source, dest)
 
@@ -565,7 +570,7 @@ if sys.platform == "win32":
             abspath = abspath[4 :]
         drive = os.path.splitdrive(abspath)[0]
 
-        print "flushing %r" % (drive,)
+        print("flushing %r" % (drive,))
         hVolume = CreateFileW(u"\\\\.\\" + drive,
                               GENERIC_WRITE,
                               FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -590,13 +595,16 @@ else:
 class ConflictError(Exception):
     pass
 
+
 class UnableToUnlinkReplacementError(Exception):
     pass
 
+
 def reraise(wrapper):
-    _, exc, tb = sys.exc_info()
-    wrapper_exc = wrapper("%s: %s" % (exc.__class__.__name__, exc))
-    raise wrapper_exc.__class__, wrapper_exc, tb
+    cls, exc, tb = sys.exc_info()
+    wrapper_exc = wrapper("%s: %s" % (cls.__name__, exc))
+    six.reraise(wrapper, wrapper_exc, tb)
+
 
 if sys.platform == "win32":
     # <https://msdn.microsoft.com/en-us/library/windows/desktop/aa365512%28v=vs.85%29.aspx>
@@ -613,12 +621,13 @@ if sys.platform == "win32":
     def rename_no_overwrite(source_path, dest_path):
         os.rename(source_path, dest_path)
 
-    def replace_file(replaced_path, replacement_path, backup_path):
+    def replace_file(replaced_path, replacement_path):
         precondition_abspath(replaced_path)
         precondition_abspath(replacement_path)
-        precondition_abspath(backup_path)
 
-        r = ReplaceFileW(replaced_path, replacement_path, backup_path,
+        # no "backup" path (the first None) because we don't want to
+        # create a backup file
+        r = ReplaceFileW(replaced_path, replacement_path, None,
                          REPLACEFILE_IGNORE_MERGE_ERRORS, None, None)
         if r == 0:
             # The UnableToUnlinkReplacementError case does not happen on Windows;
@@ -628,7 +637,7 @@ if sys.platform == "win32":
                 raise ConflictError("WinError: %s" % (WinError(err),))
 
             try:
-                rename_no_overwrite(replacement_path, replaced_path)
+                move_into_place(replacement_path, replaced_path)
             except EnvironmentError:
                 reraise(ConflictError)
 else:
@@ -640,23 +649,21 @@ else:
         except EnvironmentError:
             reraise(UnableToUnlinkReplacementError)
 
-    def replace_file(replaced_path, replacement_path, backup_path):
+    def replace_file(replaced_path, replacement_path):
         precondition_abspath(replaced_path)
         precondition_abspath(replacement_path)
-        precondition_abspath(backup_path)
 
         if not os.path.exists(replacement_path):
             raise ConflictError("Replacement file not found: %r" % (replacement_path,))
 
         try:
-            os.rename(replaced_path, backup_path)
+            move_into_place(replacement_path, replaced_path)
         except OSError as e:
             if e.errno != ENOENT:
                 raise
-        try:
-            rename_no_overwrite(replacement_path, replaced_path)
         except EnvironmentError:
             reraise(ConflictError)
+
 
 PathInfo = namedtuple('PathInfo', 'isdir isfile islink exists size mtime_ns ctime_ns')
 

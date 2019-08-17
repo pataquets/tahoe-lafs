@@ -2,6 +2,10 @@ import re, time
 from twisted.application import service, strports, internet
 from twisted.web import http, static
 from twisted.internet import defer
+from twisted.internet.address import (
+    IPv4Address,
+    IPv6Address,
+)
 from nevow import appserver, inevow
 from allmydata.util import log, fileutil
 
@@ -16,7 +20,7 @@ from allmydata.web.common import IOpHandleTable, MyExceptionHandler
 # surgery may induce a dependency upon a particular version of twisted.web
 
 parse_qs = http.parse_qs
-class MyRequest(appserver.NevowRequest):
+class MyRequest(appserver.NevowRequest, object):
     fields = None
     _tahoe_request_had_error = None
 
@@ -28,6 +32,7 @@ class MyRequest(appserver.NevowRequest):
         self.content.seek(0,0)
         self.args = {}
         self.stack = []
+        self.setHeader("Referrer-Policy", "no-referrer")
 
         self.method, self.uri = command, path
         self.clientproto = version
@@ -43,6 +48,10 @@ class MyRequest(appserver.NevowRequest):
         # serialized and sent with the request so CGIs will work remotely
         self.client = self.channel.transport.getPeer()
         self.host = self.channel.transport.getHost()
+
+        # Adding security headers. These will be sent for *all* HTTP requests.
+        # See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
+        self.responseHeaders.setRawHeaders("X-Frame-Options", ["DENY"])
 
         # Argument processing.
 
@@ -113,16 +122,32 @@ class MyRequest(appserver.NevowRequest):
         if self._tahoe_request_had_error:
             error = " [ERROR]"
 
-        log.msg(format="web: %(clientip)s %(method)s %(uri)s %(code)s %(length)s%(error)s",
-                clientip=self.getClientIP(),
-                method=self.method,
-                uri=uri,
-                code=self.code,
-                length=(self.sentLength or "-"),
-                error=error,
-                facility="tahoe.webish",
-                level=log.OPERATIONAL,
-                )
+        log.msg(
+            format=(
+                "web: %(clientip)s %(method)s %(uri)s %(code)s "
+                "%(length)s%(error)s"
+            ),
+            clientip=_get_client_ip(self),
+            method=self.method,
+            uri=uri,
+            code=self.code,
+            length=(self.sentLength or "-"),
+            error=error,
+            facility="tahoe.webish",
+            level=log.OPERATIONAL,
+        )
+
+
+def _get_client_ip(request):
+    try:
+        get = request.getClientAddress
+    except AttributeError:
+        return request.getClientIP()
+    else:
+        client_addr = get()
+        if isinstance(client_addr, (IPv4Address, IPv6Address)):
+            return client_addr.host
+        return None
 
 
 class WebishServer(service.MultiService):
@@ -136,6 +161,7 @@ class WebishServer(service.MultiService):
         # twisted.internet.task.Clock that is provided by the unit tests
         # so that they can test features that involve the passage of
         # time in a deterministic manner.
+
         self.root = root.Root(client, clock, now_fn)
         self.buildServer(webport, nodeurl_path, staticdir)
         if self.root.child_operations:
@@ -217,4 +243,3 @@ class IntroducerWebishServer(WebishServer):
         service.MultiService.__init__(self)
         self.root = introweb.IntroducerRoot(introducer)
         self.buildServer(webport, nodeurl_path, staticdir)
-

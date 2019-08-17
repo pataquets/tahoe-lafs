@@ -1,6 +1,6 @@
 import os
 
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.web.client import getPage
 from twisted.internet import defer
 from twisted.cred import error, checkers, credentials
@@ -16,13 +16,13 @@ class NeedRootcapLookupScheme(Exception):
     mechanism to translate name+passwd pairs into a rootcap, either a file of
     name/passwd/rootcap tuples, or a server to do the translation."""
 
-class FTPAvatarID:
+class FTPAvatarID(object):
     def __init__(self, username, rootcap):
         self.username = username
         self.rootcap = rootcap
 
-class AccountFileChecker:
-    implements(checkers.ICredentialsChecker)
+@implementer(checkers.ICredentialsChecker)
+class AccountFileChecker(object):
     credentialInterfaces = (credentials.IUsernamePassword,
                             credentials.IUsernameHashedPassword,
                             credentials.ISSHPrivateKey)
@@ -108,8 +108,8 @@ class AccountFileChecker:
 
         return defer.fail(error.UnauthorizedLogin())
 
-class AccountURLChecker:
-    implements(checkers.ICredentialsChecker)
+@implementer(checkers.ICredentialsChecker)
+class AccountURLChecker(object):
     credentialInterfaces = (credentials.IUsernamePassword,)
 
     def __init__(self, client, auth_url):

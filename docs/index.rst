@@ -13,16 +13,18 @@ Contents:
    about
    INSTALL
    running
+   magic-wormhole-invites
    configuration
    architecture
 
    frontends/CLI
    frontends/webapi
    frontends/FTP-and-SFTP
-   frontends/drop-upload
+   frontends/magic-folder
    frontends/download-status
 
    known_issues
+   ../.github/CONTRIBUTING
 
    servers
    helper
@@ -31,8 +33,11 @@ Contents:
 
    backdoors
    donations
+   accepting-donations
+   expenses
    cautions
    write_coordination
+   magic-folder-howto
    backupdb
 
    anonymity-configuration
@@ -60,4 +65,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-

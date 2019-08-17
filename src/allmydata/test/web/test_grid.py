@@ -1,6 +1,8 @@
+from __future__ import print_function
+
 import os.path, re, urllib
-import simplejson
-from StringIO import StringIO
+import json
+from six.moves import StringIO
 from nevow import rend
 from twisted.trial import unittest
 from allmydata import uri, dirnode
@@ -96,7 +98,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_good_return_to)
         d.addCallback(self.CHECK, "good", "t=check&output=json")
         def _got_json_good(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessEqual(r["summary"], "Healthy")
             self.failUnless(r["results"]["healthy"])
             self.failIfIn("needs-rebalancing", r["results"])
@@ -116,7 +118,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_small_return_to)
         d.addCallback(self.CHECK, "small", "t=check&output=json")
         def _got_json_small(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessEqual(r["storage-index"], "")
             self.failUnless(r["results"]["healthy"])
         d.addCallback(_got_json_small)
@@ -128,7 +130,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_smalldir)
         d.addCallback(self.CHECK, "smalldir", "t=check&output=json")
         def _got_json_smalldir(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessEqual(r["storage-index"], "")
             self.failUnless(r["results"]["healthy"])
         d.addCallback(_got_json_smalldir)
@@ -139,7 +141,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_sick)
         d.addCallback(self.CHECK, "sick", "t=check&output=json")
         def _got_json_sick(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessEqual(r["summary"],
                                  "Not Healthy: 9 shares (enc 3-of-10)")
             self.failIf(r["results"]["healthy"])
@@ -153,7 +155,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_dead)
         d.addCallback(self.CHECK, "dead", "t=check&output=json")
         def _got_json_dead(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessEqual(r["summary"],
                                  "Not Healthy: 1 shares (enc 3-of-10)")
             self.failIf(r["results"]["healthy"])
@@ -167,7 +169,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_got_html_corrupt)
         d.addCallback(self.CHECK, "corrupt", "t=check&verify=true&output=json")
         def _got_json_corrupt(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessIn("Unhealthy: 9 shares (enc 3-of-10)", r["summary"])
             self.failIf(r["results"]["healthy"])
             self.failUnless(r["results"]["recoverable"])
@@ -285,7 +287,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d.addCallback(self.CHECK, "sick", "t=check&repair=true&output=json")
         def _got_json_sick(res):
-            r = simplejson.loads(res)
+            r = json.loads(res)
             self.failUnlessReallyEqual(r["repair-attempted"], True)
             self.failUnlessReallyEqual(r["repair-successful"], True)
             self.failUnlessEqual(r["pre-repair-results"]["summary"],
@@ -347,7 +349,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d.addCallback(lambda ign: self.GET(self.rooturl+"?t=json"))
         def _check_directory_json(res, expect_rw_uri):
-            data = simplejson.loads(res)
+            data = json.loads(res)
             self.failUnlessEqual(data[0], "dirnode")
             f = data[1]["children"][name]
             self.failUnlessEqual(f[0], "unknown")
@@ -388,7 +390,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(_check_info, expect_rw_uri=False, expect_ro_uri=True)
 
         def _check_json(res, expect_rw_uri):
-            data = simplejson.loads(res)
+            data = json.loads(res)
             self.failUnlessEqual(data[0], "unknown")
             if expect_rw_uri:
                 self.failUnlessReallyEqual(to_str(data[1]["rw_uri"]), unknown_rwcap, data)
@@ -535,7 +537,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
             self.failIfIn("URI:SSK", res)
             get_lonely = "".join([r'<td>FILE</td>',
                                   r'\s+<td>',
-                                  r'<a href="[^"]+%s[^"]+">lonely</a>' % (urllib.quote(lonely_uri),),
+                                  r'<a href="[^"]+%s[^"]+" rel="noreferrer">lonely</a>' % (urllib.quote(lonely_uri),),
                                   r'</td>',
                                   r'\s+<td align="right">%d</td>' % len("one"),
                                   ])
@@ -550,7 +552,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         # ... and in JSON.
         d.addCallback(lambda ign: self.GET(self.rooturl+"?t=json"))
         def _check_json(res):
-            data = simplejson.loads(res)
+            data = json.loads(res)
             self.failUnlessEqual(data[0], "dirnode")
             listed_children = data[1]["children"]
             self.failUnlessReallyEqual(sorted(listed_children.keys()), [u"lonely"])
@@ -607,12 +609,12 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(self.CHECK, "root", "t=stream-deep-check")
         def _done(res):
             try:
-                units = [simplejson.loads(line)
+                units = [json.loads(line)
                          for line in res.splitlines()
                          if line]
             except ValueError:
-                print "response is:", res
-                print "undecodeable line was '%s'" % line
+                print("response is:", res)
+                print("undecodeable line was '%s'" % line)
                 raise
             self.failUnlessReallyEqual(len(units), 5+1)
             # should be parent-first
@@ -643,7 +645,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(self.CHECK, "root", "t=stream-manifest")
         def _check_manifest(res):
             self.failUnless(res.endswith("\n"))
-            units = [simplejson.loads(t) for t in res[:-1].split("\n")]
+            units = [json.loads(t) for t in res[:-1].split("\n")]
             self.failUnlessReallyEqual(len(units), 5+1)
             self.failUnlessEqual(units[-1]["type"], "stats")
             first = units[0]
@@ -700,7 +702,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
             self.failUnlessIn("ERROR: UnrecoverableFileError(no recoverable versions)",
                               error_line)
             self.failUnless(len(error_msg) > 2, error_msg_s) # some traceback
-            units = [simplejson.loads(line) for line in lines[:first_error]]
+            units = [json.loads(line) for line in lines[:first_error]]
             self.failUnlessReallyEqual(len(units), 6) # includes subdir
             last_unit = units[-1]
             self.failUnlessEqual(last_unit["path"], ["subdir"])
@@ -721,7 +723,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
             self.failUnlessIn("ERROR: UnrecoverableFileError(no recoverable versions)",
                               error_line)
             self.failUnless(len(error_msg) > 2, error_msg_s) # some traceback
-            units = [simplejson.loads(line) for line in lines[:first_error]]
+            units = [json.loads(line) for line in lines[:first_error]]
             self.failUnlessReallyEqual(len(units), 6) # includes subdir
             last_unit = units[-1]
             self.failUnlessEqual(last_unit["path"], ["subdir"])
@@ -794,7 +796,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d.addCallback(self.CHECK, "root", "t=stream-deep-check&repair=true")
         def _done(res):
-            units = [simplejson.loads(line)
+            units = [json.loads(line)
                      for line in res.splitlines()
                      if line]
             self.failUnlessReallyEqual(len(units), 4+1)
@@ -977,7 +979,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
 
         d.addCallback(self.CHECK, "root", "t=stream-deep-check") # no add-lease
         def _done(res):
-            units = [simplejson.loads(line)
+            units = [json.loads(line)
                      for line in res.splitlines()
                      if line]
             # root, one, small, mutable,   stats
@@ -1094,7 +1096,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
                               " overdue= unused= need 3. Last failure: None")
             msg2 = msgbase + (" ran out of shares:"
                               " complete="
-                              " pending=Share(sh0-on-xgru5)"
+                              " pending=Share(sh0-on-ysbz4st7)"
                               " overdue= unused= need 3. Last failure: None")
             self.failUnless(body == msg1 or body == msg2, body)
         d.addCallback(_check_one_share)
@@ -1238,8 +1240,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         self.basedir = "web/Grid/blacklist"
         self.set_up_grid(oneshare=True)
         c0 = self.g.clients[0]
-        c0_basedir = c0.basedir
-        fn = os.path.join(c0_basedir, "access.blacklist")
+        fn = c0.config.get_config_path("access.blacklist")
         self.uris = {}
         DATA = "off-limits " * 50
 
@@ -1290,7 +1291,7 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         # ... and in JSON (used by CLI).
         d.addCallback(lambda ign: self.GET(self.dir_url+"?t=json", followRedirect=True))
         def _check_dir_json(res):
-            data = simplejson.loads(res)
+            data = json.loads(res)
             self.failUnless(isinstance(data, list), data)
             self.failUnlessEqual(data[0], "dirnode")
             self.failUnless(isinstance(data[1], dict), data)
@@ -1336,11 +1337,11 @@ class Grid(GridTestMixin, WebErrorMixin, ShouldFailMixin, testutil.ReallyEqualMi
         d.addCallback(lambda ign: self.GET(self.dir_url_base, followRedirect=True))
         d.addCallback(lambda body: self.failUnlessIn(DIR_HTML_TAG, body))
         d.addCallback(lambda ign: self.GET(self.dir_url_json1))
-        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda res: json.loads(res))  # just check it decodes
         d.addCallback(lambda ign: self.GET(self.dir_url_json2))
-        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda res: json.loads(res))  # just check it decodes
         d.addCallback(lambda ign: self.GET(self.dir_url_json_ro))
-        d.addCallback(lambda res: simplejson.loads(res))  # just check it decodes
+        d.addCallback(lambda res: json.loads(res))  # just check it decodes
         d.addCallback(lambda ign: self.GET(self.child_url))
         d.addCallback(lambda body: self.failUnlessEqual(DATA, body))
 

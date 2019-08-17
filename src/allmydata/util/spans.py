@@ -1,5 +1,7 @@
+from __future__ import print_function
 
-class Spans:
+
+class Spans(object):
     """I represent a compressed list of booleans, one per index (an integer).
     Typically, each index represents an offset into a large string, pointing
     to a specific byte of a share. In this context, True means that byte has
@@ -40,7 +42,7 @@ class Spans:
                     assert start > prev_end
                 prev_end = start+length
         except AssertionError:
-            print "BAD:", self.dump()
+            print("BAD:", self.dump())
             raise
 
     def add(self, start, length):
@@ -191,7 +193,8 @@ class Spans:
         not_other = bounds - other
         return self - not_other
 
-    def __contains__(self, (start,length)):
+    def __contains__(self, start_and_length):
+        (start, length) = start_and_length
         for span_start,span_length in self._spans:
             o = overlap(start, length, span_start, span_length)
             if o:
@@ -219,7 +222,7 @@ def adjacent(start0, length0, start1, length1):
         return True
     return False
 
-class DataSpans:
+class DataSpans(object):
     """I represent portions of a large string. Equivalently, I can be said to
     maintain a large array of characters (with gaps of empty elements). I can
     be used to manage access to a remote share, where some pieces have been
@@ -265,7 +268,7 @@ class DataSpans:
         for start, data in self.spans[1:]:
             if not start > prev_end:
                 # adjacent or overlapping: bad
-                print "ASSERTION FAILED", self.spans
+                print("ASSERTION FAILED", self.spans)
                 raise AssertionError
 
     def get(self, start, length):

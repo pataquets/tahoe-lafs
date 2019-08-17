@@ -1,27 +1,34 @@
 
 import itertools
-from zope.interface import implements
+from zope.interface import implementer
 from allmydata.interfaces import IDownloadStatus
 
-class ReadEvent:
+class ReadEvent(object):
+
     def __init__(self, ev, ds):
         self._ev = ev
         self._ds = ds
+
     def update(self, bytes, decrypttime, pausetime):
         self._ev["bytes_returned"] += bytes
         self._ev["decrypt_time"] += decrypttime
         self._ev["paused_time"] += pausetime
+
     def finished(self, finishtime):
         self._ev["finish_time"] = finishtime
         self._ds.update_last_timestamp(finishtime)
 
-class SegmentEvent:
+
+class SegmentEvent(object):
+
     def __init__(self, ev, ds):
         self._ev = ev
         self._ds = ds
+
     def activate(self, when):
         if self._ev["active_time"] is None:
             self._ev["active_time"] = when
+
     def deliver(self, when, start, length, decodetime):
         assert self._ev["active_time"] is not None
         self._ev["finish_time"] = when
@@ -30,44 +37,53 @@ class SegmentEvent:
         self._ev["segment_start"] = start
         self._ev["segment_length"] = length
         self._ds.update_last_timestamp(when)
+
     def error(self, when):
         self._ev["finish_time"] = when
         self._ev["success"] = False
         self._ds.update_last_timestamp(when)
 
-class DYHBEvent:
+
+class DYHBEvent(object):
+
     def __init__(self, ev, ds):
         self._ev = ev
         self._ds = ds
+
     def error(self, when):
         self._ev["finish_time"] = when
         self._ev["success"] = False
         self._ds.update_last_timestamp(when)
+
     def finished(self, shnums, when):
         self._ev["finish_time"] = when
         self._ev["success"] = True
         self._ev["response_shnums"] = shnums
         self._ds.update_last_timestamp(when)
 
-class BlockRequestEvent:
+
+class BlockRequestEvent(object):
+
     def __init__(self, ev, ds):
         self._ev = ev
         self._ds = ds
+
     def finished(self, received, when):
         self._ev["finish_time"] = when
         self._ev["success"] = True
         self._ev["response_length"] = received
         self._ds.update_last_timestamp(when)
+
     def error(self, when):
         self._ev["finish_time"] = when
         self._ev["success"] = False
         self._ds.update_last_timestamp(when)
 
 
-class DownloadStatus:
+@implementer(IDownloadStatus)
+class DownloadStatus(object):
     # There is one DownloadStatus for each CiphertextFileNode. The status
     # object will keep track of all activity for that node.
-    implements(IDownloadStatus)
     statusid_counter = itertools.count(0)
 
     def __init__(self, storage_index, size):
@@ -207,8 +223,6 @@ class DownloadStatus:
         return self.size
     def get_status(self):
         # mention all outstanding segment requests
-        outstanding = set()
-        errorful = set()
         outstanding = set([s_ev["segment_number"]
                            for s_ev in self.segment_events
                            if s_ev["finish_time"] is None])

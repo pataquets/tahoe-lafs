@@ -1,6 +1,6 @@
 
 import os, stat, time, weakref
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from foolscap.api import Referenceable, DeadReferenceError, eventually
 import allmydata # for __full_version__
@@ -16,7 +16,7 @@ class NotEnoughWritersError(Exception):
     pass
 
 
-class CHKCheckerAndUEBFetcher:
+class CHKCheckerAndUEBFetcher(object):
     """I check to see if a file is already present in the grid. I also fetch
     the URI Extension Block, which is useful for an uploading client who
     wants to avoid the work of encryption and encoding.
@@ -54,7 +54,7 @@ class CHKCheckerAndUEBFetcher:
     def _get_all_shareholders(self, storage_index):
         dl = []
         for s in self._peer_getter(storage_index):
-            d = s.get_rref().callRemote("get_buckets", storage_index)
+            d = s.get_storage_server().get_buckets(storage_index)
             d.addCallbacks(self._got_response, self._got_error,
                            callbackArgs=(s,))
             dl.append(d)
@@ -76,7 +76,6 @@ class CHKCheckerAndUEBFetcher:
         if f.check(DeadReferenceError):
             return
         log.err(f, parent=self._logparent)
-        pass
 
     def _get_uri_extension(self, res):
         # assume that we can pull the UEB from any share. If we get an error,
@@ -123,12 +122,12 @@ class CHKCheckerAndUEBFetcher:
         return False
 
 
+@implementer(interfaces.RICHKUploadHelper)
 class CHKUploadHelper(Referenceable, upload.CHKUploader):
     """I am the helper-server -side counterpart to AssistedUploader. I handle
     peer selection, encoding, and share pushing. I read ciphertext from the
     remote AssistedUploader.
     """
-    implements(interfaces.RICHKUploadHelper)
     VERSION = { "http://allmydata.org/tahoe/protocols/helper/chk-upload/v1" :
                  { },
                 "application-version": str(allmydata.__full_version__),
@@ -245,7 +244,7 @@ class CHKUploadHelper(Referenceable, upload.CHKUploader):
         self._helper.upload_finished(self._storage_index, 0)
         del self._reader
 
-class AskUntilSuccessMixin:
+class AskUntilSuccessMixin(object):
     # create me with a _reader array
     _last_failure = None
 
@@ -447,8 +446,8 @@ class CHKCiphertextFetcher(AskUntilSuccessMixin):
         return self._ciphertext_fetched
 
 
+@implementer(interfaces.IEncryptedUploadable)
 class LocalCiphertextReader(AskUntilSuccessMixin):
-    implements(interfaces.IEncryptedUploadable)
 
     def __init__(self, upload_helper, storage_index, encoding_file):
         self._readers = []
@@ -484,8 +483,8 @@ class LocalCiphertextReader(AskUntilSuccessMixin):
 
 
 
+@implementer(interfaces.RIHelper, interfaces.IStatsProducer)
 class Helper(Referenceable):
-    implements(interfaces.RIHelper, interfaces.IStatsProducer)
     # this is the non-distributed version. When we need to have multiple
     # helpers, this object will become the HelperCoordinator, and will query
     # the farm of Helpers to see if anyone has the storage_index of interest,

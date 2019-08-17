@@ -71,8 +71,8 @@ port 3456, on the loopback (127.0.0.1) interface.
 Basic Concepts: GET, PUT, DELETE, POST
 ======================================
 
-As described in :doc:`../architecture`, each file and directory in a Tahoe
-virtual filesystem is referenced by an identifier that combines the
+As described in :doc:`../architecture`, each file and directory in a
+Tahoe-LAFS file store is referenced by an identifier that combines the
 designation of the object with the authority to do something with it (such as
 read or modify the contents). This identifier is called a "read-cap" or
 "write-cap", depending upon whether it enables read-only or read-write
@@ -93,7 +93,7 @@ Other variations (generally implemented by adding query parameters to the
 URL) will return information about the object, such as metadata. GET
 operations are required to have no side-effects.
 
-PUT is used to upload new objects into the filesystem, or to replace an
+PUT is used to upload new objects into the file store, or to replace an
 existing link or the contents of a mutable file. DELETE is used to unlink
 objects from directories. Both PUT and DELETE are required to be idempotent:
 performing the same operation multiple times must have the same side-effects
@@ -107,12 +107,12 @@ unlinking), because otherwise a regular web browser has no way to accomplish
 these tasks. In general, everything that can be done with a PUT or DELETE can
 also be done with a POST.
 
-Tahoe's web API is designed for two different kinds of consumer. The first is
-a program that needs to manipulate the virtual file system. Such programs are
+Tahoe-LAFS' web API is designed for two different kinds of consumer. The
+first is a program that needs to manipulate the file store. Such programs are
 expected to use the RESTful interface described above. The second is a human
-using a standard web browser to work with the filesystem. This user is given
-a series of HTML pages with links to download files, and forms that use POST
-actions to upload, rename, and unlink files.
+using a standard web browser to work with the file store. This user is
+presented with a series of HTML pages with links to download files, and forms
+that use POST actions to upload, rename, and unlink files.
 
 When an error occurs, the HTTP response code will be set to an appropriate
 400-series code (like 404 Not Found for an unknown childname, or 400 Bad Request
@@ -332,7 +332,7 @@ Programmatic Operations
 =======================
 
 Now that we know how to build URLs that refer to files and directories in a
-Tahoe virtual filesystem, what sorts of operations can we do with those URLs?
+Tahoe-LAFS file store, what sorts of operations can we do with those URLs?
 This section contains a catalog of GET, PUT, DELETE, and POST operations that
 can be performed on these URLs. This set of operations are aimed at programs
 that use HTTP to communicate with a Tahoe node. A later section describes
@@ -419,7 +419,7 @@ Writing/Uploading a File
 ``PUT /uri``
 
  This uploads a file, and produces a file-cap for the contents, but does not
- attach the file into the filesystem. No directories will be modified by
+ attach the file into the file store. No directories will be modified by
  this operation. The file-cap is returned as the body of the HTTP response.
 
  This method accepts format= and mutable=true as query string arguments, and
@@ -435,7 +435,7 @@ Creating a New Directory
 
  Create a new empty directory and return its write-cap as the HTTP response
  body. This does not make the newly created directory visible from the
- filesystem. The "PUT" operation is provided for backwards compatibility:
+ file store. The "PUT" operation is provided for backwards compatibility:
  new code should use POST.
 
  This supports a format= argument in the query string. The format=
@@ -539,7 +539,7 @@ Creating a New Directory
  checking that they are immutable. The "imm." prefix must not be stripped
  off without performing this check. (Future versions of the web-API server
  will perform it where necessary.)
- 
+
  The cap for each child may be given either in the "rw_uri" or "ro_uri"
  field of the PROPDICT (not both). If a cap is given in the "rw_uri" field,
  then the web-API server will check that it is an immutable read-cap of a
@@ -595,7 +595,7 @@ Creating a New Directory
  format of the named target directory; intermediate directories, if created,
  are created using the default mutable type setting, as configured on the
  Tahoe-LAFS server responding to the request.
- 
+
  This operation will return an error if a blocking file is present at any of
  the parent names, preventing the server from creating the necessary parent
  directory; or if it would require changing an immutable directory; or if
@@ -655,7 +655,7 @@ Creating a New Directory
  the immediate parent directory already has a a child named NAME.
 
  Note that the name= argument must be passed as a queryarg, because the POST
- request body is used for the initial children JSON. 
+ request body is used for the initial children JSON.
 
 ``POST /uri/$DIRCAP/[SUBDIRS../]?t=mkdir-immutable&name=NAME``
 
@@ -770,7 +770,7 @@ Getting Information About a File Or Directory (as JSON)
  if and only if you have read-write access to that directory. The verify_uri
  field will be present if and only if the object has a verify-cap
  (non-distributed LIT files do not have verify-caps).
- 
+
  If the cap is of an unknown format, then the file size and verify_uri will
  not be available::
 
@@ -807,8 +807,8 @@ child is set. The value of the 'tahoe':'linkcrtime' key is updated whenever
 a link to a child is created -- i.e. when there was not previously a link
 under that name.
 
-Note however, that if the edge in the Tahoe filesystem points to a mutable
-file and the contents of that mutable file is changed, then the
+Note however, that if the edge in the Tahoe-LAFS file store points to a
+mutable file and the contents of that mutable file is changed, then the
 'tahoe':'linkmotime' value on that edge will *not* be updated, since the
 edge itself wasn't updated -- only the mutable file was.
 
@@ -835,8 +835,8 @@ The reason we added the new fields in Tahoe v1.4.0 is that there is a
 values of the 'mtime'/'ctime' pair, and this API is used by the
 "tahoe backup" command (in Tahoe v1.3.0 and later) to set the 'mtime' and
 'ctime' values when backing up files from a local filesystem into the
-Tahoe filesystem. As of Tahoe v1.4.0, the set_children API cannot be used
-to set anything under the 'tahoe' key of the metadata dict -- if you
+Tahoe-LAFS file store. As of Tahoe v1.4.0, the set_children API cannot be
+used to set anything under the 'tahoe' key of the metadata dict -- if you
 include 'tahoe' keys in your 'metadata' arguments then it will silently
 ignore those keys.
 
@@ -861,11 +861,11 @@ When an edge is created or updated by "tahoe backup", the 'mtime' and
   the UNIX "ctime" of the local file, which means the last time that
   either the contents or the metadata of the local file was changed.
 
-There are several ways that the 'ctime' field could be confusing: 
+There are several ways that the 'ctime' field could be confusing:
 
 1. You might be confused about whether it reflects the time of the creation
-   of a link in the Tahoe filesystem (by a version of Tahoe < v1.7.0) or a
-   timestamp copied in by "tahoe backup" from a local filesystem.
+   of a link in the Tahoe-LAFS file store (by a version of Tahoe < v1.7.0)
+   or a timestamp copied in by "tahoe backup" from a local filesystem.
 
 2. You might be confused about whether it is a copy of the file creation
    time (if "tahoe backup" was run on a Windows system) or of the last
@@ -895,7 +895,7 @@ Attaching an Existing File or Directory by its read- or write-cap
 ``PUT /uri/$DIRCAP/[SUBDIRS../]CHILDNAME?t=uri``
 
  This attaches a child object (either a file or directory) to a specified
- location in the virtual filesystem. The child object is referenced by its
+ location in the Tahoe-LAFS file store. The child object is referenced by its
  read- or write- cap, as provided in the HTTP request body. This will create
  intermediate directories as necessary.
 
@@ -917,7 +917,7 @@ Attaching an Existing File or Directory by its read- or write-cap
  command). Note that "true", "t", and "1" are all synonyms for "True", and
  "false", "f", and "0" are synonyms for "False", and the parameter is
  case-insensitive.
- 
+
  Note that this operation does not take its child cap in the form of
  separate "rw_uri" and "ro_uri" fields. Therefore, it cannot accept a
  child cap in a format unknown to the web-API server, unless its URI
@@ -966,7 +966,7 @@ Adding Multiple Files or Directories to a Parent Directory at Once
  currently placed here are "linkcrtime" and "linkmotime". For details, see
  the section above entitled "Getting Information About a File Or Directory (as
  JSON)", in the "About the metadata" subsection.
- 
+
  Note that this command was introduced with the name "set_children", which
  uses an underscore rather than a hyphen as other multi-word command names
  do. The variant with a hyphen is now accepted, but clients that desire
@@ -1008,9 +1008,9 @@ Browser Operations: Human-oriented interfaces
 
 This section describes the HTTP operations that provide support for humans
 running a web browser. Most of these operations use HTML forms that use POST
-to drive the Tahoe node. This section is intended for HTML authors who want
-to write web pages that contain forms and buttons which manipulate the Tahoe
-filesystem.
+to drive the Tahoe-LAFS node. This section is intended for HTML authors who
+want to write web pages containing user interfaces for manipulating the
+Tahoe-LAFS file store.
 
 Note that for all POST operations, the arguments listed can be provided
 either as URL query arguments or as form body fields. URL query arguments are
@@ -1107,8 +1107,8 @@ Creating a Directory
 
 ``POST /uri?t=mkdir``
 
- This creates a new empty directory, but does not attach it to the virtual
- filesystem.
+ This creates a new empty directory, but does not attach it to any other
+ directory in the Tahoe-LAFS file store.
 
  If a "redirect_to_result=true" argument is provided, then the HTTP response
  will cause the web browser to be redirected to a /uri/$DIRCAP page that
@@ -1150,12 +1150,12 @@ Uploading a File
 ``POST /uri?t=upload``
 
  This uploads a file, and produces a file-cap for the contents, but does not
- attach the file into the filesystem. No directories will be modified by
- this operation.
+ attach the file to any directory in the Tahoe-LAFS file store. That is, no
+ directories will be modified by this operation.
 
  The file must be provided as the "file" field of an HTML encoded form body,
  produced in response to an HTML form like this::
- 
+
   <form action="/uri" method="POST" enctype="multipart/form-data">
    <input type="hidden" name="t" value="upload" />
    <input type="file" name="file" />
@@ -1182,7 +1182,7 @@ Uploading a File
  This uploads a file, and attaches it as a new child of the given directory,
  which must be mutable. The file must be provided as the "file" field of an
  HTML-encoded form body, produced in response to an HTML form like this::
- 
+
   <form action="." method="POST" enctype="multipart/form-data">
    <input type="hidden" name="t" value="upload" />
    <input type="file" name="file" />
@@ -1699,7 +1699,7 @@ incorrectly.
  for debugging. This is a table of (path, filecap/dircap), for every object
  reachable from the starting directory. The path will be slash-joined, and
  the filecap/dircap will contain a link to the object in question. This page
- gives immediate access to every object in the virtual filesystem subtree.
+ gives immediate access to every object in the file store subtree.
 
  This operation uses the same ophandle= mechanism as deep-check. The
  corresponding /operations/$HANDLE page has three different forms. The
@@ -1751,6 +1751,9 @@ incorrectly.
  keys may be missing until 'finished' is True)::
 
   finished: (bool) True if the operation has finished, else False
+  api-version: (int), number of deep-stats API version. Will be increased every
+               time backwards-incompatible change is introduced.
+               Current version is 1.
   count-immutable-files: count of how many CHK files are in the set
   count-mutable-files: same, for mutable files (does not include directories)
   count-literal-files: same, for LIT files (data contained inside the URI)
@@ -1830,9 +1833,9 @@ Other Useful Pages
 ==================
 
 The portion of the web namespace that begins with "/uri" (and "/named") is
-dedicated to giving users (both humans and programs) access to the Tahoe
-virtual filesystem. The rest of the namespace provides status information
-about the state of the Tahoe node.
+dedicated to giving users (both humans and programs) access to the Tahoe-LAFS
+file store. The rest of the namespace provides status information about the
+state of the Tahoe-LAFS node.
 
 ``GET /``   (the root page)
 
@@ -1840,12 +1843,46 @@ This is the "Welcome Page", and contains a few distinct sections::
 
  Node information: library versions, local nodeid, services being provided.
 
- Filesystem Access Forms: create a new directory, view a file/directory by
+ File store access forms: create a new directory, view a file/directory by
                           URI, upload a file (unlinked), download a file by
                           URI.
 
- Grid Status: introducer information, helper information, connected storage
+ Grid status: introducer information, helper information, connected storage
               servers.
+
+``GET /?t=json``   (the json welcome page)
+
+This is the "json Welcome Page", and contains connectivity status
+of the introducer(s) and storage server(s), here's an example::
+
+  {
+   "introducers": {
+    "statuses": []
+   },
+   "servers": [{
+     "nodeid": "other_nodeid",
+     "available_space": 123456,
+     "nickname": "George \u263b",
+     "version": "1.0",
+     "connection_status": "summary",
+     "last_received_data": 1487811257
+    }]
+  }
+
+
+The above json ``introducers`` section includes a list of
+introducer connectivity status messages.
+
+The above json ``servers`` section is an array with map elements.  Each map
+has the following properties:
+
+1. ``nodeid`` - an identifier derived from the node's public key
+2. ``available_space`` - the available space in bytes expressed as an integer
+3. ``nickname`` - the storage server nickname
+4. ``version`` - the storage server Tahoe-LAFS version
+5. ``connection_status`` - connectivity status
+6. ``last_received_data`` - the time when data was last received,
+   expressed in seconds since epoch
 
 ``GET /status/``
 
@@ -1991,23 +2028,24 @@ Safety and Security Issues -- Names vs. URIs
 ============================================
 
 Summary: use explicit file- and dir- caps whenever possible, to reduce the
-potential for surprises when the filesystem structure is changed.
+potential for surprises when the file store structure is changed.
 
-Tahoe provides a mutable filesystem, but the ways that the filesystem can
-change are limited. The only thing that can change is that the mapping from
-child names to child objects that each directory contains can be changed by
-adding a new child name pointing to an object, removing an existing child name,
-or changing an existing child name to point to a different object.
+Tahoe-LAFS provides a mutable file store, but the ways that the store can
+change are limited. The only things that can change are:
+ * the mapping from child names to child objects inside mutable directories
+   (by adding a new child, removing an existing child, or changing an
+   existing child to point to a different object)
+ * the contents of mutable files
 
-Obviously if you query Tahoe for information about the filesystem and then act
-to change the filesystem (such as by getting a listing of the contents of a
-directory and then adding a file to the directory), then the filesystem might
-have been changed after you queried it and before you acted upon it.  However,
-if you use the URI instead of the pathname of an object when you act upon the
-object, then the only change that can happen is if the object is a directory
-then the set of child names it has might be different. If, on the other hand,
-you act upon the object using its pathname, then a different object might be in
-that place, which can result in more kinds of surprises.
+Obviously if you query for information about the file store and then act
+to change it (such as by getting a listing of the contents of a mutable
+directory and then adding a file to the directory), then the store might
+have been changed after you queried it and before you acted upon it.
+However, if you use the URI instead of the pathname of an object when you
+act upon the object, then it will be the same object; only its contents
+can change (if it is mutable). If, on the other hand, you act upon the
+object using its pathname, then a different object might be in that place,
+which can result in more kinds of surprises.
 
 For example, suppose you are writing code which recursively downloads the
 contents of a directory. The first thing your code does is fetch the listing
@@ -2015,15 +2053,14 @@ of the contents of the directory. For each child that it fetched, if that
 child is a file then it downloads the file, and if that child is a directory
 then it recurses into that directory. Now, if the download and the recurse
 actions are performed using the child's name, then the results might be
-wrong, because for example a child name that pointed to a sub-directory when
+wrong, because for example a child name that pointed to a subdirectory when
 you listed the directory might have been changed to point to a file (in which
-case your attempt to recurse into it would result in an error and the file
-would be skipped), or a child name that pointed to a file when you listed the
-directory might now point to a sub-directory (in which case your attempt to
-download the child would result in a file containing HTML text describing the
-sub-directory!).
+case your attempt to recurse into it would result in an error), or a child
+name that pointed to a file when you listed the directory might now point to
+a subdirectory (in which case your attempt to download the child would result
+in a file containing HTML text describing the subdirectory!).
 
-If your recursive algorithm uses the uri of the child instead of the name of
+If your recursive algorithm uses the URI of the child instead of the name of
 the child, then those kinds of mistakes just can't happen. Note that both the
 child's name and the child's URI are included in the results of listing the
 parent directory, so it isn't any harder to use the URI for this purpose.
@@ -2192,4 +2229,3 @@ URLs and HTTP and UTF-8
 .. _RFC2231#4: https://tools.ietf.org/html/rfc2231#section-4
 .. _some developers have reported: http://markmail.org/message/dsjyokgl7hv64ig3
 .. _RFC2616#19.5.1: https://tools.ietf.org/html/rfc2616#section-19.5.1
-

@@ -1,6 +1,5 @@
-import time, os
+import time, os, json
 
-from twisted.internet import address
 from twisted.web import http
 from nevow import rend, url, tags as T
 from nevow.inevow import IRequest
@@ -8,14 +7,27 @@ from nevow.static import File as nevow_File # TODO: merge with static.File?
 from nevow.util import resource_filename
 
 import allmydata # to display import path
-from allmydata import get_package_versions_string
+from allmydata.version_checks import get_package_versions_string
 from allmydata.util import log
 from allmydata.interfaces import IFileNode
 from allmydata.web import filenode, directory, unlinked, status, operations
 from allmydata.web import storage, magic_folder
-from allmydata.web.common import abbreviate_size, getxmlfile, WebError, \
-     get_arg, RenderMixin, get_format, get_mutable_type, render_time_delta, render_time, render_time_attr
-
+from allmydata.web.common import (
+    abbreviate_size,
+    getxmlfile,
+    WebError,
+    get_arg,
+    MultiFormatPage,
+    RenderMixin,
+    get_format,
+    get_mutable_type,
+    render_time_delta,
+    render_time,
+    render_time_attr,
+)
+from allmydata.web.private import (
+    create_private_tree,
+)
 
 class URIHandler(RenderMixin, rend.Page):
     # I live at /uri . There are several operations defined on /uri itself,
@@ -127,7 +139,8 @@ class IncidentReporter(RenderMixin, rend.Page):
 
 SPACE = u"\u00A0"*2
 
-class Root(rend.Page):
+
+class Root(MultiFormatPage):
 
     addSlash = True
     docFactory = getxmlfile("welcome.xhtml")
@@ -157,6 +170,11 @@ class Root(rend.Page):
         # handler for "/magic_folder" URIs
         self.child_magic_folder = magic_folder.MagicFolderWebApi(client)
 
+        # Handler for everything beneath "/private", an area of the resource
+        # hierarchy which is only accessible with the private per-node API
+        # auth token.
+        self.child_private = create_private_tree(client.get_auth_token)
+
         self.child_file = FileHandler(client)
         self.child_named = FileHandler(client)
         self.child_status = status.Status(client.get_history())
@@ -183,15 +201,57 @@ class Root(rend.Page):
     def render_my_nodeid(self, ctx, data):
         tubid_s = "TubID: "+self.client.get_long_tubid()
         return T.td(title=tubid_s)[self.client.get_long_nodeid()]
+
     def data_my_nickname(self, ctx, data):
         return self.client.nickname
 
-    def render_magic_folder(self, ctx, data):
-        if self.client._magic_folder is None:
-            return T.p()
 
-        (ok, messages) = self.client._magic_folder.get_public_status()
+    def render_JSON(self, req):
+        req.setHeader("content-type", "application/json; charset=utf-8")
+        intro_summaries = [s.summary for s in self.client.introducer_connection_statuses()]
+        sb = self.client.get_storage_broker()
+        servers = self._describe_known_servers(sb)
+        result = {
+            "introducers": {
+                "statuses": intro_summaries,
+            },
+            "servers": servers
+        }
+        return json.dumps(result, indent=1) + "\n"
 
+
+    def _describe_known_servers(self, broker):
+        return sorted(list(
+            self._describe_server(server)
+            for server
+            in broker.get_known_servers()
+        ))
+
+
+    def _describe_server(self, server):
+        status = server.get_connection_status()
+        description = {
+            u"nodeid": server.get_serverid(),
+            u"connection_status": status.summary,
+            u"available_space": server.get_available_space(),
+            u"nickname": server.get_nickname(),
+            u"version": None,
+            u"last_received_data": status.last_received_time,
+        }
+        version = server.get_version()
+        if version is not None:
+            description[u"version"] = version["application-version"]
+
+        return description
+
+
+    def data_magic_folders(self, ctx, data):
+        return self.client._magic_folders.keys()
+
+    def render_magic_folder_row(self, ctx, data):
+        magic_folder = self.client._magic_folders[data]
+        (ok, messages) = magic_folder.get_public_status()
+        ctx.fillSlots("magic_folder_name", data)
         if ok:
             ctx.fillSlots("magic_folder_status", "yes")
             ctx.fillSlots("magic_folder_status_alt", "working")
@@ -199,11 +259,15 @@ class Root(rend.Page):
             ctx.fillSlots("magic_folder_status", "no")
             ctx.fillSlots("magic_folder_status_alt", "not working")
 
-        status = T.ul()
+        status = T.ul(class_="magic-folder-status")
         for msg in messages:
             status[T.li[str(msg)]]
-
         return ctx.tag[status]
+
+    def render_magic_folder(self, ctx, data):
+        if not self.client._magic_folders:
+            return T.p()
+        return ctx.tag
 
     def render_services(self, ctx, data):
         ul = T.ul()
@@ -240,18 +304,14 @@ class Root(rend.Page):
             return "%s introducers connected" % (connected_count,)
 
     def data_total_introducers(self, ctx, data):
-        return len(self.client.introducer_furls)
+        return len(self.client.introducer_connection_statuses())
 
     def data_connected_introducers(self, ctx, data):
-        return self.client.introducer_connection_statuses().count(True)
-
-    def data_connected_to_introducer(self, ctx, data):
-        if self.client.connected_to_introducer():
-            return "yes"
-        return "no"
+        return len([1 for cs in self.client.introducer_connection_statuses()
+                    if cs.connected])
 
     def data_connected_to_at_least_one_introducer(self, ctx, data):
-        if True in self.client.introducer_connection_statuses():
+        if self.data_connected_introducers(ctx, data):
             return "yes"
         return "no"
 
@@ -260,42 +320,52 @@ class Root(rend.Page):
 
     # In case we configure multiple introducers
     def data_introducers(self, ctx, data):
-        connection_statuses = self.client.introducer_connection_statuses()
-        s = []
-        furls = self.client.introducer_furls
-        for furl in furls:
-            if connection_statuses:
-                display_furl = furl
-                # trim off the secret swissnum
-                (prefix, _, swissnum) = furl.rpartition("/")
-                if swissnum != "introducer":
-                    display_furl = "%s/[censored]" % (prefix,)
-                i = furls.index(furl)
-                ic = self.client.introducer_clients[i]
-                s.append((display_furl, bool(connection_statuses[i]), ic))
-        s.sort()
-        return s
+        return self.client.introducer_connection_statuses()
 
-    def render_introducers_row(self, ctx, s):
-        (furl, connected, ic) = s
-        service_connection_status = "yes" if connected else "no"
-
-        since = ic.get_since()
-        service_connection_status_rel_time = render_time_delta(since, self.now_fn())
-        service_connection_status_abs_time = render_time_attr(since)
-
-        last_received_data_time = ic.get_last_received_data_time()
-        last_received_data_rel_time = render_time_delta(last_received_data_time, self.now_fn())
-        last_received_data_abs_time = render_time_attr(last_received_data_time)
-
-        ctx.fillSlots("introducer_furl", "%s" % (furl))
-        ctx.fillSlots("service_connection_status", "%s" % (service_connection_status,))
+    def _render_connection_status(self, ctx, cs):
+        connected = "yes" if cs.connected else "no"
+        ctx.fillSlots("service_connection_status", connected)
         ctx.fillSlots("service_connection_status_alt",
-            self._connectedalts[service_connection_status])
-        ctx.fillSlots("service_connection_status_abs_time", service_connection_status_abs_time)
-        ctx.fillSlots("service_connection_status_rel_time", service_connection_status_rel_time)
-        ctx.fillSlots("last_received_data_abs_time", last_received_data_abs_time)
-        ctx.fillSlots("last_received_data_rel_time", last_received_data_rel_time)
+                      self._connectedalts[connected])
+
+        since = cs.last_connection_time
+        ctx.fillSlots("service_connection_status_rel_time",
+                      render_time_delta(since, self.now_fn())
+                      if since is not None
+                      else "N/A")
+        ctx.fillSlots("service_connection_status_abs_time",
+                      render_time_attr(since)
+                      if since is not None
+                      else "N/A")
+
+        last_received_data_time = cs.last_received_time
+        ctx.fillSlots("last_received_data_abs_time",
+                      render_time_attr(last_received_data_time)
+                      if last_received_data_time is not None
+                      else "N/A")
+        ctx.fillSlots("last_received_data_rel_time",
+                      render_time_delta(last_received_data_time, self.now_fn())
+                      if last_received_data_time is not None
+                      else "N/A")
+
+        others = cs.non_connected_statuses
+        if cs.connected:
+            ctx.fillSlots("summary", cs.summary)
+            if others:
+                details = "\n".join(["* %s: %s\n" % (which, others[which])
+                                     for which in sorted(others)])
+                ctx.fillSlots("details", "Other hints:\n" + details)
+            else:
+                ctx.fillSlots("details", "(no other hints)")
+        else:
+            details = T.ul()
+            for which in sorted(others):
+                details[T.li["%s: %s" % (which, others[which])]]
+            ctx.fillSlots("summary", [cs.summary, details])
+            ctx.fillSlots("details", "")
+
+    def render_introducers_row(self, ctx, cs):
+        self._render_connection_status(ctx, cs)
         return ctx.tag
 
     def data_helper_furl_prefix(self, ctx, data):
@@ -344,33 +414,11 @@ class Root(rend.Page):
         return sorted(sb.get_known_servers(), key=lambda s: s.get_serverid())
 
     def render_service_row(self, ctx, server):
-        server_id = server.get_serverid()
+        cs = server.get_connection_status()
+        self._render_connection_status(ctx, cs)
 
         ctx.fillSlots("peerid", server.get_longname())
         ctx.fillSlots("nickname", server.get_nickname())
-        rhost = server.get_remote_host()
-        if server.is_connected():
-            if server_id == self.client.get_long_nodeid():
-                rhost_s = "(loopback)"
-            elif isinstance(rhost, address.IPv4Address):
-                rhost_s = "%s:%d" % (rhost.host, rhost.port)
-            else:
-                rhost_s = str(rhost)
-            addr = rhost_s
-            service_connection_status = "yes"
-            last_connect_time = server.get_last_connect_time()
-            service_connection_status_rel_time = render_time_delta(last_connect_time, self.now_fn())
-            service_connection_status_abs_time = render_time_attr(last_connect_time)
-        else:
-            addr = "N/A"
-            service_connection_status = "no"
-            last_loss_time = server.get_last_loss_time()
-            service_connection_status_rel_time = render_time_delta(last_loss_time, self.now_fn())
-            service_connection_status_abs_time = render_time_attr(last_loss_time)
-
-        last_received_data_time = server.get_last_received_data_time()
-        last_received_data_rel_time = render_time_delta(last_received_data_time, self.now_fn())
-        last_received_data_abs_time = render_time_attr(last_received_data_time)
 
         announcement = server.get_announcement()
         version = announcement.get("my-version", "")
@@ -379,14 +427,6 @@ class Root(rend.Page):
             available_space = "N/A"
         else:
             available_space = abbreviate_size(available_space)
-        ctx.fillSlots("address", addr)
-        ctx.fillSlots("service_connection_status", service_connection_status)
-        ctx.fillSlots("service_connection_status_alt",
-                      self._connectedalts[service_connection_status])
-        ctx.fillSlots("service_connection_status_abs_time", service_connection_status_abs_time)
-        ctx.fillSlots("service_connection_status_rel_time", service_connection_status_rel_time)
-        ctx.fillSlots("last_received_data_abs_time", last_received_data_abs_time)
-        ctx.fillSlots("last_received_data_rel_time", last_received_data_rel_time)
         ctx.fillSlots("version", version)
         ctx.fillSlots("available_space", available_space)
 

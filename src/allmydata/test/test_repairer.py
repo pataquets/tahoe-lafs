@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
+
 from allmydata.test import common
 from allmydata.monitor import Monitor
 from allmydata import check_results
@@ -17,7 +19,7 @@ MAX_DELTA_READS = 10 * READ_LEEWAY # N = 10
 
 timeout=240 # François's ARM box timed out after 120 seconds of Verifier.test_corrupt_crypttext_hashtree
 
-class RepairTestMixin:
+class RepairTestMixin(object):
     def failUnlessIsInstance(self, x, xtype):
         self.failUnless(isinstance(x, xtype), x)
 
@@ -115,7 +117,7 @@ class Verifier(GridTestMixin, unittest.TestCase, RepairTestMixin):
             self.failIfBigger(delta_reads, MAX_DELTA_READS)
             try:
                 judgement(vr)
-            except unittest.FailTest, e:
+            except unittest.FailTest as e:
                 # FailTest just uses e.args[0] == str
                 new_arg = str(e.args[0]) + "\nvr.data is: " + str(vr.as_dict())
                 e.args = (new_arg,)
@@ -348,9 +350,9 @@ class Verifier(GridTestMixin, unittest.TestCase, RepairTestMixin):
         def _show_results(ign):
             f = open("test_each_byte_output", "w")
             for i in sorted(results.keys()):
-                print >>f, "%d: %s" % (i, results[i])
+                print("%d: %s" % (i, results[i]), file=f)
             f.close()
-            print "Please look in _trial_temp/test_each_byte_output for results"
+            print("Please look in _trial_temp/test_each_byte_output for results")
         d.addCallback(_show_results)
         return d
 
@@ -706,8 +708,10 @@ class Repairer(GridTestMixin, unittest.TestCase, RepairTestMixin,
         # filecheck, but then *do* respond to the post-repair filecheck
         def _then(ign):
             ss = self.g.servers_by_number[0]
-            self.g.break_server(ss.my_nodeid, count=1)
-            self.delete_shares_numbered(self.uri, [9])
+            # we want to delete the share corresponding to the server
+            # we're making not-respond
+            share = next(ss._get_bucket_shares(self.c0_filenode.get_storage_index()))[0]
+            self.delete_shares_numbered(self.uri, [share])
             return self.c0_filenode.check_and_repair(Monitor())
         d.addCallback(_then)
         def _check(rr):

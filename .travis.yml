@@ -1,36 +1,38 @@
-sudo: true
-os:
- - "linux"
- - "osx"
-# xcode7 gives us OS-X 10.10, which gives us newer OpenSSL (the default gives
-# us 10.9, which appears to have OpenSSL-0.9.8, which is rejected by
-# cryptography-1.4)
-osx_image: xcode7
+sudo: false
+language: python
 cache: pip
+dist: trusty
 before_cache:
   - rm -f $HOME/.cache/pip/log/debug.log
-python:
-  - "2.7"
-  - "pypy"
-before_install:
-  - sh -c set
-  - git config --global user.email "travis-tahoe@tahoe-lafs.org"
-  - git config --global user.name "Travis Tahoe"
-  - git fetch --depth=1000
+git:
+  depth: 1000
+
+env:
+  global:
+    - TAHOE_LAFS_HYPOTHESIS_PROFILE=ci
+
 install:
 # ~/.local/bin is on $PATH by default, but on OS-X, --user puts it elsewhere
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then export PATH=$HOME/Library/Python/2.7/bin:$PATH; fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then wget https://bootstrap.pypa.io/get-pip.py && sudo python ./get-pip.py; fi
   - pip list
-  - pip install --user coveralls tox
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then pip install --user --upgrade codecov tox setuptools; fi
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then pip install --upgrade codecov tox setuptools; fi
   - echo $PATH; which python; which pip; which tox
   - python misc/build_helpers/show-tool-versions.py
+
 script:
-  - tox -e codechecks
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then tox; else tox -e coverage; fi
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then tox -e integration; fi
+  - |
+    set -eo pipefail
+    if [ "${T}" = "py35" ]; then
+      python3 -m compileall -f .
+    else
+      tox -e ${T}
+    fi
+
 after_success:
-  coveralls
+  - if [ "${T}" = "coverage" ]; then codecov; fi
+
 notifications:
   email: false
   irc:
@@ -40,7 +42,32 @@ notifications:
     template:
       - "%{repository}#%{build_number} [%{branch}: %{commit} by %{author}] %{message}"
       - "Changes: %{compare_url} | Details: %{build_url}"
+
 matrix:
-  allow_failures:
-    - python: "pypy"
+  include:
+  - os: linux
+    python: '2.7'
+    env: T=coverage LANG=en_US.UTF-8
+  - os: linux
+    python: '2.7'
+    env: T=codechecks LANG=en_US.UTF-8
+  - os: linux
+    python: '2.7'
+    env: T=pyinstaller LANG=en_US.UTF-8
+  - os: linux
+    python: '2.7'
+    env: T=py27 LANG=C
+  - os: osx
+    python: '2.7'
+    env: T=py27 LANG=en_US.UTF-8
+    language: generic  # "python" is not available on OS-X
+  - os: osx
+    python: '2.7'
+    env: T=pyinstaller LANG=en_US.UTF-8
+    language: generic  # "python" is not available on OS-X
+  # this is a "lint" job that checks for python3 compatibility
+  - os: linux
+    python: '3.5'
+    env: T=py35
+
   fast_finish: true

@@ -1,13 +1,13 @@
 
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from allmydata.interfaces import IRepairResults, ICheckResults
 from allmydata.mutable.publish import MutableData
 from allmydata.mutable.common import MODE_REPAIR
 from allmydata.mutable.servermap import ServerMap, ServermapUpdater
 
-class RepairResults:
-    implements(IRepairResults)
+@implementer(IRepairResults)
+class RepairResults(object):
 
     def __init__(self, smap):
         self.servermap = smap
@@ -24,7 +24,7 @@ class RepairRequiresWritecapError(Exception):
 class MustForceRepairError(Exception):
     pass
 
-class Repairer:
+class Repairer(object):
     def __init__(self, node, check_results, storage_broker, history, monitor):
         self.node = node
         self.check_results = ICheckResults(check_results)

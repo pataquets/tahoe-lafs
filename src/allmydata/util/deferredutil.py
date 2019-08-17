@@ -2,11 +2,40 @@
 import time
 
 from foolscap.api import eventually, fireEventually
-from twisted.internet import defer, reactor
+from twisted.internet import defer, reactor, error
+from twisted.python.failure import Failure
 
 from allmydata.util import log
 from allmydata.util.assertutil import _assert
 from allmydata.util.pollmixin import PollMixin
+
+
+class TimeoutError(Exception):
+    pass
+
+
+def timeout_call(reactor, d, timeout):
+    """
+    This returns the result of 'd', unless 'timeout' expires before
+    'd' is completed in which case a TimeoutError is raised.
+    """
+    timer_d = defer.Deferred()
+
+    def _timed_out():
+        timer_d.errback(Failure(TimeoutError()))
+
+    def _got_result(x):
+        try:
+            timer.cancel()
+            timer_d.callback(x)
+        except (error.AlreadyCalled, defer.AlreadyCalledError):
+            pass
+        return None
+
+    timer = reactor.callLater(timeout, _timed_out)
+    d.addBoth(_got_result)
+    return timer_d
+
 
 
 # utility wrapper for DeferredList
@@ -54,7 +83,7 @@ def _with_log(op, res):
     """
     try:
         op(res)
-    except defer.AlreadyCalledError, e:
+    except defer.AlreadyCalledError as e:
         log.err(e, op=repr(op), level=log.WEIRD)
 
 def eventually_callback(d):
@@ -73,7 +102,7 @@ def eventual_chain(source, target):
     source.addCallbacks(eventually_callback(target), eventually_errback(target))
 
 
-class HookMixin:
+class HookMixin(object):
     """
     I am a helper mixin that maintains a collection of named hooks, primarily
     for use in tests. Each hook is set to an unfired Deferred using 'set_hook',

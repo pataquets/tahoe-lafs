@@ -1,15 +1,23 @@
 
 import pprint, itertools, hashlib
-import simplejson
+import json
 from twisted.internet import defer
 from nevow import rend, inevow, tags as T
 from allmydata.util import base32, idlib
-from allmydata.web.common import getxmlfile, get_arg, \
-     abbreviate_time, abbreviate_rate, abbreviate_size, plural, compute_rate, render_time
+from allmydata.web.common import (
+    getxmlfile,
+    abbreviate_time,
+    abbreviate_rate,
+    abbreviate_size,
+    plural,
+    compute_rate,
+    render_time,
+    MultiFormatPage,
+)
 from allmydata.interfaces import IUploadStatus, IDownloadStatus, \
      IPublishStatus, IRetrieveStatus, IServermapUpdaterStatus
 
-class RateAndTimeMixin:
+class RateAndTimeMixin(object):
 
     def render_time(self, ctx, data):
         return abbreviate_time(data)
@@ -330,9 +338,6 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
         rend.Page.__init__(self, data)
         self.download_status = data
 
-    def child_timeline(self, ctx):
-        return DownloadStatusTimelinePage(self.download_status)
-
     def download_results(self):
         return defer.maybeDeferred(self.download_status.get_results)
 
@@ -470,7 +475,7 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
         # so they get converted to strings. Stupid javascript.
         data["serverids"] = server_shortnames
         data["bounds"] = {"min": ds.first_timestamp, "max": ds.last_timestamp}
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_timeline_link(self, ctx, data):
         from nevow import url
@@ -610,37 +615,6 @@ class DownloadStatusPage(DownloadResultsRendererMixin, rend.Page):
             return ""
         d.addCallback(_got_results)
         return d
-
-    def render_started(self, ctx, data):
-        started_s = render_time(data.get_started())
-        return started_s + " (%s)" % data.get_started()
-
-    def render_si(self, ctx, data):
-        si_s = base32.b2a_or_none(data.get_storage_index())
-        if si_s is None:
-            si_s = "(None)"
-        return si_s
-
-    def render_helper(self, ctx, data):
-        return {True: "Yes",
-                False: "No"}[data.using_helper()]
-
-    def render_total_size(self, ctx, data):
-        size = data.get_size()
-        if size is None:
-            return "(unknown)"
-        return size
-
-    def render_progress(self, ctx, data):
-        progress = data.get_progress()
-        # TODO: make an ascii-art bar
-        return "%.1f%%" % (100.0 * progress)
-
-    def render_status(self, ctx, data):
-        return data.get_status()
-
-class DownloadStatusTimelinePage(rend.Page):
-    docFactory = getxmlfile("download-status-timeline.xhtml")
 
     def render_started(self, ctx, data):
         started_s = render_time(data.get_started())
@@ -950,7 +924,44 @@ class MapupdateStatusPage(rend.Page, RateAndTimeMixin):
         return T.li["Per-Server Response Times: ", l]
 
 
-class Status(rend.Page):
+def marshal_json(s):
+    # common item data
+    item = {
+        "storage-index-string": base32.b2a_or_none(s.get_storage_index()),
+        "total-size": s.get_size(),
+        "status": s.get_status(),
+    }
+
+    # type-specific item date
+    if IUploadStatus.providedBy(s):
+        h, c, e = s.get_progress()
+        item["type"] = "upload"
+        item["progress-hash"] = h
+        item["progress-ciphertext"] = c
+        item["progress-encode-push"] = e
+
+    elif IDownloadStatus.providedBy(s):
+        item["type"] = "download"
+        item["progress"] = s.get_progress()
+
+    elif IPublishStatus.providedBy(s):
+        item["type"] = "publish"
+
+    elif IRetrieveStatus.providedBy(s):
+        item["type"] = "retrieve"
+
+    elif IServermapUpdaterStatus.providedBy(s):
+        item["type"] = "mapupdate"
+        item["mode"] = s.get_mode()
+
+    else:
+        item["type"] = "unknown"
+        item["class"] = s.__class__.__name__
+
+    return item
+
+
+class Status(MultiFormatPage):
     docFactory = getxmlfile("status.xhtml")
     addSlash = True
 
@@ -958,40 +969,20 @@ class Status(rend.Page):
         rend.Page.__init__(self, history)
         self.history = history
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        t = get_arg(req, "t")
-        if t == "json":
-            return self.json(req)
-        return rend.Page.renderHTTP(self, ctx)
-
-    def json(self, req):
-        req.setHeader("content-type", "text/plain")
+    def render_JSON(self, req):
+        # modern browsers now render this instead of forcing downloads
+        req.setHeader("content-type", "application/json")
         data = {}
         data["active"] = active = []
-        for s in self._get_active_operations():
-            si_s = base32.b2a_or_none(s.get_storage_index())
-            size = s.get_size()
-            status = s.get_status()
-            if IUploadStatus.providedBy(s):
-                h,c,e = s.get_progress()
-                active.append({"type": "upload",
-                               "storage-index-string": si_s,
-                               "total-size": size,
-                               "status": status,
-                               "progress-hash": h,
-                               "progress-ciphertext": c,
-                               "progress-encode-push": e,
-                               })
-            elif IDownloadStatus.providedBy(s):
-                active.append({"type": "download",
-                               "storage-index-string": si_s,
-                               "total-size": size,
-                               "status": status,
-                               "progress": s.get_progress(),
-                               })
+        data["recent"] = recent = []
 
-        return simplejson.dumps(data, indent=1) + "\n"
+        for s in self._get_active_operations():
+            active.append(marshal_json(s))
+
+        for s in self._get_recent_operations():
+            recent.append(marshal_json(s))
+
+        return json.dumps(data, indent=1) + "\n"
 
     def _get_all_statuses(self):
         h = self.history
@@ -1010,6 +1001,8 @@ class Status(rend.Page):
         active = [s
                   for s in self._get_all_statuses()
                   if s.get_active()]
+        active.sort(lambda a, b: cmp(a.get_started(), b.get_started()))
+        active.reverse()
         return active
 
     def data_recent_operations(self, ctx, data):
@@ -1019,7 +1012,7 @@ class Status(rend.Page):
         recent = [s
                   for s in self._get_all_statuses()
                   if not s.get_active()]
-        recent.sort(lambda a,b: cmp(a.get_started(), b.get_started()))
+        recent.sort(lambda a, b: cmp(a.get_started(), b.get_started()))
         recent.reverse()
         return recent
 
@@ -1103,19 +1096,12 @@ class Status(rend.Page):
                     return RetrieveStatusPage(s)
 
 
-class HelperStatus(rend.Page):
+class HelperStatus(MultiFormatPage):
     docFactory = getxmlfile("helper.xhtml")
 
     def __init__(self, helper):
         rend.Page.__init__(self, helper)
         self.helper = helper
-
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        t = get_arg(req, "t")
-        if t == "json":
-            return self.render_JSON(req)
-        return rend.Page.renderHTTP(self, ctx)
 
     def data_helper_stats(self, ctx, data):
         return self.helper.get_stats()
@@ -1124,8 +1110,8 @@ class HelperStatus(rend.Page):
         req.setHeader("content-type", "text/plain")
         if self.helper:
             stats = self.helper.get_stats()
-            return simplejson.dumps(stats, indent=1) + "\n"
-        return simplejson.dumps({}) + "\n"
+            return json.dumps(stats, indent=1) + "\n"
+        return json.dumps({}) + "\n"
 
     def render_active_uploads(self, ctx, data):
         return data["chk_upload_helper.active_uploads"]
@@ -1154,21 +1140,17 @@ class HelperStatus(rend.Page):
         return str(data["chk_upload_helper.encoded_bytes"])
 
 
-class Statistics(rend.Page):
+class Statistics(MultiFormatPage):
     docFactory = getxmlfile("statistics.xhtml")
 
     def __init__(self, provider):
         rend.Page.__init__(self, provider)
         self.provider = provider
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        t = get_arg(req, "t")
-        if t == "json":
-            stats = self.provider.get_stats()
-            req.setHeader("content-type", "text/plain")
-            return simplejson.dumps(stats, indent=1) + "\n"
-        return rend.Page.renderHTTP(self, ctx)
+    def render_JSON(self, req):
+        stats = self.provider.get_stats()
+        req.setHeader("content-type", "text/plain")
+        return json.dumps(stats, indent=1) + "\n"
 
     def data_get_stats(self, ctx, data):
         return self.provider.get_stats()

@@ -1,8 +1,10 @@
+from __future__ import print_function
 
 # system-level upload+download roundtrip test, but using shares created from
 # a previous run. This asserts that the current code is capable of decoding
 # shares from a previous version.
 
+import six
 import os
 from twisted.trial import unittest
 from twisted.internet import defer, reactor
@@ -21,6 +23,9 @@ from allmydata.immutable.downloader.status import DownloadStatus
 from allmydata.immutable.downloader.fetcher import SegmentFetcher
 from allmydata.codec import CRSDecoder
 from foolscap.eventual import eventually, fireEventually, flushEventualQueue
+
+if six.PY3:
+    long = int
 
 plaintext = "This is a moderate-sized file.\n" * 10
 mutable_plaintext = "This is a moderate-sized mutable file.\n" * 10
@@ -189,7 +194,6 @@ class _Base(GridTestMixin, ShouldFailMixin):
         return d
 
 class DownloadTest(_Base, unittest.TestCase):
-    timeout = 2400 # It takes longer than 240 seconds on Zandr's ARM box.
     def test_download(self):
         self.basedir = self.mktemp()
         self.set_up_grid()
@@ -294,8 +298,7 @@ class DownloadTest(_Base, unittest.TestCase):
         def _kill_some_shares():
             # find the shares that were used and delete them
             shares = self.n._cnode._node._shares
-            shnums = sorted([s._shnum for s in shares])
-            self.failUnlessEqual(shnums, [0,1,2,3])
+            self.killed_share_nums = sorted([s._shnum for s in shares])
 
             # break the RIBucketReader references
             # (we don't break the RIStorageServer references, because that
@@ -312,7 +315,7 @@ class DownloadTest(_Base, unittest.TestCase):
             self.failUnlessEqual("".join(c.chunks), plaintext)
             shares = self.n._cnode._node._shares
             shnums = sorted([s._shnum for s in shares])
-            self.failIfEqual(shnums, [0,1,2,3])
+            self.failIfEqual(shnums, self.killed_share_nums)
         d.addCallback(_check_failover)
         return d
 
@@ -328,7 +331,7 @@ class DownloadTest(_Base, unittest.TestCase):
         n = self.c0.create_node_from_uri(immutable_uri)
 
         c = MemoryConsumer()
-        d = n.read(c, 0L, 10L)
+        d = n.read(c, long(0), long(10))
         d.addCallback(lambda c: len("".join(c.chunks)))
         d.addCallback(lambda size: self.failUnlessEqual(size, 10))
         return d
@@ -521,8 +524,8 @@ class DownloadTest(_Base, unittest.TestCase):
             n._cnode._node._build_guessed_tables(u.max_segment_size)
             con1 = MemoryConsumer()
             con2 = MemoryConsumer()
-            d = n.read(con1, 0L, 20)
-            d2 = n.read(con2, 140L, 20)
+            d = n.read(con1, long(0), long(20))
+            d2 = n.read(con2, long(140), long(20))
             # con2 will be cancelled, so d2 should fail with DownloadStopped
             def _con2_should_not_succeed(res):
                 self.fail("the second read should not have succeeded")
@@ -562,8 +565,8 @@ class DownloadTest(_Base, unittest.TestCase):
             n._cnode._node._build_guessed_tables(u.max_segment_size)
             con1 = MemoryConsumer()
             con2 = MemoryConsumer()
-            d = n.read(con1, 0L, 20)
-            d2 = n.read(con2, 140L, 20)
+            d = n.read(con1, long(0), long(20))
+            d2 = n.read(con2, long(140), long(20))
             # con2 should wait for con1 to fail and then con2 should succeed.
             # In particular, we should not lose progress. If this test fails,
             # it will fail with a timeout error.
@@ -598,8 +601,8 @@ class DownloadTest(_Base, unittest.TestCase):
         # that they're old and can't handle reads that overrun the length of
         # the share. This exercises a different code path.
         for s in self.c0.storage_broker.get_connected_servers():
-            rref = s.get_rref()
-            v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
+            v = s.get_version()
+            v1 = v["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
         n = self.c0.create_node_from_uri(immutable_uri)
@@ -617,7 +620,8 @@ class DownloadTest(_Base, unittest.TestCase):
         n = self.c0.create_node_from_uri(immutable_uri)
         cn = n._cnode
         (d,c) = cn.get_segment(0)
-        def _got_segment((offset,data,decodetime)):
+        def _got_segment(offset_and_data_and_decodetime):
+            (offset, data, decodetime) = offset_and_data_and_decodetime
             self.failUnlessEqual(offset, 0)
             self.failUnlessEqual(len(data), len(plaintext))
         d.addCallback(_got_segment)
@@ -934,13 +938,13 @@ class Corruption(_Base, unittest.TestCase):
         log.msg("corrupt %d" % which)
         def _corruptor(s, debug=False):
             return s[:which] + chr(ord(s[which])^0x01) + s[which+1:]
-        self.corrupt_shares_numbered(imm_uri, [0], _corruptor)
+        self.corrupt_shares_numbered(imm_uri, [2], _corruptor)
 
     def _corrupt_set(self, ign, imm_uri, which, newvalue):
         log.msg("corrupt %d" % which)
         def _corruptor(s, debug=False):
             return s[:which] + chr(newvalue) + s[which+1:]
-        self.corrupt_shares_numbered(imm_uri, [0], _corruptor)
+        self.corrupt_shares_numbered(imm_uri, [2], _corruptor)
 
     def test_each_byte(self):
         # Setting catalog_detection=True performs an exhaustive test of the
@@ -976,25 +980,27 @@ class Corruption(_Base, unittest.TestCase):
             def _got_data(data):
                 self.failUnlessEqual(data, plaintext)
                 shnums = sorted([s._shnum for s in n._cnode._node._shares])
-                no_sh0 = bool(0 not in shnums)
-                sh0 = [s for s in n._cnode._node._shares if s._shnum == 0]
-                sh0_had_corruption = False
-                if sh0 and sh0[0].had_corruption:
-                    sh0_had_corruption = True
+                no_sh2 = bool(2 not in shnums)
+                sh2 = [s for s in n._cnode._node._shares if s._shnum == 2]
+                sh2_had_corruption = False
+                if sh2 and sh2[0].had_corruption:
+                    sh2_had_corruption = True
                 num_needed = len(n._cnode._node._shares)
                 if self.catalog_detection:
-                    detected = no_sh0 or sh0_had_corruption or (num_needed!=3)
+                    detected = no_sh2 or sh2_had_corruption or (num_needed!=3)
                     if not detected:
                         undetected.add(which, 1)
-                if expected == "no-sh0":
-                    self.failIfIn(0, shnums)
-                elif expected == "0bad-need-3":
-                    self.failIf(no_sh0)
-                    self.failUnless(sh0[0].had_corruption)
+                if expected == "no-sh2":
+                    self.failIfIn(2, shnums)
+                elif expected == "2bad-need-3":
+                    self.failIf(no_sh2)
+                    self.failUnless(sh2[0].had_corruption)
                     self.failUnlessEqual(num_needed, 3)
                 elif expected == "need-4th":
-                    self.failIf(no_sh0)
-                    self.failUnless(sh0[0].had_corruption)
+                    # XXX check with warner; what relevance does this
+                    # have for the "need-4th" stuff?
+                    #self.failIf(no_sh2)
+                    #self.failUnless(sh2[0].had_corruption)
                     self.failIfEqual(num_needed, 3)
             d.addCallback(_got_data)
             return d
@@ -1012,23 +1018,20 @@ class Corruption(_Base, unittest.TestCase):
             # data-block-offset, and offset=48 is the first byte of the first
             # data-block). Each one also specifies what sort of corruption
             # we're expecting to see.
-            no_sh0_victims = [0,1,2,3] # container version
+            no_sh2_victims = [0,1,2,3] # container version
             need3_victims =  [ ] # none currently in this category
             # when the offsets are corrupted, the Share will be unable to
             # retrieve the data it wants (because it thinks that data lives
             # off in the weeds somewhere), and Share treats DataUnavailable
             # as abandon-this-share, so in general we'll be forced to look
             # for a 4th share.
-            need_4th_victims = [12,13,14,15, # share version
-                                24,25,26,27, # offset[data]
-                                32,33,34,35, # offset[crypttext_hash_tree]
-                                36,37,38,39, # offset[block_hashes]
-                                44,45,46,47, # offset[UEB]
+            need_4th_victims = [12,13,14,15, # offset[data]
+                                24,25,26,27, # offset[block_hashes]
                                 ]
-            need_4th_victims.append(48) # block data
+            need_4th_victims.append(36) # block data
             # when corrupting hash trees, we must corrupt a value that isn't
             # directly set from somewhere else. Since we download data from
-            # seg0, corrupt something on its hash chain, like [2] (the
+            # seg2, corrupt something on its hash chain, like [2] (the
             # right-hand child of the root)
             need_4th_victims.append(600+2*32) # block_hashes[2]
             # Share.loop is pretty conservative: it abandons the share at the
@@ -1039,15 +1042,15 @@ class Corruption(_Base, unittest.TestCase):
             # the following fields (which are present in multiple shares)
             # should fall into the "need3_victims" case instead of the
             # "need_4th_victims" case.
-            need_4th_victims.append(376+2*32) # crypttext_hash_tree[2]
             need_4th_victims.append(824) # share_hashes
-            need_4th_victims.append(994) # UEB length
-            need_4th_victims.append(998) # UEB
-            corrupt_me = ([(i,"no-sh0") for i in no_sh0_victims] +
-                          [(i, "0bad-need-3") for i in need3_victims] +
+            corrupt_me = ([(i,"no-sh2") for i in no_sh2_victims] +
+                          [(i, "2bad-need-3") for i in need3_victims] +
                           [(i, "need-4th") for i in need_4th_victims])
             if self.catalog_detection:
-                corrupt_me = [(i, "") for i in range(len(self.sh0_orig))]
+                share_len = len(self.shares.values()[0])
+                corrupt_me = [(i, "") for i in range(share_len)]
+                # This is a work around for ticket #2024.
+                corrupt_me = corrupt_me[0:8]+corrupt_me[12:]
             for i,expected in corrupt_me:
                 # All these tests result in a successful download. What we're
                 # measuring is how many shares the downloader had to use.
@@ -1055,7 +1058,7 @@ class Corruption(_Base, unittest.TestCase):
                 d.addCallback(_download, imm_uri, i, expected)
                 d.addCallback(lambda ign: self.restore_all_shares(self.shares))
                 d.addCallback(fireEventually)
-            corrupt_values = [(3, 2, "no-sh0"),
+            corrupt_values = [(3, 2, "no-sh2"),
                               (15, 2, "need-4th"), # share looks v2
                               ]
             for i,newvalue,expected in corrupt_values:
@@ -1066,9 +1069,10 @@ class Corruption(_Base, unittest.TestCase):
             return d
         d.addCallback(_uploaded)
         def _show_results(ign):
-            print
-            print ("of [0:%d], corruption ignored in %s" %
-                   (len(self.sh0_orig), undetected.dump()))
+            share_len = len(self.shares.values()[0])
+            print()
+            print("of [0:%d], corruption ignored in %s" %
+                   (share_len, undetected.dump()))
         if self.catalog_detection:
             d.addCallback(_show_results)
             # of [0:2070], corruption ignored in len=1133:
@@ -1174,8 +1178,8 @@ class DownloadV2(_Base, unittest.TestCase):
         # that they're old and can't handle reads that overrun the length of
         # the share. This exercises a different code path.
         for s in self.c0.storage_broker.get_connected_servers():
-            rref = s.get_rref()
-            v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
+            v = s.get_version()
+            v1 = v["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
         # upload a file
@@ -1194,8 +1198,8 @@ class DownloadV2(_Base, unittest.TestCase):
         self.c0 = self.g.clients[0]
 
         for s in self.c0.storage_broker.get_connected_servers():
-            rref = s.get_rref()
-            v1 = rref.version["http://allmydata.org/tahoe/protocols/storage/v1"]
+            v = s.get_version()
+            v1 = v["http://allmydata.org/tahoe/protocols/storage/v1"]
             v1["tolerates-immutable-read-overrun"] = False
 
         # upload a file
@@ -1283,11 +1287,12 @@ def make_servers(clientids):
         servers[clientid] = make_server(clientid)
     return servers
 
-class MyShare:
+class MyShare(object):
     def __init__(self, shnum, server, rtt):
         self._shnum = shnum
         self._server = server
         self._dyhb_rtt = rtt
+
     def __repr__(self):
         return "sh%d-on-%s" % (self._shnum, self._server.get_name())
 
@@ -1298,20 +1303,25 @@ class MySegmentFetcher(SegmentFetcher):
     def _start_share(self, share, shnum):
         self._test_start_shares.append(share)
 
-class FakeNode:
+class FakeNode(object):
     def __init__(self):
         self.want_more = 0
         self.failed = None
         self.processed = None
         self._si_prefix = "si_prefix"
+
     def want_more_shares(self):
         self.want_more += 1
+
     def fetch_failed(self, fetcher, f):
         self.failed = f
+
     def process_blocks(self, segnum, blocks):
         self.processed = (segnum, blocks)
+
     def get_num_segments(self):
         return 1, True
+
 
 class Selection(unittest.TestCase):
     def test_no_shares(self):

@@ -1,4 +1,4 @@
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from allmydata.storage.server import si_b2a
 from allmydata.util import log, consumer
@@ -7,8 +7,8 @@ from allmydata.interfaces import IEncryptedUploadable
 
 from allmydata.immutable import upload
 
+@implementer(IEncryptedUploadable)
 class Repairer(log.PrefixingLogMixin):
-    implements(IEncryptedUploadable)
     """I generate any shares which were not available and upload them to
     servers.
 
@@ -61,6 +61,7 @@ class Repairer(log.PrefixingLogMixin):
             # (http://tahoe-lafs.org/trac/tahoe-lafs/ticket/1212)
             happy = 0
             self._encodingparams = (k, happy, N, segsize)
+            # XXX should pass a reactor to this
             ul = upload.CHKUploader(self._storage_broker, self._secret_holder)
             return ul.start(self) # I am the IEncryptedUploadable
         d.addCallback(_got_segsize)

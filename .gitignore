@@ -1,3 +1,9 @@
+venv
+
+# vim swap files
+*.swp
+*.swo
+
 *.pyc
 *.pyo
 *~
@@ -21,6 +27,7 @@ Twisted-*.egg
 zope.interface-*.egg
 .pc
 
+/src/allmydata/test/plugins/dropin.cache
 /_trial_temp*
 /_test_memory/
 /tmp*
@@ -37,3 +44,8 @@ zope.interface-*.egg
 /docs/_build/
 /coverage.xml
 /smoke_magicfolder/
+/.hypothesis/
+
+# This is the plaintext of the private environment needed for some CircleCI
+# operations.  It's never supposed to be checked in.
+secret-env-plain

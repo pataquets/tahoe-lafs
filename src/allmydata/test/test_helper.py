@@ -5,12 +5,12 @@ from twisted.application import service
 
 from foolscap.api import Tub, fireEventually, flushEventualQueue
 
+from allmydata.crypto import aes
 from allmydata.storage.server import si_b2a
 from allmydata.storage_client import StorageFarmBroker
 from allmydata.immutable import offloaded, upload
 from allmydata import uri, client
 from allmydata.util import hashutil, fileutil, mathutil
-from pycryptopp.cipher.aes import AES
 
 MiB = 1024*1024
 
@@ -114,7 +114,6 @@ def upload_data(uploader, data, convergence):
     return uploader.upload(u)
 
 class AssistedUpload(unittest.TestCase):
-    timeout = 240 # It takes longer than 120 seconds on Francois's arm box.
     def setUp(self):
         self.tub = t = Tub()
         t.setOption("expose-remote-exception-types", False)
@@ -190,12 +189,12 @@ class AssistedUpload(unittest.TestCase):
 
         key = hashutil.convergence_hash(k, n, segsize, DATA, "test convergence string")
         assert len(key) == 16
-        encryptor = AES(key)
+        encryptor = aes.create_encryptor(key)
         SI = hashutil.storage_index_hash(key)
         SI_s = si_b2a(SI)
         encfile = os.path.join(self.basedir, "CHK_encoding", SI_s)
         f = open(encfile, "wb")
-        f.write(encryptor.process(DATA))
+        f.write(aes.encrypt_data(encryptor, DATA))
         f.close()
 
         u = upload.Uploader(self.helper_furl)

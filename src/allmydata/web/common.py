@@ -1,12 +1,13 @@
 
 import time
-import simplejson
+import json
 
 from twisted.web import http, server, resource
 from twisted.python import log
 from twisted.python.failure import Failure
 from zope.interface import Interface
 from nevow import loaders, appserver
+from nevow.rend import Page
 from nevow.inevow import IRequest
 from nevow.util import resource_filename
 from allmydata import blacklist
@@ -134,7 +135,7 @@ def convert_children_json(nodemaker, children_json):
     t=mkdir-with-children and t=mkdir-immutable"""
     children = {}
     if children_json:
-        data = simplejson.loads(children_json)
+        data = json.loads(children_json)
         for (namex, (ctype, propdict)) in data.iteritems():
             namex = unicode(namex)
             writecap = to_str(propdict.get("rw_uri"))
@@ -321,7 +322,7 @@ def humanize_failure(f):
         return (f.getTraceback(), http.REQUEST_ENTITY_TOO_LARGE)
     return (str(f), None)
 
-class MyExceptionHandler(appserver.DefaultExceptionHandler):
+class MyExceptionHandler(appserver.DefaultExceptionHandler, object):
     def simple(self, ctx, text, code=http.BAD_REQUEST):
         req = IRequest(ctx)
         req.setResponseCode(code)
@@ -370,7 +371,7 @@ class NeedOperationHandleError(WebError):
     pass
 
 
-class RenderMixin:
+class RenderMixin(object):
 
     def renderHTTP(self, ctx):
         request = IRequest(ctx)
@@ -386,8 +387,81 @@ class RenderMixin:
             raise server.UnsupportedMethod(getattr(self, 'allowedMethods', ()))
         return m(ctx)
 
+    def render_OPTIONS(self, ctx):
+        """
+        Handle HTTP OPTIONS request by adding appropriate headers.
 
-class TokenOnlyWebApi(resource.Resource):
+        :param ctx: client transaction from which request is extracted
+        :returns: str (empty)
+        """
+        req = IRequest(ctx)
+        req.setHeader("server", "Tahoe-LAFS gateway")
+        methods = ', '.join([m[7:] for m in dir(self) if m.startswith('render_')])
+        req.setHeader("allow", methods)
+        req.setHeader("public", methods)
+        req.setHeader("compliance", "rfc=2068, rfc=2616")
+        req.setHeader("content-length", 0)
+        return ""
+
+
+class MultiFormatPage(Page):
+    """
+    ```MultiFormatPage`` is a ``rend.Page`` that can be rendered in a number
+    of different formats.
+
+    Rendered format is controlled by a query argument (given by
+    ``self.formatArgument``).  Different resources may support different
+    formats but ``json`` is a pretty common one.
+    """
+    formatArgument = "t"
+    formatDefault = None
+
+    def renderHTTP(self, ctx):
+        """
+        Dispatch to a renderer for a particular format, as selected by a query
+        argument.
+
+        A renderer for the format given by the query argument matching
+        ``formatArgument`` will be selected and invoked.  The default ``Page``
+        rendering behavior will be used if no format is selected (either by
+        query arguments or by ``formatDefault``).
+
+        :return: The result of the selected renderer.
+        """
+        req = IRequest(ctx)
+        t = get_arg(req, self.formatArgument, self.formatDefault)
+        renderer = self._get_renderer(t)
+        result = renderer(ctx)
+        return result
+
+
+    def _get_renderer(self, fmt):
+        """
+        Get the renderer for the indicated format.
+
+        :param bytes fmt: The format.  If a method with a prefix of
+            ``render_`` and a suffix of this format (upper-cased) is found, it
+            will be used.
+
+        :return: A callable which takes a Nevow context and renders a
+            response.
+        """
+        if fmt is None:
+            return super(MultiFormatPage, self).renderHTTP
+        try:
+            renderer = getattr(self, "render_{}".format(fmt.upper()))
+        except AttributeError:
+            raise WebError(
+                "Unknown {} value: {!r}".format(self.formatArgument, fmt),
+            )
+        else:
+            if renderer is None:
+                return super(MultiFormatPage, self).renderHTTP
+            return lambda ctx: renderer(IRequest(ctx))
+
+
+
+class TokenOnlyWebApi(resource.Resource, object):
     """
     I provide a rend.Page implementation that only accepts POST calls,
     and only if they have a 'token=' arg with the correct
@@ -429,9 +503,12 @@ class TokenOnlyWebApi(resource.Resource):
         if t == u'json':
             try:
                 return self.post_json(req)
-            except Exception:
+            except WebError as e:
+                req.setResponseCode(e.code)
+                return json.dumps({"error": e.text})
+            except Exception as e:
                 message, code = humanize_failure(Failure())
-                req.setResponseCode(code)
-                return simplejson.dumps({"error": message})
+                req.setResponseCode(500 if code is None else code)
+                return json.dumps({"error": message})
         else:
             raise WebError("'%s' invalid type for 't' arg" % (t,), http.BAD_REQUEST)

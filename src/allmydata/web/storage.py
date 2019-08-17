@@ -1,16 +1,22 @@
 
-import time, simplejson
-from nevow import rend, tags as T, inevow
-from allmydata.web.common import getxmlfile, abbreviate_time, get_arg
+import time, json
+from nevow import rend, tags as T
+from allmydata.web.common import (
+    getxmlfile,
+    abbreviate_time,
+    MultiFormatPage,
+)
 from allmydata.util.abbreviate import abbreviate_space
 from allmydata.util import time_format, idlib
+
 
 def remove_prefix(s, prefix):
     if not s.startswith(prefix):
         return None
     return s[len(prefix):]
 
-class StorageStatus(rend.Page):
+
+class StorageStatus(MultiFormatPage):
     docFactory = getxmlfile("storage_status.xhtml")
     # the default 'data' argument is the StorageServer instance
 
@@ -19,13 +25,6 @@ class StorageStatus(rend.Page):
         self.storage = storage
         self.nickname = nickname
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        t = get_arg(req, "t")
-        if t == "json":
-            return self.render_JSON(req)
-        return rend.Page.renderHTTP(self, ctx)
-
     def render_JSON(self, req):
         req.setHeader("content-type", "text/plain")
         d = {"stats": self.storage.get_stats(),
@@ -33,7 +32,7 @@ class StorageStatus(rend.Page):
              "lease-checker": self.storage.lease_checker.get_state(),
              "lease-checker-progress": self.storage.lease_checker.get_progress(),
              }
-        return simplejson.dumps(d, indent=1) + "\n"
+        return json.dumps(d, indent=1) + "\n"
 
     def data_nickname(self, ctx, storage):
         return self.nickname
@@ -266,4 +265,3 @@ class StorageStatus(rend.Page):
                              ]]])
 
         return ctx.tag[p]
-

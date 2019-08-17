@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 
-import sha as shamodule
+from __future__ import print_function
+
+import hashlib
 import os, random
 
 from pkg_resources import require
@@ -10,12 +12,12 @@ from pyrrd.rrd import DataSource, RRD, RRA
 
 
 def sha(s):
-    return shamodule.new(s).digest()
+    return hashlib.sha1(s).digest()
 
 def randomid():
     return os.urandom(20)
 
-class Node:
+class Node(object):
     def __init__(self, nid, introducer, simulator):
         self.nid = nid
         self.introducer = introducer
@@ -70,10 +72,7 @@ class Node:
             return False
 
     def decide(self, sharesize):
-        if sharesize > self.capacity:
-            return False
         return False
-        return random.random() > 0.5
 
     def make_space(self, sharesize):
         assert sharesize <= self.capacity
@@ -113,7 +112,7 @@ class Node:
         self.introducer.delete(fileid)
         return True
 
-class Introducer:
+class Introducer(object):
     def __init__(self, simulator):
         self.living_files = {}
         self.utilization = 0 # total size of all active files
@@ -150,7 +149,7 @@ class Introducer:
         self.simulator.stamp_utilization(self.utilization)
         del self.living_files[fileid]
 
-class Simulator:
+class Simulator(object):
     NUM_NODES = 1000
     EVENTS = ["ADDFILE", "DELFILE", "ADDNODE", "DELNODE"]
     RATE_ADDFILE = 1.0 / 10
@@ -205,7 +204,7 @@ class Simulator:
         size = random.randrange(1000)
         n = random.choice(self.all_nodes)
         if self.verbose:
-            print "add_file(size=%d, from node %s)" % (size, n)
+            print("add_file(size=%d, from node %s)" % (size, n))
         fileid = randomid()
         able = n.publish_file(fileid, size)
         if able:
@@ -226,7 +225,7 @@ class Simulator:
             if n.delete_file():
                 self.deleted_files += 1
                 return
-        print "no files to delete"
+        print("no files to delete")
 
     def _add_event(self, etype):
         rate = getattr(self, "RATE_" + etype)
@@ -259,16 +258,15 @@ class Simulator:
         # self.print_stats(current_time, etype)
 
     def print_stats_header(self):
-        print "time:  added   failed   lost  avg_tried"
+        print("time:  added   failed   lost  avg_tried")
 
     def print_stats(self, time, etype):
         if not self.published_files:
             avg_tried = "NONE"
         else:
             avg_tried = sum(self.published_files) / len(self.published_files)
-        print time, etype, self.added_data, self.failed_files, self.lost_data_bytes, avg_tried, len(self.introducer.living_files), self.introducer.utilization
+        print(time, etype, self.added_data, self.failed_files, self.lost_data_bytes, avg_tried, len(self.introducer.living_files), self.introducer.utilization)
 
-global s
 s = None
 
 def main():
@@ -282,7 +280,7 @@ def main():
     # s.print_stats_header()
     for i in range(1000):
         s.do_event()
-    print "%d files added, %d files deleted" % (s.added_files, s.deleted_files)
+    print("%d files added, %d files deleted" % (s.added_files, s.deleted_files))
     return s
 
 if __name__ == '__main__':

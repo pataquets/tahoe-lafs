@@ -1,7 +1,8 @@
 
-import os, simplejson, urllib
+import os, json, urllib
 from twisted.trial import unittest
 from twisted.internet import defer
+from twisted.internet.defer import inlineCallbacks, returnValue
 from allmydata.immutable import upload
 from allmydata.mutable.common import UnrecoverableFileError
 from allmydata.mutable.publish import MutableData
@@ -11,15 +12,13 @@ from allmydata.interfaces import ICheckResults, ICheckAndRepairResults, \
      IDeepCheckResults, IDeepCheckAndRepairResults
 from allmydata.monitor import Monitor, OperationCancelledError
 from allmydata.uri import LiteralFileURI
-from twisted.web.client import getPage
 
 from allmydata.test.common import ErrorMixin, _corrupt_mutable_share_data, \
      ShouldFailMixin
 from .common_util import StallMixin, run_cli
+from .common_web import do_http
 from allmydata.test.no_network import GridTestMixin
 from .cli.common import CLITestMixin
-
-timeout = 2400 # One of these took 1046.091s on Zandr's ARM box.
 
 class MutableChecker(GridTestMixin, unittest.TestCase, ErrorMixin):
     def test_good(self):
@@ -130,9 +129,10 @@ class DeepCheckBase(GridTestMixin, ErrorMixin, StallMixin, ShouldFailMixin,
         d.addCallback(self.decode_json)
         return d
 
-    def decode_json(self, (s,url)):
+    def decode_json(self, args):
+        (s, url) = args
         try:
-            data = simplejson.loads(s)
+            data = json.loads(s)
         except ValueError:
             self.fail("%s: not JSON: '%s'" % (url, s))
         return data
@@ -143,59 +143,52 @@ class DeepCheckBase(GridTestMixin, ErrorMixin, StallMixin, ShouldFailMixin,
                 # stream should end with a newline, so split returns ""
                 continue
             try:
-                yield simplejson.loads(unit)
-            except ValueError, le:
+                yield json.loads(unit)
+            except ValueError as le:
                 le.args = tuple(le.args + (unit,))
                 raise
 
+    @inlineCallbacks
     def web(self, n, method="GET", **kwargs):
         # returns (data, url)
         url = (self.client_baseurls[0] + "uri/%s" % urllib.quote(n.get_uri())
                + "?" + "&".join(["%s=%s" % (k,v) for (k,v) in kwargs.items()]))
-        d = getPage(url, method=method)
-        d.addCallback(lambda data: (data,url))
-        return d
+        data = yield do_http(method, url, browser_like_redirects=True)
+        returnValue((data,url))
 
-    def wait_for_operation(self, ignored, ophandle):
+    @inlineCallbacks
+    def wait_for_operation(self, ophandle):
         url = self.client_baseurls[0] + "operations/" + ophandle
         url += "?t=status&output=JSON"
-        d = getPage(url)
-        def _got(res):
-            try:
-                data = simplejson.loads(res)
-            except ValueError:
-                self.fail("%s: not JSON: '%s'" % (url, res))
-            if not data["finished"]:
-                d = self.stall(delay=1.0)
-                d.addCallback(self.wait_for_operation, ophandle)
-                return d
-            return data
-        d.addCallback(_got)
-        return d
+        while True:
+            body = yield do_http("get", url)
+            data = json.loads(body)
+            if data["finished"]:
+                break
+            yield self.stall(delay=0.1)
+        returnValue(data)
 
-    def get_operation_results(self, ignored, ophandle, output=None):
+    @inlineCallbacks
+    def get_operation_results(self, ophandle, output=None):
         url = self.client_baseurls[0] + "operations/" + ophandle
         url += "?t=status"
         if output:
             url += "&output=" + output
-        d = getPage(url)
-        def _got(res):
-            if output and output.lower() == "json":
-                try:
-                    return simplejson.loads(res)
-                except ValueError:
-                    self.fail("%s: not JSON: '%s'" % (url, res))
-            return res
-        d.addCallback(_got)
-        return d
+        body = yield do_http("get", url)
+        if output and output.lower() == "json":
+            data = json.loads(body)
+        else:
+            data = body
+        returnValue(data)
 
+    @inlineCallbacks
     def slow_web(self, n, output=None, **kwargs):
         # use ophandle=
         handle = base32.b2a(os.urandom(4))
-        d = self.web(n, "POST", ophandle=handle, **kwargs)
-        d.addCallback(self.wait_for_operation, handle)
-        d.addCallback(self.get_operation_results, handle, output=output)
-        return d
+        yield self.web(n, "POST", ophandle=handle, **kwargs)
+        yield self.wait_for_operation(handle)
+        data = yield self.get_operation_results(handle, output=output)
+        returnValue(data)
 
 
 class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
@@ -363,8 +356,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_web_stream_manifest(self, ignored):
         d = self.web(self.root, method="POST", t="stream-manifest")
-        d.addCallback(lambda (output,url):
-                      self._check_streamed_manifest(output))
+        d.addCallback(lambda output_and_url:
+                      self._check_streamed_manifest(output_and_url[0]))
         return d
 
     def _check_streamed_manifest(self, output):
@@ -739,7 +732,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_manifest_stream1(self):
         d = self.do_cli("manifest", self.root_uri)
-        def _check((rc,out,err)):
+        def _check(args):
+            (rc, out, err) = args
             self.failUnlessEqual(err, "")
             lines = [l for l in out.split("\n") if l]
             self.failUnlessEqual(len(lines), 8)
@@ -764,7 +758,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_manifest_stream2(self):
         d = self.do_cli("manifest", "--raw", self.root_uri)
-        def _check((rc,out,err)):
+        def _check(args):
+            (rc, out, err) = args
             self.failUnlessEqual(err, "")
             # this should be the same as the POST t=stream-manifest output
             self._check_streamed_manifest(out)
@@ -773,7 +768,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_manifest_stream3(self):
         d = self.do_cli("manifest", "--storage-index", self.root_uri)
-        def _check((rc,out,err)):
+        def _check(args):
+            (rc, out, err) = args
             self.failUnlessEqual(err, "")
             self._check_manifest_storage_index(out)
         d.addCallback(_check)
@@ -781,7 +777,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_manifest_stream4(self):
         d = self.do_cli("manifest", "--verify-cap", self.root_uri)
-        def _check((rc,out,err)):
+        def _check(args):
+            (rc, out, err) = args
             self.failUnlessEqual(err, "")
             lines = [l for l in out.split("\n") if l]
             self.failUnlessEqual(len(lines), 3)
@@ -793,7 +790,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_manifest_stream5(self):
         d = self.do_cli("manifest", "--repair-cap", self.root_uri)
-        def _check((rc,out,err)):
+        def _check(args):
+            (rc, out, err) = args
             self.failUnlessEqual(err, "")
             lines = [l for l in out.split("\n") if l]
             self.failUnlessEqual(len(lines), 3)
@@ -805,7 +803,8 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_stats1(self):
         d = self.do_cli("stats", self.root_uri)
-        def _check3((rc,out,err)):
+        def _check3(args):
+            (rc, out, err) = args
             lines = [l.strip() for l in out.split("\n") if l]
             self.failUnless("count-immutable-files: 1" in lines)
             self.failUnless("count-mutable-files: 1" in lines)
@@ -822,8 +821,9 @@ class DeepCheckWebGood(DeepCheckBase, unittest.TestCase):
 
     def do_cli_stats2(self):
         d = self.do_cli("stats", "--raw", self.root_uri)
-        def _check4((rc,out,err)):
-            data = simplejson.loads(out)
+        def _check4(args):
+            (rc, out, err) = args
+            data = json.loads(out)
             self.failUnlessEqual(data["count-immutable-files"], 1)
             self.failUnlessEqual(data["count-immutable-files"], 1)
             self.failUnlessEqual(data["count-mutable-files"], 1)
@@ -959,7 +959,7 @@ class DeepCheckWebBad(DeepCheckBase, unittest.TestCase):
             self.failUnlessEqual(cr.get_version_counter_recoverable(), 1, where)
             self.failUnlessEqual(cr.get_version_counter_unrecoverable(), 0, where)
             return cr
-        except Exception, le:
+        except Exception as le:
             le.args = tuple(le.args + (where,))
             raise
 
@@ -1195,7 +1195,8 @@ class Large(DeepCheckBase, unittest.TestCase):
         def _start_deepcheck(ignored):
             return self.web(self.root, method="POST", t="stream-deep-check")
         d.addCallback(_start_deepcheck)
-        def _check( (output, url) ):
+        def _check(output_and_url):
+            (output, url) = output_and_url
             units = list(self.parse_streamed_json(output))
             self.failUnlessEqual(len(units), 2+COUNT+1)
         d.addCallback(_check)

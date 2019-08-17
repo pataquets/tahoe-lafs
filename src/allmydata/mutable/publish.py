@@ -1,20 +1,19 @@
-
-
 import os, time
-from StringIO import StringIO
+from six.moves import cStringIO as StringIO
 from itertools import count
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.python import failure
+
+from allmydata.crypto import aes
+from allmydata.crypto import rsa
 from allmydata.interfaces import IPublishStatus, SDMF_VERSION, MDMF_VERSION, \
                                  IMutableUploadable
 from allmydata.util import base32, hashutil, mathutil, log
 from allmydata.util.dictutil import DictOfSets
 from allmydata import hashtree, codec
 from allmydata.storage.server import si_b2a
-from pycryptopp.cipher.aes import AES
 from foolscap.api import eventually, fireEventually
-
 from allmydata.mutable.common import MODE_WRITE, MODE_CHECK, MODE_REPAIR, \
      UncoordinatedWriteError, NotEnoughServersError
 from allmydata.mutable.servermap import ServerMap
@@ -30,8 +29,8 @@ PUSHING_BLOCKS_STATE = 0
 PUSHING_EVERYTHING_ELSE_STATE = 1
 DONE_STATE = 2
 
-class PublishStatus:
-    implements(IPublishStatus)
+@implementer(IPublishStatus)
+class PublishStatus(object):
     statusid_counter = count(0)
     def __init__(self):
         self.timings = {}
@@ -102,7 +101,7 @@ class PublishStatus:
 class LoopLimitExceededError(Exception):
     pass
 
-class Publish:
+class Publish(object):
     """I represent a single act of publishing the mutable file to the grid. I
     will only publish my data if the servermap I am using still represents
     the current state of the world.
@@ -271,7 +270,7 @@ class Publish:
             secrets = (write_enabler, renew_secret, cancel_secret)
 
             writer = writer_class(shnum,
-                                  server.get_rref(),
+                                  server.get_storage_server(),
                                   self._storage_index,
                                   secrets,
                                   self._new_seqnum,
@@ -473,7 +472,7 @@ class Publish:
             secrets = (write_enabler, renew_secret, cancel_secret)
 
             writer =  writer_class(shnum,
-                                   server.get_rref(),
+                                   server.get_storage_server(),
                                    self._storage_index,
                                    secrets,
                                    self._new_seqnum,
@@ -713,8 +712,8 @@ class Publish:
 
         key = hashutil.ssk_readkey_data_hash(salt, self.readkey)
         self._status.set_status("Encrypting")
-        enc = AES(key)
-        crypttext = enc.process(data)
+        encryptor = aes.create_encryptor(key)
+        crypttext = aes.encrypt_data(encryptor, data)
         assert len(crypttext) == len(data)
 
         now = time.time()
@@ -851,7 +850,7 @@ class Publish:
         started = time.time()
         self._status.set_status("Signing prefix")
         signable = self._get_some_writer().get_signable()
-        self.signature = self._privkey.sign(signable)
+        self.signature = rsa.sign_data(self._privkey, signable)
 
         for (shnum, writers) in self.writers.iteritems():
             for writer in writers:
@@ -866,7 +865,7 @@ class Publish:
         self._status.set_status("Pushing shares")
         self._started_pushing = started
         ds = []
-        verification_key = self._pubkey.serialize()
+        verification_key = rsa.der_string_from_verifying_key(self._pubkey)
 
         for (shnum, writers) in self.writers.copy().iteritems():
             for writer in writers:
@@ -909,9 +908,7 @@ class Publish:
                  level=log.NOISY)
 
     def update_goal(self):
-        # if log.recording_noisy
-        if True:
-            self.log_goal(self.goal, "before update: ")
+        self.log_goal(self.goal, "before update: ")
 
         # first, remove any bad servers from our goal
         self.goal = set([ (server, shnum)
@@ -976,8 +973,7 @@ class Publish:
             i += 1
             if i >= len(serverlist):
                 i = 0
-        if True:
-            self.log_goal(self.goal, "after update: ")
+        self.log_goal(self.goal, "after update: ")
 
 
     def _got_write_answer(self, answer, writer, started):
@@ -1077,7 +1073,6 @@ class Publish:
                     # of highest-replaceable-seqnum or lower, we're allowed
                     # to replace it: send out a new writev (or rather add it
                     # to self.goal and loop).
-                    pass
 
                 surprised = True
 
@@ -1199,12 +1194,12 @@ class Publish:
         eventually(self.done_deferred.callback, f)
 
 
-class MutableFileHandle:
+@implementer(IMutableUploadable)
+class MutableFileHandle(object):
     """
     I am a mutable uploadable built around a filehandle-like object,
     usually either a StringIO instance or a handle to an actual file.
     """
-    implements(IMutableUploadable)
 
     def __init__(self, filehandle):
         # The filehandle is defined as a generally file-like object that
@@ -1283,13 +1278,13 @@ class MutableData(MutableFileHandle):
         MutableFileHandle.__init__(self, StringIO(s))
 
 
-class TransformingUploadable:
+@implementer(IMutableUploadable)
+class TransformingUploadable(object):
     """
     I am an IMutableUploadable that wraps another IMutableUploadable,
     and some segments that are already on the grid. When I am called to
     read, I handle merging of boundary segments.
     """
-    implements(IMutableUploadable)
 
 
     def __init__(self, data, offset, segment_size, start, end):

@@ -1,11 +1,13 @@
+"""Tests for the dirnode module."""
+import six
 import time
 import unicodedata
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.trial import unittest
 from twisted.internet import defer
 from twisted.internet.interfaces import IConsumer
 from allmydata import uri, dirnode
-from allmydata.client import Client
+from allmydata.client import _Client
 from allmydata.immutable import upload
 from allmydata.interfaces import IImmutableFileNode, IMutableFileNode, \
      ExistingChildError, NoSuchChildError, MustNotBeUnknownRWError, \
@@ -25,8 +27,12 @@ from allmydata.nodemaker import NodeMaker
 from base64 import b32decode
 import allmydata.test.common_util as testutil
 
-class MemAccum:
-    implements(IConsumer)
+if six.PY3:
+    long = int
+
+
+@implementer(IConsumer)
+class MemAccum(object):
     def registerProducer(self, producer, streaming):
         self.producer = producer
         self.producer.resumeProducing()
@@ -57,7 +63,6 @@ one_nfd = u"one\u0304"
 
 class Dirnode(GridTestMixin, unittest.TestCase,
               testutil.ReallyEqualMixin, testutil.ShouldFailMixin, testutil.StallMixin, ErrorMixin):
-    timeout = 480 # It occasionally takes longer than 240 seconds on Francois's arm box.
 
     def _do_create_test(self, mdmf=False):
         c = self.g.clients[0]
@@ -405,11 +410,13 @@ class Dirnode(GridTestMixin, unittest.TestCase,
             def _start(res):
                 self._start_timestamp = time.time()
             d.addCallback(_start)
-            # simplejson-1.7.1 (as shipped on Ubuntu 'gutsy') rounds all
-            # floats to hundredeths (it uses str(num) instead of repr(num)).
-            # simplejson-1.7.3 does not have this bug. To prevent this bug
-            # from causing the test to fail, stall for more than a few
-            # hundrededths of a second.
+            # a long time ago, we used simplejson-1.7.1 (as shipped on Ubuntu
+            # 'gutsy'), which had a bug/misbehavior in which it would round
+            # all floats to hundredeths (it used str(num) instead of
+            # repr(num)). To prevent this bug from causing the test to fail,
+            # we stall for more than a few hundrededths of a second here.
+            # simplejson-1.7.3 does not have this bug, and anyways we've
+            # moved on to stdlib "json" which doesn't have it either.
             d.addCallback(self.stall, 0.1)
             d.addCallback(lambda res: n.add_file(u"timestamps",
                                                  upload.Data("stamp me", convergence="some convergence string")))
@@ -1373,7 +1380,7 @@ class Dirnode(GridTestMixin, unittest.TestCase,
         self.set_up_grid(oneshare=True)
         return self._do_initial_children_test(mdmf=True)
 
-class MinimalFakeMutableFile:
+class MinimalFakeMutableFile(object):
     def get_writekey(self):
         return "writekey"
 
@@ -1487,8 +1494,8 @@ class Packing(testutil.ReallyEqualMixin, unittest.TestCase):
                               dirnode.pack_children,
                               kids, fn.get_writekey(), deep_immutable=True)
 
-class FakeMutableFile:
-    implements(IMutableFileNode)
+@implementer(IMutableFileNode)
+class FakeMutableFile(object):
     counter = 0
     def __init__(self, initial_contents=""):
         data = self._get_initial_contents(initial_contents)
@@ -1549,7 +1556,7 @@ class FakeNodeMaker(NodeMaker):
     def create_mutable_file(self, contents="", keysize=None, version=None):
         return defer.succeed(FakeMutableFile(contents))
 
-class FakeClient2(Client):
+class FakeClient2(_Client):
     def __init__(self):
         self.nodemaker = FakeNodeMaker(None, None, None,
                                        None, None,
@@ -1750,7 +1757,6 @@ class Dirnode2(testutil.ReallyEqualMixin, testutil.ShouldFailMixin, unittest.Tes
 
 
 class DeepStats(testutil.ReallyEqualMixin, unittest.TestCase):
-    timeout = 240 # It takes longer than 120 seconds on Francois's arm box.
     def test_stats(self):
         ds = dirnode.DeepStats(None)
         ds.add("count-files")
@@ -1790,7 +1796,7 @@ class DeepStats(testutil.ReallyEqualMixin, unittest.TestCase):
                                      (101, 316, 216),
                                      (317, 1000, 684),
                                      (1001, 3162, 99),
-                                     (3162277660169L, 10000000000000L, 1),
+                                     (long(3162277660169), long(10000000000000), 1),
                                      ])
 
 class UCWEingMutableFileNode(MutableFileNode):
@@ -1815,7 +1821,6 @@ class UCWEingNodeMaker(NodeMaker):
 
 
 class Deleter(GridTestMixin, testutil.ReallyEqualMixin, unittest.TestCase):
-    timeout = 3600 # It takes longer than 433 seconds on Zandr's ARM box.
     def test_retry(self):
         # ticket #550, a dirnode.delete which experiences an
         # UncoordinatedWriteError will fail with an incorrect "you're

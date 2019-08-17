@@ -1,7 +1,7 @@
 
 import os
 
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.python import log as twisted_log
 
@@ -17,7 +17,7 @@ class FileProhibited(Exception):
         self.reason = reason
 
 
-class Blacklist:
+class Blacklist(object):
     def __init__(self, blacklist_fn):
         self.blacklist_fn = blacklist_fn
         self.last_mtime = None
@@ -42,7 +42,7 @@ class Blacklist:
                     si = base32.a2b(si_s) # must be valid base32
                     self.entries[si] = reason
                 self.last_mtime = current_mtime
-        except Exception, e:
+        except Exception as e:
             twisted_log.err(e, "unparseable blacklist file")
             raise
 
@@ -56,8 +56,8 @@ class Blacklist:
         return reason
 
 
-class ProhibitedNode:
-    implements(IFileNode)
+@implementer(IFileNode)
+class ProhibitedNode(object):
 
     def __init__(self, wrapped_node, reason):
         assert IFilesystemNode.providedBy(wrapped_node), wrapped_node

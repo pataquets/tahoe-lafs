@@ -1,5 +1,9 @@
-from allmydata.util import dictutil
+import collections, itertools, functools
 
+objnums = collections.defaultdict(itertools.count)
+
+
+@functools.total_ordering
 class NummedObj(object):
     """
     This is useful for nicer debug printouts.  Instead of objects of the same class being
@@ -10,7 +14,6 @@ class NummedObj(object):
     to diff outputs from separate runs to see what changed, without having to ignore a difference
     on every line due to different memory addresses of objects.
     """
-    objnums = dictutil.NumDict() # key: class names, value: highest used object number
 
     def __init__(self, klass=None):
         """
@@ -20,29 +23,20 @@ class NummedObj(object):
             klass = self.__class__
         self._classname = klass.__name__
 
-        NummedObj.objnums.inc(self._classname)
-        self._objid = NummedObj.objnums[self._classname]
+        self._objid = objnums[self._classname].next()
 
     def __repr__(self):
         return "<%s #%d>" % (self._classname, self._objid,)
 
     def __lt__(self, other):
-        return (self._objid, self._classname,) < (other._objid, other._classname,)
-
-    def __le__(self, other):
-        return (self._objid, self._classname,) <= (other._objid, other._classname,)
+        if isinstance(other, NummedObj):
+            return (self._objid, self._classname,) < (other._objid, other._classname,)
+        return NotImplemented
 
     def __eq__(self, other):
-        return (self._objid, self._classname,) == (other._objid, other._classname,)
-
-    def __ne__(self, other):
-        return (self._objid, self._classname,) != (other._objid, other._classname,)
-
-    def __gt__(self, other):
-        return (self._objid, self._classname,) > (other._objid, other._classname,)
-
-    def __ge__(self, other):
-        return (self._objid, self._classname,) >= (other._objid, other._classname,)
+        if isinstance(other, NummedObj):
+            return (self._objid, self._classname,) == (other._objid, other._classname,)
+        return NotImplemented
 
     def __hash__(self):
         return id(self)

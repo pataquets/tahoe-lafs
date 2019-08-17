@@ -1,14 +1,20 @@
+from __future__ import print_function
+
 
 def foo(): pass # keep the line number constant
 
-import os, time, sys, yaml
-from StringIO import StringIO
+import binascii
+import six
+import hashlib
+import os, time, sys
+import yaml
+
+from six.moves import StringIO
 from datetime import timedelta
 from twisted.trial import unittest
 from twisted.internet import defer, reactor
 from twisted.python.failure import Failure
 from twisted.python import log
-from pycryptopp.hash.sha256 import SHA256 as _hash
 
 from allmydata.util import base32, idlib, humanreadable, mathutil, hashutil
 from allmydata.util import assertutil, fileutil, deferredutil, abbreviate
@@ -16,7 +22,20 @@ from allmydata.util import limiter, time_format, pollmixin, cachedir
 from allmydata.util import statistics, dictutil, pipeline, yamlutil
 from allmydata.util import log as tahoe_log
 from allmydata.util.spans import Spans, overlap, DataSpans
+from allmydata.util.fileutil import EncryptedTemporaryFile
 from allmydata.test.common_util import ReallyEqualMixin, TimezoneMixin
+
+if six.PY3:
+    long = int
+
+
+def sha256(data):
+    """
+    :param bytes data: data to hash
+
+    :returns: a hex-encoded SHA256 hash of the data
+    """
+    return binascii.hexlify(hashlib.sha256(data).digest())
 
 
 class Base32(unittest.TestCase):
@@ -48,10 +67,10 @@ class NoArgumentException(Exception):
 class HumanReadable(unittest.TestCase):
     def test_repr(self):
         hr = humanreadable.hr
-        self.failUnlessEqual(hr(foo), "<foo() at test_util.py:2>")
+        self.failUnlessEqual(hr(foo), "<foo() at test_util.py:4>")
         self.failUnlessEqual(hr(self.test_repr),
                              "<bound method HumanReadable.test_repr of <allmydata.test.test_util.HumanReadable testMethod=test_repr>>")
-        self.failUnlessEqual(hr(1L), "1")
+        self.failUnlessEqual(hr(long(1)), "1")
         self.failUnlessEqual(hr(10**40),
                              "100000000000000000...000000000000000000")
         self.failUnlessEqual(hr(self), "<allmydata.test.test_util.HumanReadable testMethod=test_repr>")
@@ -59,19 +78,19 @@ class HumanReadable(unittest.TestCase):
         self.failUnlessEqual(hr({1:2}), "{1:2}")
         try:
             raise ValueError
-        except Exception, e:
+        except Exception as e:
             self.failUnless(
                 hr(e) == "<ValueError: ()>" # python-2.4
                 or hr(e) == "ValueError()") # python-2.5
         try:
             raise ValueError("oops")
-        except Exception, e:
+        except Exception as e:
             self.failUnless(
                 hr(e) == "<ValueError: 'oops'>" # python-2.4
                 or hr(e) == "ValueError('oops',)") # python-2.5
         try:
             raise NoArgumentException
-        except Exception, e:
+        except Exception as e:
             self.failUnless(
                 hr(e) == "<NoArgumentException>" # python-2.4
                 or hr(e) == "NoArgumentException()") # python-2.5
@@ -354,18 +373,18 @@ class Asserts(unittest.TestCase):
     def should_assert(self, func, *args, **kwargs):
         try:
             func(*args, **kwargs)
-        except AssertionError, e:
+        except AssertionError as e:
             return str(e)
-        except Exception, e:
+        except Exception as e:
             self.fail("assert failed with non-AssertionError: %s" % e)
         self.fail("assert was not caught")
 
     def should_not_assert(self, func, *args, **kwargs):
         try:
             func(*args, **kwargs)
-        except AssertionError, e:
+        except AssertionError as e:
             self.fail("assertion fired when it should not have: %s" % e)
-        except Exception, e:
+        except Exception as e:
             self.fail("assertion (which shouldn't have failed) failed with non-AssertionError: %s" % e)
         return # we're happy
 
@@ -410,7 +429,7 @@ class Asserts(unittest.TestCase):
         self.failUnlessEqual("postcondition: othermsg: 'message2' <type 'str'>", m)
 
 class FileUtil(ReallyEqualMixin, unittest.TestCase):
-    def mkdir(self, basedir, path, mode=0777):
+    def mkdir(self, basedir, path, mode=0o777):
         fn = os.path.join(basedir, path)
         fileutil.make_dirs(fn, mode)
 
@@ -430,16 +449,16 @@ class FileUtil(ReallyEqualMixin, unittest.TestCase):
         d = os.path.join(basedir, "doomed")
         self.mkdir(d, "a/b")
         self.touch(d, "a/b/1.txt")
-        self.touch(d, "a/b/2.txt", 0444)
+        self.touch(d, "a/b/2.txt", 0o444)
         self.touch(d, "a/b/3.txt", 0)
         self.mkdir(d, "a/c")
         self.touch(d, "a/c/1.txt")
-        self.touch(d, "a/c/2.txt", 0444)
+        self.touch(d, "a/c/2.txt", 0o444)
         self.touch(d, "a/c/3.txt", 0)
-        os.chmod(os.path.join(d, "a/c"), 0444)
+        os.chmod(os.path.join(d, "a/c"), 0o444)
         self.mkdir(d, "a/d")
         self.touch(d, "a/d/1.txt")
-        self.touch(d, "a/d/2.txt", 0444)
+        self.touch(d, "a/d/2.txt", 0o444)
         self.touch(d, "a/d/3.txt", 0)
         os.chmod(os.path.join(d, "a/d"), 0)
 
@@ -509,40 +528,27 @@ class FileUtil(ReallyEqualMixin, unittest.TestCase):
         workdir = fileutil.abspath_expanduser_unicode(u"test_replace_file")
         fileutil.make_dirs(workdir)
 
-        backup_path      = os.path.join(workdir, "backup")
         replaced_path    = os.path.join(workdir, "replaced")
         replacement_path = os.path.join(workdir, "replacement")
 
         # when none of the files exist
-        self.failUnlessRaises(fileutil.ConflictError, fileutil.replace_file, replaced_path, replacement_path, backup_path)
+        self.failUnlessRaises(fileutil.ConflictError, fileutil.replace_file, replaced_path, replacement_path)
 
         # when only replaced exists
         fileutil.write(replaced_path,    "foo")
-        self.failUnlessRaises(fileutil.ConflictError, fileutil.replace_file, replaced_path, replacement_path, backup_path)
+        self.failUnlessRaises(fileutil.ConflictError, fileutil.replace_file, replaced_path, replacement_path)
         self.failUnlessEqual(fileutil.read(replaced_path), "foo")
 
-        # when both replaced and replacement exist, but not backup
+        # when both replaced and replacement exist
         fileutil.write(replacement_path, "bar")
-        fileutil.replace_file(replaced_path, replacement_path, backup_path)
-        self.failUnlessEqual(fileutil.read(backup_path),   "foo")
+        fileutil.replace_file(replaced_path, replacement_path)
         self.failUnlessEqual(fileutil.read(replaced_path), "bar")
         self.failIf(os.path.exists(replacement_path))
 
         # when only replacement exists
-        os.remove(backup_path)
         os.remove(replaced_path)
         fileutil.write(replacement_path, "bar")
-        fileutil.replace_file(replaced_path, replacement_path, backup_path)
-        self.failUnlessEqual(fileutil.read(replaced_path), "bar")
-        self.failIf(os.path.exists(replacement_path))
-        self.failIf(os.path.exists(backup_path))
-
-        # when replaced, replacement and backup all exist
-        fileutil.write(replaced_path,    "foo")
-        fileutil.write(replacement_path, "bar")
-        fileutil.write(backup_path,      "bak")
-        fileutil.replace_file(replaced_path, replacement_path, backup_path)
-        self.failUnlessEqual(fileutil.read(backup_path),   "foo")
+        fileutil.replace_file(replaced_path, replacement_path)
         self.failUnlessEqual(fileutil.read(replaced_path), "bar")
         self.failIf(os.path.exists(replacement_path))
 
@@ -642,22 +648,44 @@ class FileUtil(ReallyEqualMixin, unittest.TestCase):
         workdir = fileutil.abspath_expanduser_unicode(u"test_make_dirs_with_absolute_mode")
         fileutil.make_dirs(workdir)
         abspath = fileutil.abspath_expanduser_unicode(u"a/b/c/d", base=workdir)
-        fileutil.make_dirs_with_absolute_mode(workdir, abspath, 0766)
-        new_mode = os.stat(os.path.join(workdir, "a", "b", "c", "d")).st_mode & 0777
-        self.failUnlessEqual(new_mode, 0766)
-        new_mode = os.stat(os.path.join(workdir, "a", "b", "c")).st_mode & 0777
-        self.failUnlessEqual(new_mode, 0766)
-        new_mode = os.stat(os.path.join(workdir, "a", "b")).st_mode & 0777
-        self.failUnlessEqual(new_mode, 0766)
-        new_mode = os.stat(os.path.join(workdir, "a")).st_mode & 0777
-        self.failUnlessEqual(new_mode, 0766)
-        new_mode = os.stat(workdir).st_mode & 0777
-        self.failIfEqual(new_mode, 0766)
+        fileutil.make_dirs_with_absolute_mode(workdir, abspath, 0o766)
+        new_mode = os.stat(os.path.join(workdir, "a", "b", "c", "d")).st_mode & 0o777
+        self.failUnlessEqual(new_mode, 0o766)
+        new_mode = os.stat(os.path.join(workdir, "a", "b", "c")).st_mode & 0o777
+        self.failUnlessEqual(new_mode, 0o766)
+        new_mode = os.stat(os.path.join(workdir, "a", "b")).st_mode & 0o777
+        self.failUnlessEqual(new_mode, 0o766)
+        new_mode = os.stat(os.path.join(workdir, "a")).st_mode & 0o777
+        self.failUnlessEqual(new_mode, 0o766)
+        new_mode = os.stat(workdir).st_mode & 0o777
+        self.failIfEqual(new_mode, 0o766)
 
     def test_create_long_path(self):
+        """
+        Even for paths with total length greater than 260 bytes,
+        ``fileutil.abspath_expanduser_unicode`` produces a path on which other
+        path-related APIs can operate.
+
+        https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx
+        documents certain Windows-specific path length limitations this test
+        is specifically intended to demonstrate can be overcome.
+        """
         workdir = u"test_create_long_path"
         fileutil.make_dirs(workdir)
-        long_path = fileutil.abspath_expanduser_unicode(os.path.join(workdir, u'x'*255))
+        base_path = fileutil.abspath_expanduser_unicode(workdir)
+        base_length = len(base_path)
+
+        # Construct a path /just/ long enough to exercise the important case.
+        # It would be nice if we could just use a seemingly globally valid
+        # long file name (the `x...` portion) here - for example, a name 255
+        # bytes long- and a previous version of this test did just that.
+        # However, aufs imposes a 242 byte length limit on file names.  Most
+        # other POSIX filesystems do allow names up to 255 bytes.  It's not
+        # clear there's anything we can *do* about lower limits, though, and
+        # POSIX.1-2017 (and earlier) only requires that the maximum be at
+        # least 14 (!!!)  bytes.
+        long_path = os.path.join(base_path, u'x' * (261 - base_length))
+
         def _cleanup():
             fileutil.remove(long_path)
         self.addCleanup(_cleanup)
@@ -760,6 +788,11 @@ class FileUtil(ReallyEqualMixin, unittest.TestCase):
         self.failUnlessTrue(symlinkinfo.exists)
         self.failUnlessFalse(symlinkinfo.isfile)
         self.failUnlessFalse(symlinkinfo.isdir)
+
+    def test_encrypted_tempfile(self):
+        f = EncryptedTemporaryFile()
+        f.write("foobar")
+        f.close()
 
 
 class PollMixinTests(unittest.TestCase):
@@ -943,6 +976,11 @@ class HashUtilTests(unittest.TestCase):
         self._testknown(hashutil.ssk_readkey_data_hash, "73wsaldnvdzqaf7v4pzbr2ae5a", "iv", "rk")
         self._testknown(hashutil.ssk_storage_index_hash, "j7icz6kigb6hxrej3tv4z7ayym", "")
 
+        self._testknown(hashutil.permute_server_hash,
+                        "kb4354zeeurpo3ze5e275wzbynm6hlap", # b32(expected)
+                        "SI", # peer selection index == storage_index
+                        base32.a2b("u33m4y7klhz3bypswqkozwetvabelhxt"), # seed
+                        )
 
 class Abbreviate(unittest.TestCase):
     def test_time(self):
@@ -1039,7 +1077,6 @@ class Abbreviate(unittest.TestCase):
         self.failUnlessIn("fhtagn", str(e))
 
 class Limiter(unittest.TestCase):
-    timeout = 480 # This takes longer than 240 seconds on Francois's arm box.
 
     def job(self, i, foo):
         self.calls.append( (i, foo) )
@@ -1313,7 +1350,7 @@ class CacheDir(unittest.TestCase):
         del b2
 
 ctr = [0]
-class EqButNotIs:
+class EqButNotIs(object):
     def __init__(self, x):
         self.x = x
         self.hash = ctr[0]
@@ -1336,82 +1373,6 @@ class EqButNotIs:
         return self.x == other
 
 class DictUtil(unittest.TestCase):
-    def _help_test_empty_dict(self, klass):
-        d1 = klass()
-        d2 = klass({})
-
-        self.failUnless(d1 == d2, "d1: %r, d2: %r" % (d1, d2,))
-        self.failUnless(len(d1) == 0)
-        self.failUnless(len(d2) == 0)
-
-    def _help_test_nonempty_dict(self, klass):
-        d1 = klass({'a': 1, 'b': "eggs", 3: "spam",})
-        d2 = klass({'a': 1, 'b': "eggs", 3: "spam",})
-
-        self.failUnless(d1 == d2)
-        self.failUnless(len(d1) == 3, "%s, %s" % (len(d1), d1,))
-        self.failUnless(len(d2) == 3)
-
-    def _help_test_eq_but_notis(self, klass):
-        d = klass({'a': 3, 'b': EqButNotIs(3), 'c': 3})
-        d.pop('b')
-
-        d.clear()
-        d['a'] = 3
-        d['b'] = EqButNotIs(3)
-        d['c'] = 3
-        d.pop('b')
-
-        d.clear()
-        d['b'] = EqButNotIs(3)
-        d['a'] = 3
-        d['c'] = 3
-        d.pop('b')
-
-        d.clear()
-        d['a'] = EqButNotIs(3)
-        d['c'] = 3
-        d['a'] = 3
-
-        d.clear()
-        fake3 = EqButNotIs(3)
-        fake7 = EqButNotIs(7)
-        d[fake3] = fake7
-        d[3] = 7
-        d[3] = 8
-        self.failUnless(filter(lambda x: x is 8,  d.itervalues()))
-        self.failUnless(filter(lambda x: x is fake7,  d.itervalues()))
-        # The real 7 should have been ejected by the d[3] = 8.
-        self.failUnless(not filter(lambda x: x is 7,  d.itervalues()))
-        self.failUnless(filter(lambda x: x is fake3,  d.iterkeys()))
-        self.failUnless(filter(lambda x: x is 3,  d.iterkeys()))
-        d[fake3] = 8
-
-        d.clear()
-        d[3] = 7
-        fake3 = EqButNotIs(3)
-        fake7 = EqButNotIs(7)
-        d[fake3] = fake7
-        d[3] = 8
-        self.failUnless(filter(lambda x: x is 8,  d.itervalues()))
-        self.failUnless(filter(lambda x: x is fake7,  d.itervalues()))
-        # The real 7 should have been ejected by the d[3] = 8.
-        self.failUnless(not filter(lambda x: x is 7,  d.itervalues()))
-        self.failUnless(filter(lambda x: x is fake3,  d.iterkeys()))
-        self.failUnless(filter(lambda x: x is 3,  d.iterkeys()))
-        d[fake3] = 8
-
-    def test_all(self):
-        self._help_test_eq_but_notis(dictutil.UtilDict)
-        self._help_test_eq_but_notis(dictutil.NumDict)
-        self._help_test_eq_but_notis(dictutil.ValueOrderedDict)
-        self._help_test_nonempty_dict(dictutil.UtilDict)
-        self._help_test_nonempty_dict(dictutil.NumDict)
-        self._help_test_nonempty_dict(dictutil.ValueOrderedDict)
-        self._help_test_eq_but_notis(dictutil.UtilDict)
-        self._help_test_eq_but_notis(dictutil.NumDict)
-        self._help_test_eq_but_notis(dictutil.ValueOrderedDict)
-
     def test_dict_of_sets(self):
         ds = dictutil.DictOfSets()
         ds.add(1, "a")
@@ -1435,234 +1396,6 @@ class DictUtil(unittest.TestCase):
         self.failUnlessEqual(ds[1], set(["a"]))
         self.failUnlessEqual(ds[3], set(["f", "g"]))
         self.failUnlessEqual(ds[4], set(["h"]))
-
-    def test_move(self):
-        d1 = {1: "a", 2: "b"}
-        d2 = {2: "c", 3: "d"}
-        dictutil.move(1, d1, d2)
-        self.failUnlessEqual(d1, {2: "b"})
-        self.failUnlessEqual(d2, {1: "a", 2: "c", 3: "d"})
-
-        d1 = {1: "a", 2: "b"}
-        d2 = {2: "c", 3: "d"}
-        dictutil.move(2, d1, d2)
-        self.failUnlessEqual(d1, {1: "a"})
-        self.failUnlessEqual(d2, {2: "b", 3: "d"})
-
-        d1 = {1: "a", 2: "b"}
-        d2 = {2: "c", 3: "d"}
-        self.failUnlessRaises(KeyError, dictutil.move, 5, d1, d2, strict=True)
-
-    def test_subtract(self):
-        d1 = {1: "a", 2: "b"}
-        d2 = {2: "c", 3: "d"}
-        d3 = dictutil.subtract(d1, d2)
-        self.failUnlessEqual(d3, {1: "a"})
-
-        d1 = {1: "a", 2: "b"}
-        d2 = {2: "c"}
-        d3 = dictutil.subtract(d1, d2)
-        self.failUnlessEqual(d3, {1: "a"})
-
-    def test_utildict(self):
-        d = dictutil.UtilDict({1: "a", 2: "b"})
-        d.del_if_present(1)
-        d.del_if_present(3)
-        self.failUnlessEqual(d, {2: "b"})
-        def eq(a, b):
-            return a == b
-        self.failUnlessRaises(TypeError, eq, d, "not a dict")
-
-        d = dictutil.UtilDict({1: "b", 2: "a"})
-        self.failUnlessEqual(d.items_sorted_by_value(),
-                             [(2, "a"), (1, "b")])
-        self.failUnlessEqual(d.items_sorted_by_key(),
-                             [(1, "b"), (2, "a")])
-        self.failUnlessEqual(repr(d), "{1: 'b', 2: 'a'}")
-        self.failUnless(1 in d)
-
-        d2 = dictutil.UtilDict({3: "c", 4: "d"})
-        self.failUnless(d != d2)
-        self.failUnless(d2 > d)
-        self.failUnless(d2 >= d)
-        self.failUnless(d <= d2)
-        self.failUnless(d < d2)
-        self.failUnlessEqual(d[1], "b")
-        self.failUnlessEqual(sorted(list([k for k in d])), [1,2])
-
-        d3 = d.copy()
-        self.failUnlessEqual(d, d3)
-        self.failUnless(isinstance(d3, dictutil.UtilDict))
-
-        d4 = d.fromkeys([3,4], "e")
-        self.failUnlessEqual(d4, {3: "e", 4: "e"})
-
-        self.failUnlessEqual(d.get(1), "b")
-        self.failUnlessEqual(d.get(3), None)
-        self.failUnlessEqual(d.get(3, "default"), "default")
-        self.failUnlessEqual(sorted(list(d.items())),
-                             [(1, "b"), (2, "a")])
-        self.failUnlessEqual(sorted(list(d.iteritems())),
-                             [(1, "b"), (2, "a")])
-        self.failUnlessEqual(sorted(d.keys()), [1, 2])
-        self.failUnlessEqual(sorted(d.values()), ["a", "b"])
-        x = d.setdefault(1, "new")
-        self.failUnlessEqual(x, "b")
-        self.failUnlessEqual(d[1], "b")
-        x = d.setdefault(3, "new")
-        self.failUnlessEqual(x, "new")
-        self.failUnlessEqual(d[3], "new")
-        del d[3]
-
-        x = d.popitem()
-        self.failUnless(x in [(1, "b"), (2, "a")])
-        x = d.popitem()
-        self.failUnless(x in [(1, "b"), (2, "a")])
-        self.failUnlessRaises(KeyError, d.popitem)
-
-    def test_numdict(self):
-        d = dictutil.NumDict({"a": 1, "b": 2})
-
-        d.add_num("a", 10, 5)
-        d.add_num("c", 20, 5)
-        d.add_num("d", 30)
-        self.failUnlessEqual(d, {"a": 11, "b": 2, "c": 25, "d": 30})
-
-        d.subtract_num("a", 10)
-        d.subtract_num("e", 10)
-        d.subtract_num("f", 10, 15)
-        self.failUnlessEqual(d, {"a": 1, "b": 2, "c": 25, "d": 30,
-                                 "e": -10, "f": 5})
-
-        self.failUnlessEqual(d.sum(), sum([1, 2, 25, 30, -10, 5]))
-
-        d = dictutil.NumDict()
-        d.inc("a")
-        d.inc("a")
-        d.inc("b", 5)
-        self.failUnlessEqual(d, {"a": 2, "b": 6})
-        d.dec("a")
-        d.dec("c")
-        d.dec("d", 5)
-        self.failUnlessEqual(d, {"a": 1, "b": 6, "c": -1, "d": 4})
-        self.failUnlessEqual(d.items_sorted_by_key(),
-                             [("a", 1), ("b", 6), ("c", -1), ("d", 4)])
-        self.failUnlessEqual(d.items_sorted_by_value(),
-                             [("c", -1), ("a", 1), ("d", 4), ("b", 6)])
-        self.failUnlessEqual(d.item_with_largest_value(), ("b", 6))
-
-        d = dictutil.NumDict({"a": 1, "b": 2})
-        self.failUnlessIn(repr(d), ("{'a': 1, 'b': 2}",
-                                    "{'b': 2, 'a': 1}"))
-        self.failUnless("a" in d)
-
-        d2 = dictutil.NumDict({"c": 3, "d": 4})
-        self.failUnless(d != d2)
-        self.failUnless(d2 > d)
-        self.failUnless(d2 >= d)
-        self.failUnless(d <= d2)
-        self.failUnless(d < d2)
-        self.failUnlessEqual(d["a"], 1)
-        self.failUnlessEqual(sorted(list([k for k in d])), ["a","b"])
-        def eq(a, b):
-            return a == b
-        self.failUnlessRaises(TypeError, eq, d, "not a dict")
-
-        d3 = d.copy()
-        self.failUnlessEqual(d, d3)
-        self.failUnless(isinstance(d3, dictutil.NumDict))
-
-        d4 = d.fromkeys(["a","b"], 5)
-        self.failUnlessEqual(d4, {"a": 5, "b": 5})
-
-        self.failUnlessEqual(d.get("a"), 1)
-        self.failUnlessEqual(d.get("c"), 0)
-        self.failUnlessEqual(d.get("c", 5), 5)
-        self.failUnlessEqual(sorted(list(d.items())),
-                             [("a", 1), ("b", 2)])
-        self.failUnlessEqual(sorted(list(d.iteritems())),
-                             [("a", 1), ("b", 2)])
-        self.failUnlessEqual(sorted(d.keys()), ["a", "b"])
-        self.failUnlessEqual(sorted(d.values()), [1, 2])
-        self.failUnless(d.has_key("a"))
-        self.failIf(d.has_key("c"))
-
-        x = d.setdefault("c", 3)
-        self.failUnlessEqual(x, 3)
-        self.failUnlessEqual(d["c"], 3)
-        x = d.setdefault("c", 5)
-        self.failUnlessEqual(x, 3)
-        self.failUnlessEqual(d["c"], 3)
-        del d["c"]
-
-        x = d.popitem()
-        self.failUnless(x in [("a", 1), ("b", 2)])
-        x = d.popitem()
-        self.failUnless(x in [("a", 1), ("b", 2)])
-        self.failUnlessRaises(KeyError, d.popitem)
-
-        d.update({"c": 3})
-        d.update({"c": 4, "d": 5})
-        self.failUnlessEqual(d, {"c": 4, "d": 5})
-
-    def test_del_if_present(self):
-        d = {1: "a", 2: "b"}
-        dictutil.del_if_present(d, 1)
-        dictutil.del_if_present(d, 3)
-        self.failUnlessEqual(d, {2: "b"})
-
-    def test_valueordereddict(self):
-        d = dictutil.ValueOrderedDict()
-        d["a"] = 3
-        d["b"] = 2
-        d["c"] = 1
-
-        self.failUnlessEqual(d, {"a": 3, "b": 2, "c": 1})
-        self.failUnlessEqual(d.items(), [("c", 1), ("b", 2), ("a", 3)])
-        self.failUnlessEqual(d.values(), [1, 2, 3])
-        self.failUnlessEqual(d.keys(), ["c", "b", "a"])
-        self.failUnlessEqual(repr(d), "<ValueOrderedDict {c: 1, b: 2, a: 3}>")
-        def eq(a, b):
-            return a == b
-        self.failIf(d == {"a": 4})
-        self.failUnless(d != {"a": 4})
-
-        x = d.setdefault("d", 0)
-        self.failUnlessEqual(x, 0)
-        self.failUnlessEqual(d["d"], 0)
-        x = d.setdefault("d", -1)
-        self.failUnlessEqual(x, 0)
-        self.failUnlessEqual(d["d"], 0)
-
-        x = d.remove("e", "default", False)
-        self.failUnlessEqual(x, "default")
-        self.failUnlessRaises(KeyError, d.remove, "e", "default", True)
-        x = d.remove("d", 5)
-        self.failUnlessEqual(x, 0)
-
-        x = d.__getitem__("c")
-        self.failUnlessEqual(x, 1)
-        x = d.__getitem__("e", "default", False)
-        self.failUnlessEqual(x, "default")
-        self.failUnlessRaises(KeyError, d.__getitem__, "e", "default", True)
-
-        self.failUnlessEqual(d.popitem(), ("c", 1))
-        self.failUnlessEqual(d.popitem(), ("b", 2))
-        self.failUnlessEqual(d.popitem(), ("a", 3))
-        self.failUnlessRaises(KeyError, d.popitem)
-
-        d = dictutil.ValueOrderedDict({"a": 3, "b": 2, "c": 1})
-        x = d.pop("d", "default", False)
-        self.failUnlessEqual(x, "default")
-        self.failUnlessRaises(KeyError, d.pop, "d", "default", True)
-        x = d.pop("b")
-        self.failUnlessEqual(x, 2)
-        self.failUnlessEqual(d.items(), [("c", 1), ("a", 3)])
-
-        d = dictutil.ValueOrderedDict({"a": 3, "b": 2, "c": 1})
-        x = d.pop_from_list(1) # pop the second item, b/2
-        self.failUnlessEqual(x, "b")
-        self.failUnlessEqual(d.items(), [("c", 1), ("a", 3)])
 
     def test_auxdict(self):
         d = dictutil.AuxValueDict()
@@ -1899,7 +1632,7 @@ class Log(unittest.TestCase):
         self.flushLoggedErrors(SampleError)
 
 
-class SimpleSpans:
+class SimpleSpans(object):
     # this is a simple+inefficient form of util.spans.Spans . We compare the
     # behavior of this reference model against the real (efficient) form.
 
@@ -1976,7 +1709,8 @@ class SimpleSpans:
                 s.add(i, 1)
         return s
 
-    def __contains__(self, (start,length)):
+    def __contains__(self, start_and_length):
+        (start, length) = start_and_length
         for i in range(start, start+length):
             if i not in self._have:
                 return False
@@ -1993,7 +1727,7 @@ class ByteSpans(unittest.TestCase):
         s1 = Spans(3, 4) # 3,4,5,6
         self._check1(s1)
 
-        s1 = Spans(3L, 4L) # 3,4,5,6
+        s1 = Spans(long(3), long(4)) # 3,4,5,6
         self._check1(s1)
 
         s2 = Spans(s1)
@@ -2108,7 +1842,7 @@ class ByteSpans(unittest.TestCase):
         def _create(subseed):
             ns1 = S1(); ns2 = S2()
             for i in range(10):
-                what = _hash(subseed+str(i)).hexdigest()
+                what = sha256(subseed+str(i))
                 start = int(what[2:4], 16)
                 length = max(1,int(what[5:6], 16))
                 ns1.add(start, length); ns2.add(start, length)
@@ -2116,7 +1850,7 @@ class ByteSpans(unittest.TestCase):
 
         #print
         for i in range(1000):
-            what = _hash(seed+str(i)).hexdigest()
+            what = sha256(seed+str(i))
             op = what[0]
             subop = what[1]
             start = int(what[2:4], 16)
@@ -2162,7 +1896,7 @@ class ByteSpans(unittest.TestCase):
             self.failUnlessEqual(bool(s1), bool(s2))
             self.failUnlessEqual(list(s1), list(s2))
             for j in range(10):
-                what = _hash(what[12:14]+str(j)).hexdigest()
+                what = sha256(what[12:14]+str(j))
                 start = int(what[2:4], 16)
                 length = max(1, int(what[5:6], 16))
                 span = (start, length)
@@ -2226,7 +1960,7 @@ def replace(s, start, data):
     assert len(s) >= start+len(data)
     return s[:start] + data + s[start+len(data):]
 
-class SimpleDataSpans:
+class SimpleDataSpans(object):
     def __init__(self, other=None):
         self.missing = "" # "1" where missing, "0" where found
         self.data = ""
@@ -2320,9 +2054,9 @@ class StringSpans(unittest.TestCase):
         self.failUnlessEqual(ds.get(2, 4), "fear")
 
         ds = klass()
-        ds.add(2L, "four")
-        ds.add(3L, "ea")
-        self.failUnlessEqual(ds.get(2L, 4L), "fear")
+        ds.add(long(2), "four")
+        ds.add(long(3), "ea")
+        self.failUnlessEqual(ds.get(long(2), long(4)), "fear")
 
 
     def do_scan(self, klass):
@@ -2373,13 +2107,13 @@ class StringSpans(unittest.TestCase):
                 p_added = set(range(start, end))
                 b = base()
                 if DEBUG:
-                    print
-                    print dump(b), which
+                    print()
+                    print(dump(b), which)
                     add = klass(); add.add(start, S[start:end])
-                    print dump(add)
+                    print(dump(add))
                 b.add(start, S[start:end])
                 if DEBUG:
-                    print dump(b)
+                    print(dump(b))
                 # check that the new span is there
                 d = b.get(start, end-start)
                 self.failUnlessEqual(d, S[start:end], which)
@@ -2431,14 +2165,14 @@ class StringSpans(unittest.TestCase):
             created = 0
             pieces = []
             while created < length:
-                piece = _hash(seed + str(created)).hexdigest()
+                piece = sha256(seed + str(created))
                 pieces.append(piece)
                 created += len(piece)
             return "".join(pieces)[:length]
         def _create(subseed):
             ns1 = S1(); ns2 = S2()
             for i in range(10):
-                what = _hash(subseed+str(i)).hexdigest()
+                what = sha256(subseed+str(i))
                 start = int(what[2:4], 16)
                 length = max(1,int(what[5:6], 16))
                 ns1.add(start, _randstr(length, what[7:9]));
@@ -2447,7 +2181,7 @@ class StringSpans(unittest.TestCase):
 
         #print
         for i in range(1000):
-            what = _hash(seed+str(i)).hexdigest()
+            what = sha256(seed+str(i))
             op = what[0]
             subop = what[1]
             start = int(what[2:4], 16)
@@ -2475,7 +2209,7 @@ class StringSpans(unittest.TestCase):
             self.failUnlessEqual(s1.len(), s2.len())
             self.failUnlessEqual(list(s1._dump()), list(s2._dump()))
             for j in range(100):
-                what = _hash(what[12:14]+str(j)).hexdigest()
+                what = sha256(what[12:14]+str(j))
                 start = int(what[2:4], 16)
                 length = max(1, int(what[5:6], 16))
                 d1 = s1.get(start, length); d2 = s2.get(start, length)

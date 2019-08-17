@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 import json
 import os
@@ -8,15 +9,15 @@ from collections import deque
 from twisted.internet import reactor
 from twisted.application import service
 from twisted.application.internet import TimerService
-from zope.interface import implements
+from zope.interface import implementer
 from foolscap.api import eventually, DeadReferenceError, Referenceable, Tub
 
 from allmydata.util import log
 from allmydata.util.encodingutil import quote_local_unicode_path
 from allmydata.interfaces import RIStatsProvider, RIStatsGatherer, IStatsProducer
 
+@implementer(IStatsProducer)
 class LoadMonitor(service.MultiService):
-    implements(IStatsProducer)
 
     loop_interval = 1
     num_samples = 60
@@ -69,8 +70,8 @@ class LoadMonitor(service.MultiService):
         return { 'load_monitor.avg_load': avg,
                  'load_monitor.max_load': m_x, }
 
+@implementer(IStatsProducer)
 class CPUUsageMonitor(service.MultiService):
-    implements(IStatsProducer)
     HISTORY_LENGTH = 15
     POLL_INTERVAL = 60
 
@@ -122,8 +123,8 @@ class CPUUsageMonitor(service.MultiService):
         return s
 
 
+@implementer(RIStatsProvider)
 class StatsProvider(Referenceable, service.MultiService):
-    implements(RIStatsProvider)
 
     def __init__(self, node, gatherer_furl):
         service.MultiService.__init__(self)
@@ -175,8 +176,8 @@ class StatsProvider(Referenceable, service.MultiService):
         gatherer.callRemoteOnly('provide', self, nickname or '')
 
 
+@implementer(RIStatsGatherer)
 class StatsGatherer(Referenceable, service.MultiService):
-    implements(RIStatsGatherer)
 
     poll_interval = 60
 
@@ -196,7 +197,7 @@ class StatsGatherer(Referenceable, service.MultiService):
     def remote_provide(self, provider, nickname):
         tubid = self.get_tubid(provider)
         if tubid == '<unauth>':
-            print "WARNING: failed to get tubid for %s (%s)" % (provider, nickname)
+            print("WARNING: failed to get tubid for %s (%s)" % (provider, nickname))
             # don't add to clients to poll (polluting data) don't care about disconnect
             return
         self.clients[tubid] = provider
@@ -229,15 +230,15 @@ class StdOutStatsGatherer(StatsGatherer):
     def remote_provide(self, provider, nickname):
         tubid = self.get_tubid(provider)
         if self.verbose:
-            print 'connect "%s" [%s]' % (nickname, tubid)
+            print('connect "%s" [%s]' % (nickname, tubid))
             provider.notifyOnDisconnect(self.announce_lost_client, tubid)
         StatsGatherer.remote_provide(self, provider, nickname)
 
     def announce_lost_client(self, tubid):
-        print 'disconnect "%s" [%s]' % (self.nicknames[tubid], tubid)
+        print('disconnect "%s" [%s]' % (self.nicknames[tubid], tubid))
 
     def got_stats(self, stats, tubid, nickname):
-        print '"%s" [%s]:' % (nickname, tubid)
+        print('"%s" [%s]:' % (nickname, tubid))
         pprint.pprint(stats)
 
 class JSONStatsGatherer(StdOutStatsGatherer):
@@ -253,10 +254,10 @@ class JSONStatsGatherer(StdOutStatsGatherer):
             try:
                 self.gathered_stats = json.load(f)
             except Exception:
-                print ("Error while attempting to load stats file %s.\n"
-                       "You may need to restore this file from a backup,"
-                       " or delete it if no backup is available.\n" %
-                       quote_local_unicode_path(self.jsonfile))
+                print("Error while attempting to load stats file %s.\n"
+                      "You may need to restore this file from a backup,"
+                      " or delete it if no backup is available.\n" %
+                      quote_local_unicode_path(self.jsonfile))
                 raise
             f.close()
         else:

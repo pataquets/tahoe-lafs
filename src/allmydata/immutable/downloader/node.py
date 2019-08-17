@@ -23,16 +23,18 @@ class IDownloadStatusHandlingConsumer(Interface):
         """Record the DownloadStatus 'read event', to be updated with the
         time it takes to decrypt each chunk of data."""
 
-class Cancel:
+class Cancel(object):
     def __init__(self, f):
         self._f = f
         self.active = True
+
     def cancel(self):
         if self.active:
             self.active = False
             self._f(self)
 
-class DownloadNode:
+
+class DownloadNode(object):
     """Internal class which manages downloads and holds state. External
     callers use CiphertextFileNode instead."""
 
@@ -473,7 +475,8 @@ class DownloadNode:
         d.addCallback(_process)
         return d
 
-    def _check_ciphertext_hash(self, (segment, decodetime), segnum):
+    def _check_ciphertext_hash(self, segment_and_decodetime, segnum):
+        (segment, decodetime) = segment_and_decodetime
         start = now()
         assert self._active_segment.segnum == segnum
         assert self.segment_size is not None

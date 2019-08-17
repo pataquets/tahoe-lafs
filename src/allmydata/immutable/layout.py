@@ -1,5 +1,5 @@
 import struct
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from allmydata.interfaces import IStorageBucketWriter, IStorageBucketReader, \
      FileTooLargeError, HASH_SIZE
@@ -94,8 +94,8 @@ def make_write_bucket_proxy(rref, server,
                                   num_share_hashes, uri_extension_size_max)
     return wbp
 
-class WriteBucketProxy:
-    implements(IStorageBucketWriter)
+@implementer(IStorageBucketWriter)
+class WriteBucketProxy(object):
     fieldsize = 4
     fieldstruct = ">L"
 
@@ -289,8 +289,8 @@ class WriteBucketProxy_v2(WriteBucketProxy):
         assert len(offset_data) == 0x44, len(offset_data)
         self._offset_data = offset_data
 
-class ReadBucketProxy:
-    implements(IStorageBucketReader)
+@implementer(IStorageBucketReader)
+class ReadBucketProxy(object):
 
     MAX_UEB_SIZE = 2000 # actual size is closer to 419, but varies by a few bytes
 
@@ -438,9 +438,7 @@ class ReadBucketProxy:
     def _get_share_hashes(self, unused=None):
         if hasattr(self, '_share_hashes'):
             return self._share_hashes
-        else:
-            return self._get_share_hashes_the_old_way()
-        return self._share_hashes
+        return self._get_share_hashes_the_old_way()
 
     def get_share_hashes(self):
         d = self._start_if_needed()

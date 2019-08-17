@@ -1,5 +1,7 @@
 # -*- python -*-
 
+from __future__ import print_function
+
 """
 # run this tool on a linux box in its own directory, with a file named
 # 'pids.txt' describing which processes to watch. It will follow CPU usage of
@@ -20,12 +22,11 @@
 #  built-in graphs on web interface
 
 
-
 import pickle, os.path, time, pprint
 from twisted.application import internet, service, strports
 from twisted.web import server, resource, http
 from twisted.python import log
-import simplejson
+import json
 from foolscap import Tub, Referenceable, RemoteInterface, eventual
 from foolscap.schema import ListOf, TupleOf
 from zope.interface import implements
@@ -159,7 +160,7 @@ class CPUWatcher(service.MultiService, resource.Resource, Referenceable):
             data += pprint.pformat(self.current) + "\n"
         elif t == "json":
             #data = str(self.current) + "\n" # isn't that convenient? almost.
-            data = simplejson.dumps(self.current, indent=True)
+            data = json.dumps(self.current, indent=True)
         else:
             req.setResponseCode(http.BAD_REQUEST)
             data = "Unknown t= %s\n" % t
@@ -210,7 +211,7 @@ class CPUWatcher(service.MultiService, resource.Resource, Referenceable):
                 row.append(self._average_N(pid, avg))
             current.append(tuple(row))
         self.current = current
-        print current
+        print(current)
         for ob in self.observers:
             eventual.eventually(self.notify, ob)
 

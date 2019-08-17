@@ -1,6 +1,9 @@
+from __future__ import print_function
 
 import os, sys, urllib, textwrap
 import codecs
+from ConfigParser import NoSectionError
+from os.path import join
 from twisted.python import usage
 from allmydata.util.assertutil import precondition
 from allmydata.util.encodingutil import unicode_to_url, quote_output, \
@@ -103,6 +106,26 @@ class NoDefaultBasedirOptions(BasedirOptions):
 DEFAULT_ALIAS = u"tahoe"
 
 
+def get_introducer_furl(nodedir, config):
+    """
+    :return: the introducer FURL for the given node (no matter if it's
+        a client-type node or an introducer itself)
+    """
+    try:
+        introducer_furl = config.get('client', 'introducer.furl')
+    except NoSectionError:
+        # we're not a client; maybe this is running *on* the introducer?
+        try:
+            with open(join(nodedir, "private", "introducer.furl"), "r") as f:
+                introducer_furl = f.read().strip()
+        except IOError:
+            raise Exception(
+                "Can't find introducer FURL in tahoe.cfg nor "
+                "{}/private/introducer.furl".format(nodedir)
+            )
+    return introducer_furl
+
+
 def get_aliases(nodedir):
     aliases = {}
     aliasfile = os.path.join(nodedir, "private", "aliases")
@@ -128,7 +151,7 @@ def get_aliases(nodedir):
         pass
     return aliases
 
-class DefaultAliasMarker:
+class DefaultAliasMarker(object):
     pass
 
 pretend_platform_uses_lettercolon = False # for tests
@@ -146,7 +169,7 @@ class TahoeError(Exception):
         self.msg = msg
 
     def display(self, err):
-        print >>err, self.msg
+        print(self.msg, file=err)
 
 
 class UnknownAliasError(TahoeError):

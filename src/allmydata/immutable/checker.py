@@ -1,4 +1,4 @@
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from foolscap.api import DeadReferenceError, RemoteException
 from allmydata import hashtree, codec, uri
@@ -27,8 +27,8 @@ class BadOrMissingHash(IntegrityCheckReject):
 class UnsupportedErasureCodec(BadURIExtension):
     pass
 
-class ValidatedExtendedURIProxy:
-    implements(IValidatedThingProxy)
+@implementer(IValidatedThingProxy)
+class ValidatedExtendedURIProxy(object):
     """ I am a front-end for a remote UEB (using a local ReadBucketProxy),
     responsible for retrieving and validating the elements from the UEB."""
 
@@ -256,9 +256,9 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
             sharehashes = dict(sh)
             try:
                 self.share_hash_tree.set_hashes(sharehashes)
-            except IndexError, le:
+            except IndexError as le:
                 raise BadOrMissingHash(le)
-            except (hashtree.BadHashError, hashtree.NotEnoughHashesError), le:
+            except (hashtree.BadHashError, hashtree.NotEnoughHashesError) as le:
                 raise BadOrMissingHash(le)
         d.addCallback(_got_share_hashes)
         return d
@@ -289,9 +289,9 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
 
             try:
                 self.block_hash_tree.set_hashes(bh)
-            except IndexError, le:
+            except IndexError as le:
                 raise BadOrMissingHash(le)
-            except (hashtree.BadHashError, hashtree.NotEnoughHashesError), le:
+            except (hashtree.BadHashError, hashtree.NotEnoughHashesError) as le:
                 raise BadOrMissingHash(le)
         d.addCallback(_got_block_hashes)
         return d
@@ -316,9 +316,9 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
             ct_hashes = dict(enumerate(hashes))
             try:
                 crypttext_hash_tree.set_hashes(ct_hashes)
-            except IndexError, le:
+            except IndexError as le:
                 raise BadOrMissingHash(le)
-            except (hashtree.BadHashError, hashtree.NotEnoughHashesError), le:
+            except (hashtree.BadHashError, hashtree.NotEnoughHashesError) as le:
                 raise BadOrMissingHash(le)
         d.addCallback(_got_crypttext_hashes)
         return d
@@ -359,7 +359,7 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
         sharehashes, blockhashes, blockdata = results
         try:
             sharehashes = dict(sharehashes)
-        except ValueError, le:
+        except ValueError as le:
             le.args = tuple(le.args + (sharehashes,))
             raise
         blockhashes = dict(enumerate(blockhashes))
@@ -373,7 +373,7 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
                 # match the root node of self.share_hash_tree.
                 try:
                     self.share_hash_tree.set_hashes(sharehashes)
-                except IndexError, le:
+                except IndexError as le:
                     # Weird -- sharehashes contained index numbers outside of
                     # the range that fit into this hash tree.
                     raise BadOrMissingHash(le)
@@ -400,7 +400,7 @@ class ValidatedReadBucketProxy(log.PrefixingLogMixin):
             #        (self.sharenum, blocknum, len(blockdata),
             #         blockdata[:50], blockdata[-50:], base32.b2a(blockhash)))
 
-        except (hashtree.BadHashError, hashtree.NotEnoughHashesError), le:
+        except (hashtree.BadHashError, hashtree.NotEnoughHashesError) as le:
             # log.WEIRD: indicates undetected disk/network error, or more
             # likely a programming error
             self.log("hash failure in block=%d, shnum=%d on %s" %
@@ -496,16 +496,19 @@ class Checker(log.PrefixingLogMixin):
         that we want to track and report whether or not each server
         responded.)"""
 
-        rref = s.get_rref()
+        storage_server = s.get_storage_server()
         lease_seed = s.get_lease_seed()
         if self._add_lease:
             renew_secret = self._get_renewal_secret(lease_seed)
             cancel_secret = self._get_cancel_secret(lease_seed)
-            d2 = rref.callRemote("add_lease", storageindex,
-                                 renew_secret, cancel_secret)
+            d2 = storage_server.add_lease(
+                storageindex,
+                renew_secret,
+                cancel_secret,
+            )
             d2.addErrback(self._add_lease_failed, s.get_name(), storageindex)
 
-        d = rref.callRemote("get_buckets", storageindex)
+        d = storage_server.get_buckets(storageindex)
         def _wrap_results(res):
             return (res, True)
 
@@ -724,12 +727,16 @@ class Checker(log.PrefixingLogMixin):
 
     def _check_server_shares(self, s):
         """Return a deferred which eventually fires with a tuple of
-        (set(sharenum), server, set(), set(), responded) showing all the
-        shares claimed to be served by this server. In case the server is
-        disconnected then it fires with (set(), server, set(), set(), False)
-        (a server disconnecting when we ask it for buckets is the same, for
-        our purposes, as a server that says it has none, except that we want
-        to track and report whether or not each server responded.)"""
+        (set(sharenum), server, set(corrupt), set(incompatible),
+        responded) showing all the shares claimed to be served by this
+        server. In case the server is disconnected then it fires with
+        (set(), server, set(), set(), False) (a server disconnecting
+        when we ask it for buckets is the same, for our purposes, as a
+        server that says it has none, except that we want to track and
+        report whether or not each server responded.)
+
+        see also _verify_server_shares()
+        """
         def _curry_empty_corrupted(res):
             buckets, responded = res
             return (set(buckets), s, set(), set(), responded)

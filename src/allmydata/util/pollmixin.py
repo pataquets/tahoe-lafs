@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 import time
 from twisted.internet import task
@@ -8,7 +9,7 @@ class TimeoutError(Exception):
 class PollComplete(Exception):
     pass
 
-class PollMixin:
+class PollMixin(object):
     _poll_should_ignore_these_errors = []
 
     def poll(self, check_f, pollinterval=0.01, timeout=1000):
@@ -45,6 +46,6 @@ class PollMixin:
                 if not e.check(*self._poll_should_ignore_these_errors):
                     errs.append(e)
             if errs:
-                print errs
+                print(errs)
                 self.fail("Errors snooped, terminating early")
 

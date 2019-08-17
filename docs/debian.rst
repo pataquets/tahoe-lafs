@@ -11,8 +11,7 @@ Debian and Ubuntu Support
 Overview
 ========
 
-Tahoe-LAFS is provided as a ``.deb`` package in current Debian (>= wheezy)
-and Ubuntu (>= lucid) releases. Before official packages were added, the Tahoe
+Tahoe-LAFS is provided as a ``.deb`` package in current Debian (>= `stretch <https://packages.debian.org/source/stretch/tahoe-lafs>`_) and Ubuntu (>= lucid) releases. Before official packages were added, the Tahoe
 source tree provided support for building unofficial packages for a variety
 of popular Debian/Ubuntu versions. The project also ran buildbots to create
 ``.debs`` of current trunk for ease of testing.
@@ -40,16 +39,16 @@ virtualenv.
 
 The ``.deb`` packages, of course, rely solely upon other ``.deb`` packages.
 For reference, here is a list of the debian package names that provide Tahoe's
-dependencies as of the 1.9 release:
+dependencies as of the 1.14.0 release:
 
 * python
 * python-zfec
-* python-pycryptopp
 * python-foolscap
 * python-openssl (needed by foolscap)
 * python-twisted
 * python-nevow
 * python-mock
+* python-cryptography
 * python-simplejson
 * python-setuptools
 * python-support (for Debian-specific install-time tools)

@@ -42,8 +42,8 @@ Tahoe-LAFS Support
 
 All Tahoe-LAFS client nodes can run a frontend SFTP server, allowing regular
 SFTP clients (like ``/usr/bin/sftp``, the ``sshfs`` FUSE plugin, and many
-others) to access the virtual filesystem. They can also run an FTP server,
-so FTP clients (like ``/usr/bin/ftp``, ``ncftp``, and others) can too. These
+others) to access the file store. They can also run an FTP server, so FTP
+clients (like ``/usr/bin/ftp``, ``ncftp``, and others) can too. These
 frontends sit at the same level as the web-API interface.
 
 Since Tahoe-LAFS does not use user accounts or passwords, the SFTP/FTP
@@ -211,14 +211,7 @@ Dependencies
 
 The Tahoe-LAFS SFTP server requires the Twisted "Conch" component (a "conch"
 is a twisted shell, get it?). Many Linux distributions package the Conch code
-separately: debian puts it in the "python-twisted-conch" package. Conch
-requires the "pycrypto" package, which is a Python+C implementation of many
-cryptographic functions (the debian package is named "python-crypto").
-
-Note that "pycrypto" is different than the "pycryptopp" package that
-Tahoe-LAFS uses (which is a Python wrapper around the C++ -based Crypto++
-library, a library that is frequently installed as /usr/lib/libcryptopp.a, to
-avoid problems with non-alphanumerics in filenames).
+separately: debian puts it in the "python-twisted-conch" package.
 
 Immutable and Mutable Files
 ===========================

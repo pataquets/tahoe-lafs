@@ -1,6 +1,7 @@
+from __future__ import print_function
 
 import os
-from cStringIO import StringIO
+from six.moves import cStringIO as StringIO
 import urlparse, httplib
 import allmydata # for __full_version__
 
@@ -32,7 +33,7 @@ class BadResponse(object):
         self.status = -1
         self.reason = "Error trying to connect to %s: %s" % (url, err)
         self.error = err
-    def read(self):
+    def read(self, length=0):
         return ""
 
 
@@ -69,7 +70,7 @@ def do_http(method, url, body=""):
 
     try:
         c.endheaders()
-    except socket_error, err:
+    except socket_error as err:
         return BadResponse(url, err)
 
     while True:
@@ -90,7 +91,7 @@ def format_http_error(msg, resp):
 
 def check_http_error(resp, stderr):
     if resp.status < 200 or resp.status >= 300:
-        print >>stderr, format_http_error("Error during HTTP request", resp)
+        print(format_http_error("Error during HTTP request", resp), file=stderr)
         return 1
 
 

@@ -1,5 +1,5 @@
 
-import simplejson
+import json
 import os.path, shutil
 from twisted.trial import unittest
 from twisted.internet import defer
@@ -15,7 +15,7 @@ from allmydata.immutable.upload import Data
 from allmydata.test.common_web import WebRenderingMixin
 from allmydata.mutable.publish import MutableData
 
-class FakeClient:
+class FakeClient(object):
     def get_storage_broker(self):
         return self.storage_broker
 
@@ -69,8 +69,8 @@ class WebResultsRendering(unittest.TestCase, WebRenderingMixin):
                               html)
         d.addCallback(_check_return_to)
         d.addCallback(lambda ignored: self.render_json(lcr))
-        def _check_json(json):
-            j = simplejson.loads(json)
+        def _check_json(js):
+            j = json.loads(js)
             self.failUnlessEqual(j["storage-index"], "")
             self.failUnlessEqual(j["results"]["healthy"], True)
         d.addCallback(_check_json)
@@ -152,7 +152,7 @@ class WebResultsRendering(unittest.TestCase, WebRenderingMixin):
 
         d = self.render_json(w)
         def _check_json(jdata):
-            j = simplejson.loads(jdata)
+            j = json.loads(jdata)
             self.failUnlessEqual(j["summary"], "rather dead")
             self.failUnlessEqual(j["storage-index"],
                                  "2k6avpjga3dho3zsjo6nnkt7n4")
@@ -292,7 +292,7 @@ class WebResultsRendering(unittest.TestCase, WebRenderingMixin):
 
         d = self.render_json(w)
         def _got_json(data):
-            j = simplejson.loads(data)
+            j = json.loads(data)
             self.failUnlessEqual(j["repair-attempted"], True)
             self.failUnlessEqual(j["storage-index"],
                                  "2k6avpjga3dho3zsjo6nnkt7n4")
@@ -303,7 +303,7 @@ class WebResultsRendering(unittest.TestCase, WebRenderingMixin):
         w2 = web_check_results.CheckAndRepairResultsRenderer(c, None)
         d.addCallback(lambda ignored: self.render_json(w2))
         def _got_lit_results(data):
-            j = simplejson.loads(data)
+            j = json.loads(data)
             self.failUnlessEqual(j["repair-attempted"], False)
             self.failUnlessEqual(j["storage-index"], "")
         d.addCallback(_got_lit_results)
@@ -391,7 +391,6 @@ class BalancingAct(GridTestMixin, unittest.TestCase):
             return self.imm.check_and_repair(Monitor())
         def _check_counts(crr, shares_good, good_share_hosts):
             prr = crr.get_post_repair_results()
-            #print self._pretty_shares_chart(self.uri)
             self.failUnlessEqual(prr.get_share_counter_good(), shares_good)
             self.failUnlessEqual(prr.get_host_counter_good_shares(),
                                  good_share_hosts)
@@ -401,16 +400,26 @@ class BalancingAct(GridTestMixin, unittest.TestCase):
             0:[A] 1:[A] 2:[A] 3:[A,B,C,D,E]
           4 good shares, but 5 good hosts
         After deleting all instances of share #3 and repairing:
-            0:[A,B], 1:[A,C], 2:[A,D], 3:[E]
-          Still 4 good shares and 5 good hosts
+            0:[A], 1:[A,B], 2:[C,A], 3:[E]
+# actually: {0: ['E', 'A'], 1: ['C', 'A'], 2: ['A', 'B'], 3: ['D']}
+          Still 4 good shares but now 4 good hosts
             """
         d.addCallback(_check_and_repair)
         d.addCallback(_check_counts, 4, 5)
         d.addCallback(lambda _: self.delete_shares_numbered(self.uri, [3]))
         d.addCallback(_check_and_repair)
-        d.addCallback(_check_counts, 4, 5)
-        d.addCallback(lambda _: [self.g.break_server(sid)
-                                 for sid in self.g.get_all_serverids()])
+
+        # it can happen that our uploader will choose, e.g., to upload
+        # to servers B, C, D, E .. which will mean that all 5 serves
+        # now contain our shares (and thus "respond").
+
+        def _check_happy(crr):
+            prr = crr.get_post_repair_results()
+            self.assertTrue(prr.get_host_counter_good_shares() >= 4)
+            return crr
+        d.addCallback(_check_happy)
+        d.addCallback(lambda _: all([self.g.break_server(sid)
+                                     for sid in self.g.get_all_serverids()]))
         d.addCallback(_check_and_repair)
         d.addCallback(_check_counts, 0, 0)
         return d
@@ -535,5 +544,3 @@ class TooParallel(GridTestMixin, unittest.TestCase):
             return res
         d.addBoth(_clean_up)
         return d
-
-    test_immutable.timeout = 80

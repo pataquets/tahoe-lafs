@@ -1,11 +1,12 @@
 
 import re
+import treq
 from twisted.internet import defer
-from twisted.web import client
+from twisted.web.error import Error
 from nevow.testutil import FakeRequest
 from nevow import inevow, context
 
-class WebRenderingMixin:
+class WebRenderingMixin(object):
     # d=page.renderString() or s=page.renderSynchronously() will exercise
     # docFactory, render_*/data_* . It won't exercise want_json(), or my
     # renderHTTP() override which tests want_json(). To exercise args=, we
@@ -59,25 +60,12 @@ class WebRenderingMixin:
         s = re.sub(r'\s+', ' ', s)
         return s
 
-
-class MyGetter(client.HTTPPageGetter):
-    handleStatus_206 = lambda self: self.handleStatus_200() # PARTIAL_CONTENT
-    handleStatus_304 = lambda self: self.handleStatus_200() # NOT_MODIFIED
-
-class HTTPClientHEADFactory(client.HTTPClientFactory):
-    protocol = MyGetter
-
-    def noPage(self, reason):
-        # Twisted-2.5.0 and earlier had a bug, in which they would raise an
-        # exception when the response to a HEAD request had no body (when in
-        # fact they are defined to never have a body). This was fixed in
-        # Twisted-8.0 . To work around this, we catch the
-        # PartialDownloadError and make it disappear.
-        if (reason.check(client.PartialDownloadError)
-            and self.method.upper() == "HEAD"):
-            self.page("")
-            return
-        return client.HTTPClientFactory.noPage(self, reason)
-
-class HTTPClientGETFactory(client.HTTPClientFactory):
-    protocol = MyGetter
+@defer.inlineCallbacks
+def do_http(method, url, **kwargs):
+    response = yield treq.request(method, url, persistent=False, **kwargs)
+    body = yield treq.content(response)
+    # TODO: replace this with response.fail_for_status when
+    # https://github.com/twisted/treq/pull/159 has landed
+    if 400 <= response.code < 600:
+        raise Error(response.code, response=body)
+    defer.returnValue(body)

@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os, sys
 import urllib
-import simplejson
+import json
 
 configinfo = """\
 graph_title Tahoe Helper Stats - Bytes Fetched
@@ -17,10 +19,10 @@ fetched.min 0
 
 if len(sys.argv) > 1:
     if sys.argv[1] == "config":
-        print configinfo.rstrip()
+        print(configinfo.rstrip())
         sys.exit(0)
 
 url = os.environ["url"]
 
-data = simplejson.loads(urllib.urlopen(url).read())
-print "fetched.value %d" % data["chk_upload_helper.fetched_bytes"]
+data = json.loads(urllib.urlopen(url).read())
+print("fetched.value %d" % data["chk_upload_helper.fetched_bytes"])

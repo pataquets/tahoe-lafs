@@ -1,10 +1,10 @@
-
+import six
 import heapq, traceback, array, stat, struct
 from types import NoneType
 from stat import S_IFREG, S_IFDIR
 from time import time, strftime, localtime
 
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.python import components
 from twisted.application import service, strports
 from twisted.conch.ssh import factory, keys, session
@@ -38,24 +38,12 @@ from allmydata.dirnode import update_metadata
 from allmydata.util.fileutil import EncryptedTemporaryFile
 
 noisy = True
-use_foolscap_logging = True
 
 from allmydata.util.log import NOISY, OPERATIONAL, WEIRD, \
-    msg as _msg, err as _err, PrefixingLogMixin as _PrefixingLogMixin
+    msg as logmsg, PrefixingLogMixin
 
-if use_foolscap_logging:
-    (logmsg, logerr, PrefixingLogMixin) = (_msg, _err, _PrefixingLogMixin)
-else:  # pragma: no cover
-    def logmsg(s, level=None):
-        print s
-    def logerr(s, level=None):
-        print s
-    class PrefixingLogMixin:
-        def __init__(self, facility=None, prefix=''):
-            self.prefix = prefix
-        def log(self, s, level=None):
-            print "%r %s" % (self.prefix, s)
-
+if six.PY3:
+    long = int
 
 def eventually_callback(d):
     return lambda res: eventually(d.callback, res)
@@ -76,7 +64,7 @@ def _to_sftp_time(t):
     """SFTP times are unsigned 32-bit integers representing UTC seconds
     (ignoring leap seconds) since the Unix epoch, January 1 1970 00:00 UTC.
     A Tahoe time is the corresponding float."""
-    return long(t) & 0xFFFFFFFFL
+    return long(t) & long(0xFFFFFFFF)
 
 
 def _convert_error(res, request):
@@ -229,7 +217,7 @@ def _populate_attrs(childnode, metadata, size=None):
     if childnode and childnode.is_unknown():
         perms = 0
     elif childnode and IDirectoryNode.providedBy(childnode):
-        perms = S_IFDIR | 0777
+        perms = S_IFDIR | 0o777
     else:
         # For files, omit the size if we don't immediately know it.
         if childnode and size is None:
@@ -237,11 +225,11 @@ def _populate_attrs(childnode, metadata, size=None):
         if size is not None:
             _assert(isinstance(size, (int, long)) and not isinstance(size, bool), size=size)
             attrs['size'] = size
-        perms = S_IFREG | 0666
+        perms = S_IFREG | 0o666
 
     if metadata:
         if metadata.get('no-write', False):
-            perms &= S_IFDIR | S_IFREG | 0555  # clear 'w' bits
+            perms &= S_IFDIR | S_IFREG | 0o555  # clear 'w' bits
 
         # See webapi.txt for what these times mean.
         # We would prefer to omit atime, but SFTP version 3 can only
@@ -294,8 +282,8 @@ def _direntry_for(filenode_or_parent, childname, filenode=None):
     return None
 
 
+@implementer(IConsumer)
 class OverwriteableFileConsumer(PrefixingLogMixin):
-    implements(IConsumer)
     """I act both as a consumer for the download of the original file contents, and as a
     wrapper for a temporary file that records the downloaded data and any overwrites.
     I use a priority queue to keep track of which regions of the file have been overwritten
@@ -551,7 +539,7 @@ class OverwriteableFileConsumer(PrefixingLogMixin):
             self.is_closed = True
             try:
                 self.f.close()
-            except Exception, e:
+            except Exception as e:
                 self.log("suppressed %r from close of temporary file %r" % (e, self.f), level=WEIRD)
         self.download_done("closed")
         return self.done_status
@@ -566,8 +554,8 @@ class OverwriteableFileConsumer(PrefixingLogMixin):
 SIZE_THRESHOLD = 1000
 
 
+@implementer(ISFTPFile)
 class ShortReadOnlySFTPFile(PrefixingLogMixin):
-    implements(ISFTPFile)
     """I represent a file handle to a particular file on an SFTP connection.
     I am used only for short immutable files opened in read-only mode.
     When I am created, the file contents start to be downloaded to memory.
@@ -644,8 +632,8 @@ class ShortReadOnlySFTPFile(PrefixingLogMixin):
         return defer.execute(_denied)
 
 
+@implementer(ISFTPFile)
 class GeneralSFTPFile(PrefixingLogMixin):
-    implements(ISFTPFile)
     """I represent a file handle to a particular file on an SFTP connection.
     I wrap an instance of OverwriteableFileConsumer, which is responsible for
     storing the file contents. In order to allow write requests to be satisfied
@@ -963,7 +951,7 @@ class GeneralSFTPFile(PrefixingLogMixin):
         return d
 
 
-class StoppableList:
+class StoppableList(object):
     def __init__(self, items):
         self.items = items
     def __iter__(self):
@@ -973,7 +961,7 @@ class StoppableList:
         pass
 
 
-class Reason:
+class Reason(object):
     def __init__(self, value):
         self.value = value
 
@@ -993,8 +981,8 @@ def _reload():
     global all_heisenfiles
     all_heisenfiles = {}
 
+@implementer(ISFTPServer)
 class SFTPUserHandler(ConchUser, PrefixingLogMixin):
-    implements(ISFTPServer)
     def __init__(self, client, rootnode, username):
         ConchUser.__init__(self)
         PrefixingLogMixin.__init__(self, facility="tahoe.sftp", prefix=username)
@@ -1358,7 +1346,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
 
         d = delay or defer.succeed(None)
         d.addCallback(lambda ign: self._get_root(path))
-        def _got_root( (root, path) ):
+        def _got_root(root_and_path):
+            (root, path) = root_and_path
             if root.is_unknown():
                 raise SFTPError(FX_PERMISSION_DENIED,
                                 "cannot open an unknown cap (or child of an unknown object). "
@@ -1436,7 +1425,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
                         if noisy: self.log("%r.get_child_and_metadata(%r)" % (parent, childname), level=NOISY)
                         d3.addCallback(lambda ign: parent.get_child_and_metadata(childname))
 
-                    def _got_child( (filenode, current_metadata) ):
+                    def _got_child(filenode_and_current_metadata):
+                        (filenode, current_metadata) = filenode_and_current_metadata
                         if noisy: self.log("_got_child( (%r, %r) )" % (filenode, current_metadata), level=NOISY)
 
                         metadata = update_metadata(current_metadata, desired_metadata, time())
@@ -1497,7 +1487,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
         # the target directory must already exist
         d = deferredutil.gatherResults([self._get_parent_or_node(from_path),
                                         self._get_parent_or_node(to_path)])
-        def _got( (from_pair, to_pair) ):
+        def _got(from_pair_and_to_pair):
+            (from_pair, to_pair) = from_pair_and_to_pair
             if noisy: self.log("_got( (%r, %r) ) in .renameFile(%r, %r, overwrite=%r)" %
                                (from_pair, to_pair, from_pathstring, to_pathstring, overwrite), level=NOISY)
             (from_parent, from_childname) = from_pair
@@ -1568,8 +1559,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
             return defer.execute(_denied)
 
         d = self._get_root(path)
-        d.addCallback(lambda (root, path):
-                      self._get_or_create_directories(root, path, metadata))
+        d.addCallback(lambda root_and_path:
+                      self._get_or_create_directories(root_and_path[0], root_and_path[1], metadata))
         d.addBoth(_convert_error, request)
         return d
 
@@ -1611,7 +1602,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
     def _remove_object(self, path, must_be_directory=False, must_be_file=False):
         userpath = self._path_to_utf8(path)
         d = self._get_parent_or_node(path)
-        def _got_parent( (parent, childname) ):
+        def _got_parent(parent_and_childname):
+            (parent, childname) = parent_and_childname
             if childname is None:
                 raise SFTPError(FX_NO_SUCH_FILE, "cannot remove an object specified by URI")
 
@@ -1633,7 +1625,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
 
         path = self._path_from_string(pathstring)
         d = self._get_parent_or_node(path)
-        def _got_parent_or_node( (parent_or_node, childname) ):
+        def _got_parent_or_node(parent_or_node__and__childname):
+            (parent_or_node, childname) = parent_or_node__and__childname
             if noisy: self.log("_got_parent_or_node( (%r, %r) ) in openDirectory(%r)" %
                                (parent_or_node, childname, pathstring), level=NOISY)
             if childname is None:
@@ -1680,7 +1673,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
         path = self._path_from_string(pathstring)
         userpath = self._path_to_utf8(path)
         d = self._get_parent_or_node(path)
-        def _got_parent_or_node( (parent_or_node, childname) ):
+        def _got_parent_or_node(parent_or_node__and__childname):
+            (parent_or_node, childname) = parent_or_node__and__childname
             if noisy: self.log("_got_parent_or_node( (%r, %r) )" % (parent_or_node, childname), level=NOISY)
 
             # Some clients will incorrectly try to get the attributes
@@ -1700,7 +1694,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
             else:
                 parent = parent_or_node
                 d2.addCallback(lambda ign: parent.get_child_and_metadata_at_path([childname]))
-                def _got( (child, metadata) ):
+                def _got(child_and_metadata):
+                    (child, metadata) = child_and_metadata
                     if noisy: self.log("_got( (%r, %r) )" % (child, metadata), level=NOISY)
                     _assert(IDirectoryNode.providedBy(parent), parent=parent)
                     metadata['no-write'] = _no_write(parent.is_readonly(), child, metadata)
@@ -1738,7 +1733,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
         path = self._path_from_string(pathstring)
         userpath = self._path_to_utf8(path)
         d = self._get_parent_or_node(path)
-        def _got_parent_or_node( (parent_or_node, childname) ):
+        def _got_parent_or_node(parent_or_node__and__childname):
+            (parent_or_node, childname) = parent_or_node__and__childname
             if noisy: self.log("_got_parent_or_node( (%r, %r) )" % (parent_or_node, childname), level=NOISY)
 
             direntry = _direntry_for(parent_or_node, childname)
@@ -1883,7 +1879,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
     def _get_parent_or_node(self, path):
         # return Deferred (parent, childname) or (node, None)
         d = self._get_root(path)
-        def _got_root( (root, remaining_path) ):
+        def _got_root(root_and_remaining_path):
+            (root, remaining_path) = root_and_remaining_path
             if not remaining_path:
                 return (root, None)
             else:
@@ -1894,8 +1891,8 @@ class SFTPUserHandler(ConchUser, PrefixingLogMixin):
         return d
 
 
-class FakeTransport:
-    implements(ITransport)
+@implementer(ITransport)
+class FakeTransport(object):
     def write(self, data):
         logmsg("FakeTransport.write(<data of length %r>)" % (len(data),), level=NOISY)
 
@@ -1908,8 +1905,8 @@ class FakeTransport:
     # getPeer and getHost can just raise errors, since we don't know what to return
 
 
+@implementer(ISession)
 class ShellSession(PrefixingLogMixin):
-    implements(ISession)
     def __init__(self, userHandler):
         PrefixingLogMixin.__init__(self, facility="tahoe.sftp")
         if noisy: self.log(".__init__(%r)" % (userHandler), level=NOISY)
@@ -1965,8 +1962,8 @@ components.registerAdapter(ShellSession, SFTPUserHandler, ISession)
 
 from allmydata.frontends.auth import AccountURLChecker, AccountFileChecker, NeedRootcapLookupScheme
 
-class Dispatcher:
-    implements(portal.IRealm)
+@implementer(portal.IRealm)
+class Dispatcher(object):
     def __init__(self, client):
         self._client = client
 

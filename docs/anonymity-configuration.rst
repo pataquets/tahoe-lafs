@@ -6,7 +6,6 @@ Using Tahoe-LAFS with an anonymizing network: Tor, I2P
 
 #. `Overview`_
 #. `Use cases`_
-#. `Unresolved tickets`_
 
 #. `Software Dependencies`_
 
@@ -87,22 +86,6 @@ For Tahoe-LAFS storage servers there are three use-cases:
    https://geti2p.net/en/about/intro
 
 
-Unresolved tickets
-==================
-
-Tahoe's anonymity support does not yet include automatic configuration of
-servers. This issue is tracked by Tahoe tickets `#2490`_ and `#2773`_: until
-those are resolved, anonymous servers (running as Tor Onion services or I2P
-servers) must be configured manually, as described below.
-
-See also Tahoe-LAFS Tor related tickets `#1010`_ and `#517`_.
-
-.. _`#2490`: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/2490
-.. _`#2773`: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/2773
-.. _`#1010`: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/1010
-.. _`#517`: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/517
-
-
 Software Dependencies
 =====================
 
@@ -163,10 +146,10 @@ extras enabled::
 Connection configuration
 ========================
 
-See :ref:`configuration` "Client Configuration" for a description of the
-``[tor]`` and ``[i2p]`` sections of ``tahoe.cfg``. These control how the
-Tahoe client will connect to a Tor/I2P daemon, and thus make connections to
-Tor/I2P -based servers.
+See :ref:`Connection Management` for a description of the ``[tor]`` and
+``[i2p]`` sections of ``tahoe.cfg``. These control how the Tahoe client will
+connect to a Tor/I2P daemon, and thus make connections to Tor/I2P -based
+servers.
 
 The ``[tor]`` and ``[i2p]`` sections only need to be modified to use unusual
 configurations, or to enable automatic server setup.
@@ -316,14 +299,14 @@ the location announcement).
 Server anonymity, automatic configuration
 -----------------------------------------
 
-(note: this is not yet implemented, see Tahoe tickets `#2490`_ and `#2773`_
-for progress)
-
-
 To configure a server node to listen on an anonymizing network, create the
 node with the ``--listen=tor`` option. This requires a Tor configuration that
 either launches a new Tor daemon, or has access to the Tor control port (and
-enough authority to create a new onion service).
+enough authority to create a new onion service). On Debian/Ubuntu systems, do
+``apt install tor``, add yourself to the control group with ``adduser
+YOURUSERNAME debian-tor``, and then logout and log back in: if the ``groups``
+command includes ``debian-tor`` in the output, you should have permission to
+use the unix-domain control port at ``/var/run/tor/control``.
 
 This option will set ``reveal-IP-address = False`` and ``[connections] tcp =
 tor``. It will allocate the necessary ports, instruct Tor to create the onion

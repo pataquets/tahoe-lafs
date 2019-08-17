@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os, sys, re
 import urllib
-import simplejson
+import json
 
 url = os.environ["url"]
-current = simplejson.loads(urllib.urlopen(url).read())
+current = json.loads(urllib.urlopen(url).read())
 
 configinfo = """\
 graph_title Tahoe CPU Usage
@@ -24,6 +26,6 @@ for (name, avg1, avg5, avg15) in current:
 
 if len(sys.argv) > 1:
     if sys.argv[1] == "config":
-        print configinfo.rstrip()
+        print(configinfo.rstrip())
         sys.exit(0)
-print data.rstrip()
+print(data.rstrip())

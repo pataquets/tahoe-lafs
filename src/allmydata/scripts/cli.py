@@ -1,14 +1,17 @@
+from __future__ import print_function
+
 import os.path, re, fnmatch
 from twisted.python import usage
 from allmydata.scripts.common import get_aliases, get_default_nodedir, \
      DEFAULT_ALIAS, BaseOptions
 from allmydata.util.encodingutil import argv_to_unicode, argv_to_abspath, quote_local_unicode_path
+from .tahoe_status import TahoeStatusCommand
 
 NODEURL_RE=re.compile("http(s?)://([^:]*)(:([1-9][0-9]*))?")
 
 _default_nodedir = get_default_nodedir()
 
-class FilesystemOptions(BaseOptions):
+class FileStoreOptions(BaseOptions):
     optParameters = [
         ["node-url", "u", None,
          "Specify the URL of the Tahoe gateway node, such as "
@@ -45,7 +48,7 @@ class FilesystemOptions(BaseOptions):
         self.aliases = aliases # maps alias name to dircap
 
 
-class MakeDirectoryOptions(FilesystemOptions):
+class MakeDirectoryOptions(FileStoreOptions):
     optParameters = [
         ("format", None, None, "Create a directory with the given format: SDMF or MDMF (case-insensitive)"),
         ]
@@ -60,7 +63,7 @@ class MakeDirectoryOptions(FilesystemOptions):
     synopsis = "[options] [REMOTE_DIR]"
     description = """Create a new directory, either unlinked or as a subdirectory."""
 
-class AddAliasOptions(FilesystemOptions):
+class AddAliasOptions(FileStoreOptions):
     def parseArgs(self, alias, cap):
         self.alias = argv_to_unicode(alias)
         if self.alias.endswith(u':'):
@@ -70,7 +73,7 @@ class AddAliasOptions(FilesystemOptions):
     synopsis = "[options] ALIAS[:] DIRCAP"
     description = """Add a new alias for an existing directory."""
 
-class CreateAliasOptions(FilesystemOptions):
+class CreateAliasOptions(FileStoreOptions):
     def parseArgs(self, alias):
         self.alias = argv_to_unicode(alias)
         if self.alias.endswith(u':'):
@@ -79,11 +82,15 @@ class CreateAliasOptions(FilesystemOptions):
     synopsis = "[options] ALIAS[:]"
     description = """Create a new directory and add an alias for it."""
 
-class ListAliasesOptions(FilesystemOptions):
+class ListAliasesOptions(FileStoreOptions):
     synopsis = "[options]"
     description = """Display a table of all configured aliases."""
+    optFlags = [
+        ("readonly-uri", None, "Show read-only dircaps instead of readwrite"),
+        ("json", None, "Show JSON output"),
+    ]
 
-class ListOptions(FilesystemOptions):
+class ListOptions(FileStoreOptions):
     optFlags = [
         ("long", "l", "Use long format: show file sizes, and timestamps."),
         ("uri", None, "Show file/directory URIs."),
@@ -120,11 +127,11 @@ class ListOptions(FilesystemOptions):
     Otherwise the size of the file, when known, is given in bytes.
     The size of mutable files or unknown objects is shown as '?'.
 
-    The date/time shows when this link in the Tahoe filesystem was
-    last modified.
+    The date/time shows when this link in the Tahoe grid was last
+    modified.
     """
 
-class GetOptions(FilesystemOptions):
+class GetOptions(FileStoreOptions):
     def parseArgs(self, arg1, arg2=None):
         # tahoe get FOO |less            # write to stdout
         # tahoe get tahoe:FOO |less      # same
@@ -152,7 +159,7 @@ class GetOptions(FilesystemOptions):
      % tahoe get tahoe:FOO bar        # same
     """
 
-class PutOptions(FilesystemOptions):
+class PutOptions(FileStoreOptions):
     optFlags = [
         ("mutable", "m", "Create a mutable file instead of an immutable one (like --format=SDMF)"),
         ]
@@ -198,7 +205,7 @@ class PutOptions(FilesystemOptions):
      % tahoe put bar MUTABLE-FILE-WRITECAP # modify the mutable file in-place
     """
 
-class CpOptions(FilesystemOptions):
+class CpOptions(FileStoreOptions):
     optFlags = [
         ("recursive", "r", "Copy source directory recursively."),
         ("verbose", "v", "Be noisy about what is happening."),
@@ -245,7 +252,7 @@ class CpOptions(FilesystemOptions):
     contents.
     """
 
-class UnlinkOptions(FilesystemOptions):
+class UnlinkOptions(FileStoreOptions):
     def parseArgs(self, where):
         self.where = argv_to_unicode(where)
 
@@ -256,7 +263,7 @@ class RmOptions(UnlinkOptions):
     synopsis = "[options] REMOTE_FILE"
     description = "Remove a named file from its parent directory."
 
-class MvOptions(FilesystemOptions):
+class MvOptions(FileStoreOptions):
     def parseArgs(self, frompath, topath):
         self.from_file = argv_to_unicode(frompath)
         self.to_file = argv_to_unicode(topath)
@@ -275,7 +282,7 @@ class MvOptions(FilesystemOptions):
     the grid -- use 'tahoe cp' for that.
     """
 
-class LnOptions(FilesystemOptions):
+class LnOptions(FileStoreOptions):
     def parseArgs(self, frompath, topath):
         self.from_file = argv_to_unicode(frompath)
         self.to_file = argv_to_unicode(topath)
@@ -307,7 +314,7 @@ class LnOptions(FilesystemOptions):
 class BackupConfigurationError(Exception):
     pass
 
-class BackupOptions(FilesystemOptions):
+class BackupOptions(FileStoreOptions):
     optFlags = [
         ("verbose", "v", "Be noisy about what is happening."),
         ("ignore-timestamps", None, "Do not use backupdb timestamps to decide whether a local file is unchanged."),
@@ -376,7 +383,7 @@ class BackupOptions(FilesystemOptions):
     --link-dest=TO/Archives/(previous) FROM TO/Archives/(new); ln -sf
     TO/Archives/(new) TO/Latest'."""
 
-class WebopenOptions(FilesystemOptions):
+class WebopenOptions(FileStoreOptions):
     optFlags = [
         ("info", "i", "Open the t=info page for the file"),
         ]
@@ -390,7 +397,7 @@ class WebopenOptions(FilesystemOptions):
     directory on the grid. When run without arguments, open the Welcome
     page."""
 
-class ManifestOptions(FilesystemOptions):
+class ManifestOptions(FileStoreOptions):
     optFlags = [
         ("storage-index", "s", "Only print storage index strings, not pathname+cap."),
         ("verify-cap", None, "Only print verifycap, not pathname+cap."),
@@ -405,7 +412,7 @@ class ManifestOptions(FilesystemOptions):
     Print a list of all files and directories reachable from the given
     starting point."""
 
-class StatsOptions(FilesystemOptions):
+class StatsOptions(FileStoreOptions):
     optFlags = [
         ("raw", "r", "Display raw JSON data instead of parsed"),
         ]
@@ -417,7 +424,7 @@ class StatsOptions(FilesystemOptions):
     Print statistics about of all files and directories reachable from the
     given starting point."""
 
-class CheckOptions(FilesystemOptions):
+class CheckOptions(FileStoreOptions):
     optFlags = [
         ("raw", None, "Display raw JSON data instead of parsed."),
         ("verify", None, "Verify all hashes, instead of merely querying share presence."),
@@ -433,7 +440,7 @@ class CheckOptions(FilesystemOptions):
     verify their hashes. Optionally repair the file if any problems were
     found."""
 
-class DeepCheckOptions(FilesystemOptions):
+class DeepCheckOptions(FileStoreOptions):
     optFlags = [
         ("raw", None, "Display raw JSON data instead of parsed."),
         ("verify", None, "Verify all hashes, instead of merely querying share presence."),
@@ -469,6 +476,7 @@ subCommands = [
     ["stats", None, StatsOptions, "Print statistics about all files/directories in a subtree."],
     ["check", None, CheckOptions, "Check a single file or directory."],
     ["deep-check", None, DeepCheckOptions, "Check all files/directories reachable from a starting point."],
+    ["status", None, TahoeStatusCommand, "Various status information."],
     ]
 
 def mkdir(options):
@@ -506,8 +514,8 @@ def get(options):
             # enough to have picked an empty file
             pass
         else:
-            print >>options.stderr, "%s retrieved and written to %s" % \
-                  (options.from_file, options.to_file)
+            print("%s retrieved and written to %s" % \
+                  (options.from_file, options.to_file), file=options.stderr)
     return rc
 
 def put(options):
@@ -568,6 +576,10 @@ def deepcheck(options):
     rc = tahoe_check.deepcheck(options)
     return rc
 
+def status(options):
+    from allmydata.scripts import tahoe_status
+    return tahoe_status.do_status(options)
+
 dispatch = {
     "mkdir": mkdir,
     "add-alias": add_alias,
@@ -587,4 +599,5 @@ dispatch = {
     "stats": stats,
     "check": check,
     "deep-check": deepcheck,
+    "status": status,
     }

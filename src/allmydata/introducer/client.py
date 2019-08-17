@@ -1,6 +1,5 @@
-
 import time
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.application import service
 from foolscap.api import Referenceable, eventually
 from allmydata.interfaces import InsufficientVersionError
@@ -8,9 +7,9 @@ from allmydata.introducer.interfaces import IIntroducerClient, \
      RIIntroducerSubscriberClient_v2
 from allmydata.introducer.common import sign_to_foolscap, unsign_from_foolscap,\
      get_tubid_string_from_ann
-from allmydata.util import log, yamlutil
+from allmydata.util import log, yamlutil, connection_status
 from allmydata.util.rrefutil import add_version_to_remote_reference
-from allmydata.util.keyutil import BadSignatureError
+from allmydata.crypto.error import BadSignature
 from allmydata.util.assertutil import precondition
 
 class InvalidCacheError(Exception):
@@ -18,8 +17,8 @@ class InvalidCacheError(Exception):
 
 V2 = "http://allmydata.org/tahoe/protocols/introducer/v2"
 
+@implementer(RIIntroducerSubscriberClient_v2, IIntroducerClient)
 class IntroducerClient(service.Service, Referenceable):
-    implements(RIIntroducerSubscriberClient_v2, IIntroducerClient)
 
     def __init__(self, tub, introducer_furl,
                  nickname, my_version, oldest_supported,
@@ -239,7 +238,7 @@ class IntroducerClient(service.Service, Referenceable):
                 ann, key_s = unsign_from_foolscap(ann_t)
                 # key is "v0-base32abc123"
                 precondition(isinstance(key_s, str), key_s)
-            except BadSignatureError:
+            except BadSignature:
                 self.log("bad signature on inbound announcement: %s" % (ann_t,),
                          parent=lp, level=log.WEIRD, umid="ZAU15Q")
                 # process other announcements that arrived with the bad one
@@ -326,14 +325,16 @@ class IntroducerClient(service.Service, Referenceable):
             if service_name2 == service_name:
                 eventually(cb, key_s, ann, *args, **kwargs)
 
+    def connection_status(self):
+        assert self.running # startService builds _introducer_reconnector
+        irc = self._introducer_reconnector
+        last_received = (self._publisher.getDataLastReceivedAt()
+                         if self._publisher
+                         else None)
+        return connection_status.from_foolscap_reconnector(irc, last_received)
+
     def connected_to_introducer(self):
         return bool(self._publisher)
 
     def get_since(self):
         return self._since
-
-    def get_last_received_data_time(self):
-        if self._publisher is None:
-            return None
-        else:
-            return self._publisher.getDataLastReceivedAt()

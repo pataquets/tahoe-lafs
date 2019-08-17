@@ -1,6 +1,8 @@
+from __future__ import print_function
+
 import os, signal, sys, time
 from random import randrange
-from cStringIO import StringIO
+from six.moves import StringIO
 
 from twisted.internet import reactor, defer
 from twisted.python import failure
@@ -8,7 +10,8 @@ from twisted.trial import unittest
 
 from allmydata.util import fileutil, log
 from ..util.assertutil import precondition
-from allmydata.util.encodingutil import unicode_platform, get_filesystem_encoding
+from allmydata.util.encodingutil import (unicode_platform, get_filesystem_encoding,
+                                         get_io_encoding)
 from ..scripts import runner
 
 def skip_if_cannot_represent_filename(u):
@@ -21,13 +24,21 @@ def skip_if_cannot_represent_filename(u):
         except UnicodeEncodeError:
             raise unittest.SkipTest("A non-ASCII filename could not be encoded on this platform.")
 
+def skip_if_cannot_represent_argv(u):
+    precondition(isinstance(u, unicode))
+    try:
+        u.encode(get_io_encoding())
+    except UnicodeEncodeError:
+        raise unittest.SkipTest("A non-ASCII argv could not be encoded on this platform.")
+
 def run_cli(verb, *args, **kwargs):
     precondition(not [True for arg in args if not isinstance(arg, str)],
                  "arguments to do_cli must be strs -- convert using unicode_to_argv", args=args)
     nodeargs = kwargs.get("nodeargs", [])
     argv = nodeargs + [verb] + list(args)
     stdin = kwargs.get("stdin", "")
-    stdout, stderr = StringIO(), StringIO()
+    stdout = StringIO()
+    stderr = StringIO()
     d = defer.succeed(argv)
     d.addCallback(runner.parse_or_exit_with_explanation, stdout=stdout)
     d.addCallback(runner.dispatch,
@@ -72,13 +83,13 @@ def flip_one_bit(s, offset=0, size=None):
     return result
 
 
-class ReallyEqualMixin:
+class ReallyEqualMixin(object):
     def failUnlessReallyEqual(self, a, b, msg=None):
-        self.failUnlessEqual(a, b, msg=msg)
-        self.failUnlessEqual(type(a), type(b), msg="a :: %r, b :: %r, %r" % (a, b, msg))
+        self.assertEqual(a, b, msg)
+        self.assertEqual(type(a), type(b), "a :: %r, b :: %r, %r" % (a, b, msg))
 
 
-class NonASCIIPathMixin:
+class NonASCIIPathMixin(object):
     def mkdir_nonascii(self, dirpath):
         # Kludge to work around the fact that buildbot can't remove a directory tree that has
         # any non-ASCII directory names on Windows. (#1472)
@@ -90,22 +101,28 @@ class NonASCIIPathMixin:
                     if os.path.exists(dirpath):
                         msg = ("We were unable to delete a non-ASCII directory %r created by the test. "
                                "This is liable to cause failures on future builds." % (dirpath,))
-                        print msg
+                        print(msg)
                         log.err(msg)
             self.addCleanup(_cleanup)
         os.mkdir(dirpath)
 
-    def unicode_or_fallback(self, unicode_name, fallback_name):
-        if unicode_platform():
-            return unicode_name
-        try:
-            unicode_name.encode(get_filesystem_encoding())
-            return unicode_name
-        except UnicodeEncodeError:
-            return fallback_name
+    def unicode_or_fallback(self, unicode_name, fallback_name, io_as_well=False):
+        if not unicode_platform():
+            try:
+                unicode_name.encode(get_filesystem_encoding())
+            except UnicodeEncodeError:
+                return fallback_name
+
+        if io_as_well:
+            try:
+                unicode_name.encode(get_io_encoding())
+            except UnicodeEncodeError:
+                return fallback_name
+
+        return unicode_name
 
 
-class SignalMixin:
+class SignalMixin(object):
     # This class is necessary for any code which wants to use Processes
     # outside the usual reactor.run() environment. It is copied from
     # Twisted's twisted.test.test_process . Note that Twisted-8.2.0 uses
@@ -119,18 +136,20 @@ class SignalMixin:
         if hasattr(reactor, "_handleSigchld") and hasattr(signal, "SIGCHLD"):
             self.sigchldHandler = signal.signal(signal.SIGCHLD,
                                                 reactor._handleSigchld)
+        return super(SignalMixin, self).setUp()
 
     def tearDown(self):
         if self.sigchldHandler:
             signal.signal(signal.SIGCHLD, self.sigchldHandler)
+        return super(SignalMixin, self).tearDown()
 
-class StallMixin:
+class StallMixin(object):
     def stall(self, res=None, delay=1):
         d = defer.Deferred()
         reactor.callLater(delay, d.callback, res)
         return d
 
-class ShouldFailMixin:
+class ShouldFailMixin(object):
 
     def shouldFail(self, expected_failure, which, substring,
                    callable, *args, **kwargs):
@@ -160,7 +179,6 @@ class TestMixin(SignalMixin):
             to without access to real randomness and real time.time from the
             code under test
         """
-        SignalMixin.setUp(self)
         self.repeatable = repeatable
         if self.repeatable:
             import repeatable_random
@@ -169,13 +187,14 @@ class TestMixin(SignalMixin):
             self.teststarttime = time.realtime()
         else:
             self.teststarttime = time.time()
+        return super(TestMixin, self).setUp()
 
     def tearDown(self):
-        SignalMixin.tearDown(self)
         if self.repeatable:
             import repeatable_random
             repeatable_random.restore_non_repeatability()
         self.clean_pending(required_to_quiesce=True)
+        return super(TestMixin, self).tearDown()
 
     def clean_pending(self, dummy=None, required_to_quiesce=True):
         """
@@ -211,7 +230,7 @@ class TestMixin(SignalMixin):
             if p.active():
                 p.cancel()
             else:
-                print "WEIRDNESS! pending timed call not active!"
+                print("WEIRDNESS! pending timed call not active!")
         if required_to_quiesce and active:
             self.fail("Reactor was still active when it was required to be quiescent.")
 

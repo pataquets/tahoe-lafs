@@ -1,6 +1,6 @@
-import simplejson
+import json
 
-from allmydata.web.common import TokenOnlyWebApi
+from allmydata.web.common import TokenOnlyWebApi, get_arg, WebError
 
 
 class MagicFolderWebApi(TokenOnlyWebApi):
@@ -14,9 +14,18 @@ class MagicFolderWebApi(TokenOnlyWebApi):
 
     def post_json(self, req):
         req.setHeader("content-type", "application/json")
+        nick = get_arg(req, 'name', 'default')
+
+        try:
+            magic_folder = self.client._magic_folders[nick]
+        except KeyError:
+            raise WebError(
+                "No such magic-folder '{}'".format(nick),
+                404,
+            )
 
         data = []
-        for item in self.client._magic_folder.uploader.get_status():
+        for item in magic_folder.uploader.get_status():
             d = dict(
                 path=item.relpath_u,
                 status=item.status_history()[-1][0],
@@ -25,9 +34,10 @@ class MagicFolderWebApi(TokenOnlyWebApi):
             for (status, ts) in item.status_history():
                 d[status + '_at'] = ts
             d['percent_done'] = item.progress.progress
+            d['size'] = item.size
             data.append(d)
 
-        for item in self.client._magic_folder.downloader.get_status():
+        for item in magic_folder.downloader.get_status():
             d = dict(
                 path=item.relpath_u,
                 status=item.status_history()[-1][0],
@@ -36,6 +46,7 @@ class MagicFolderWebApi(TokenOnlyWebApi):
             for (status, ts) in item.status_history():
                 d[status + '_at'] = ts
             d['percent_done'] = item.progress.progress
+            d['size'] = item.size
             data.append(d)
 
-        return simplejson.dumps(data)
+        return json.dumps(data)

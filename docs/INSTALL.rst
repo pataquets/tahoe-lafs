@@ -1,18 +1,22 @@
 ﻿.. -*- coding: utf-8-with-signature-unix; fill-column: 77 -*-
 
+..
+    note: if you aren't reading the rendered form of these docs at
+    http://tahoe-lafs.readthedocs.io/en/latest/ , then be aware that any
+    ":doc:" links refer to other files in this docs/ directory
+
 *********************
 Installing Tahoe-LAFS
 *********************
 
 Welcome to `the Tahoe-LAFS project`_, a secure, decentralized, fault-tolerant
-storage system. See `about.rst`_ for an overview of the architecture and
+storage system. See :doc:`about` for an overview of the architecture and
 security properties of the system.
 
-This procedure should work on Windows, Mac, OpenSolaris, and too many flavors
-of Linux and of BSD to list.
+This procedure should work on Windows, Mac, illumos (previously OpenSolaris),
+and too many flavors of Linux and of BSD to list.
 
 .. _the Tahoe-LAFS project: https://tahoe-lafs.org
-.. _about.rst: about.rst
 
 First: In Case Of Trouble
 =========================
@@ -31,11 +35,11 @@ Pre-Packaged Versions
 
 You may not need to build Tahoe at all.
 
-If you are on Windows, please see `windows.rst`_ for platform-specific
+If you are on Windows, please see :doc:`windows` for platform-specific
 instructions.
 
 If you are on a Mac, you can either follow these instructions, or use the
-pre-packaged bundle described in `OS-X.rst`_. The Tahoe project hosts
+pre-packaged bundle described in :doc:`OS-X`. The Tahoe project hosts
 pre-compiled "wheels" for all dependencies, so use the ``--find-links=``
 option described below to avoid needing a compiler.
 
@@ -44,8 +48,6 @@ can ``apt-get install tahoe-lafs``. See `OSPackages`_ for other
 platforms.
 
 .. _OSPackages: https://tahoe-lafs.org/trac/tahoe-lafs/wiki/OSPackages
-.. _windows.rst: windows.rst
-.. _OS-X.rst: OS-X.rst
 
 
 Preliminaries
@@ -59,12 +61,14 @@ need a C compiler, the Python development headers, and some libraries
 On a modern Debian/Ubuntu-derived distribution, this command will get you
 everything you need::
 
-    apt-get install build-essential python-dev libffi-dev libssl-dev python-virtualenv
+    apt-get install build-essential python-dev libffi-dev libssl-dev libyaml-dev python-virtualenv
 
 On OS-X, install pip and virtualenv as described below. If you want to
 compile the dependencies yourself (instead of using ``--find-links`` to take
 advantage of the pre-compiled ones we host), you'll also need to install
 Xcode and its command-line tools.
+
+**Note** that Tahoe-LAFS depends on `openssl 1.1.1c` or greater.
 
 Python 2.7
 ----------
@@ -90,7 +94,7 @@ Many Python installations already include ``pip``, but in case yours does
 not, get it with the `pip install instructions`_::
 
     % pip --version
-    pip 8.1.1 from ... (python 2.7)
+    pip 10.0.1 from ... (python 2.7)
 
 .. _pip install instructions: https://pip.pypa.io/en/stable/installing/
 
@@ -102,7 +106,7 @@ instructions from the `virtualenv documentation`_::
 
 
     % virtualenv --version
-    15.0.1
+    15.1.0
 
 .. _virtualenv documentation: https://virtualenv.pypa.io/en/latest/installation.html
 
@@ -118,6 +122,9 @@ On Debian/Ubuntu-derived systems, the necessary packages are ``python-dev``,
 ``libffi-dev``, and ``libssl-dev``, and can be installed with ``apt-get``. On
 RPM-based system (like Fedora) these may be named ``python-devel``, etc,
 instead, and cam be installed with ``yum`` or ``rpm``.
+
+**Note** that Tahoe-LAFS depends on `openssl 1.1.1c` or greater.
+
 
 Install the Latest Tahoe-LAFS Release
 =====================================
@@ -156,7 +163,7 @@ from PyPI with ``venv/bin/pip install tahoe-lafs``. After installation, run
  Successfully installed ...
  
  % venv/bin/tahoe --version
- tahoe-lafs: 1.11.0
+ tahoe-lafs: 1.13.0
  foolscap: ...
  
  %
@@ -170,37 +177,33 @@ advantage of the hosted pre-compiled wheels::
 Install From a Source Tarball
 -----------------------------
 
-You can also download the source tarball first, unpack it, then install from
-the unpacked source tree.
+You can also install directly from the source tarball URL::
 
-Download the latest stable release, `Tahoe-LAFS v1.11.0`_.
-
-.. _Tahoe-LAFS v1.11.0: https://tahoe-lafs.org/downloads/tahoe-lafs-1.11.0.tar.bz2
-
-Then unpack and install (again into a virtualenv)::
-
- % wget https://tahoe-lafs.org/downloads/tahoe-lafs-1.11.0.tar.bz2
- ...
- 
- % tar xf tahoe-lafs-1.11.0.tar.bz2
- ...
- 
- % cd tahoe-lafs-1.11.0
- 
  % virtualenv venv
- New python executable in ~/tahoe-lafs-1.11.0/venv/bin/python2.7
+ New python executable in ~/venv/bin/python2.7
  Installing setuptools, pip, wheel...done.
  
- % venv/bin/pip install .
- Processing ~/tahoe-lafs-1.11.0
+ % venv/bin/pip install https://tahoe-lafs.org/downloads/tahoe-lafs-1.13.0.tar.bz2
+ Collecting https://tahoe-lafs.org/downloads/tahoe-lafs-1.13.0.tar.bz2
  ...
  Installing collected packages: ...
  Successfully installed ...
  
  % venv/bin/tahoe --version
- tahoe-lafs: 1.11.0
+ tahoe-lafs: 1.13.0
  ...
 
+Extras
+------
+
+Tahoe-LAFS provides some functionality only when explicitly requested at installation time.
+It does this using the "extras" feature of setuptools.
+You can request these extra features when running the ``pip install`` command like this::
+
+  % venv/bin/pip install tahoe-lafs[tor]
+
+This example enables support for listening and connecting using Tor.
+The Tahoe-LAFS documentation for specific features which require an explicit install-time step will mention the "extra" that must be requested.
 
 Hacking On Tahoe-LAFS
 ---------------------
@@ -221,7 +224,7 @@ the additional libraries needed to run the unit tests::
  Successfully installed ...
  
  % venv/bin/tahoe --version
- tahoe-lafs: 1.11.0.post34.dev0
+ tahoe-lafs: 1.13.0.post34.dev0
  ...
 
 This way, you won't have to re-run the ``pip install`` step each time you
@@ -270,7 +273,7 @@ result in a "all tests passed" mesage::
  % tox
  GLOB sdist-make: ~/tahoe-lafs/setup.py
  py27 recreate: ~/tahoe-lafs/.tox/py27
- py27 inst: ~/tahoe-lafs/.tox/dist/tahoe-lafs-1.11.0a2.post8.dev0.zip
+ py27 inst: ~/tahoe-lafs/.tox/dist/tahoe-lafs-1.13.0.post8.dev0.zip
  py27 runtests: commands[0] | tahoe --version
  py27 runtests: commands[1] | trial --rterrors allmydata
  allmydata.test.test_auth
@@ -297,12 +300,12 @@ Similar errors about ``openssl/crypto.h`` indicate that you are missing the
 OpenSSL development headers (``libssl-dev``). Likewise ``ffi.h`` means you
 need ``libffi-dev``.
 
+**Note** that Tahoe-LAFS depends on `openssl 1.1.1c` or greater.
+
 
 Using Tahoe-LAFS
 ================
 
 Now you are ready to deploy a decentralized filesystem. You will use the
 ``tahoe`` executable to create, configure, and launch your Tahoe-LAFS nodes.
-See `running.rst`_ for instructions on how to do that.
-
-.. _running.rst: running.rst
+See :doc:`running` for instructions on how to do that.

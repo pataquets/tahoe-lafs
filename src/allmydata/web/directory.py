@@ -1,8 +1,8 @@
 
-import simplejson
+import json
 import urllib
 
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.internet.interfaces import IPushProducer
 from twisted.python.failure import Failure
@@ -26,7 +26,8 @@ from allmydata.web.common import text_plain, WebError, \
      boolean_of_arg, get_arg, get_root, parse_replace_arg, \
      should_create_intermediate_directories, \
      getxmlfile, RenderMixin, humanize_failure, convert_children_json, \
-     get_format, get_mutable_type, get_filenode_metadata, render_time
+     get_format, get_mutable_type, get_filenode_metadata, render_time, \
+     MultiFormatPage
 from allmydata.web.filenode import ReplaceMeMixin, \
      FileNodeHandler, PlaceHolderNodeHandler
 from allmydata.web.check_results import CheckResultsRenderer, \
@@ -73,8 +74,6 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         return d
 
     def got_child(self, node_or_failure, ctx, name):
-        DEBUG = False
-        if DEBUG: print "GOT_CHILD", name, node_or_failure
         req = IRequest(ctx)
         method = req.method
         nonterminal = len(req.postpath) > 1
@@ -83,24 +82,18 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
             f = node_or_failure
             f.trap(NoSuchChildError)
             # No child by this name. What should we do about it?
-            if DEBUG: print "no child", name
-            if DEBUG: print "postpath", req.postpath
             if nonterminal:
-                if DEBUG: print " intermediate"
                 if should_create_intermediate_directories(req):
                     # create intermediate directories
-                    if DEBUG: print " making intermediate directory"
                     d = self.node.create_subdirectory(name)
                     d.addCallback(make_handler_for,
                                   self.client, self.node, name)
                     return d
             else:
-                if DEBUG: print " terminal"
                 # terminal node
                 if (method,t) in [ ("POST","mkdir"), ("PUT","mkdir"),
                                    ("POST", "mkdir-with-children"),
                                    ("POST", "mkdir-immutable") ]:
-                    if DEBUG: print " making final directory"
                     # final directory
                     kids = {}
                     if t in ("mkdir-with-children", "mkdir-immutable"):
@@ -121,14 +114,12 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
                                   self.client, self.node, name)
                     return d
                 if (method,t) in ( ("PUT",""), ("PUT","uri"), ):
-                    if DEBUG: print " PUT, making leaf placeholder"
                     # we were trying to find the leaf filenode (to put a new
                     # file in its place), and it didn't exist. That's ok,
                     # since that's the leaf node that we're about to create.
                     # We make a dummy one, which will respond to the PUT
                     # request by replacing itself.
                     return PlaceHolderNodeHandler(self.client, self.node, name)
-            if DEBUG: print " 404"
             # otherwise, we just return a no-such-child error
             return f
 
@@ -137,11 +128,9 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
             if not IDirectoryNode.providedBy(node):
                 # we would have put a new directory here, but there was a
                 # file in the way.
-                if DEBUG: print "blocking"
                 raise WebError("Unable to create directory '%s': "
                                "a file was in the way" % name,
                                http.CONFLICT)
-        if DEBUG: print "good child"
         return make_handler_for(node, self.client, self.node, name)
 
     def render_DELETE(self, ctx):
@@ -549,14 +538,14 @@ class DirectoryNodeHandler(RenderMixin, rend.Page, ReplaceMeMixin):
         req.content.seek(0)
         body = req.content.read()
         try:
-            children = simplejson.loads(body)
-        except ValueError, le:
+            children = json.loads(body)
+        except ValueError as le:
             le.args = tuple(le.args + (body,))
             # TODO test handling of bad JSON
             raise
         cs = {}
         for name, (file_or_dir, mddict) in children.iteritems():
-            name = unicode(name) # simplejson-2.0.1 returns str *or* unicode
+            name = unicode(name) # json returns str *or* unicode
             writecap = mddict.get('rw_uri')
             if writecap is not None:
                 writecap = str(writecap)
@@ -732,7 +721,7 @@ class DirectoryAsHTML(rend.Page):
             # page that doesn't know about the directory at all
             dlurl = "%s/file/%s/@@named=/%s" % (root, quoted_uri, nameurl)
 
-            ctx.fillSlots("filename", T.a(href=dlurl)[name])
+            ctx.fillSlots("filename", T.a(href=dlurl, rel="noreferrer")[name])
             ctx.fillSlots("type", "SSK")
 
             ctx.fillSlots("size", "?")
@@ -742,7 +731,7 @@ class DirectoryAsHTML(rend.Page):
         elif IImmutableFileNode.providedBy(target):
             dlurl = "%s/file/%s/@@named=/%s" % (root, quoted_uri, nameurl)
 
-            ctx.fillSlots("filename", T.a(href=dlurl)[name])
+            ctx.fillSlots("filename", T.a(href=dlurl, rel="noreferrer")[name])
             ctx.fillSlots("type", "FILE")
 
             ctx.fillSlots("size", target.get_size())
@@ -907,8 +896,7 @@ def DirectoryJSONMetadata(ctx, dirnode):
             contents['verify_uri'] = verifycap.to_string()
         contents['mutable'] = dirnode.is_mutable()
         data = ("dirnode", contents)
-        json = simplejson.dumps(data, indent=1) + "\n"
-        return json
+        return json.dumps(data, indent=1) + "\n"
     d.addCallback(_got)
     d.addCallback(text_plain, ctx)
 
@@ -916,7 +904,7 @@ def DirectoryJSONMetadata(ctx, dirnode):
         message, code = humanize_failure(f)
         req = IRequest(ctx)
         req.setResponseCode(code)
-        return simplejson.dumps({
+        return json.dumps({
             "error": message,
         })
     d.addErrback(error)
@@ -955,28 +943,26 @@ class RenameForm(rend.Page):
         ctx.tag.attributes['value'] = name
         return ctx.tag
 
-class ManifestResults(rend.Page, ReloadMixin):
+class ManifestResults(MultiFormatPage, ReloadMixin):
     docFactory = getxmlfile("manifest.xhtml")
+
+    # Control MultiFormatPage
+    formatArgument = "output"
+    formatDefault = "html"
 
     def __init__(self, client, monitor):
         self.client = client
         self.monitor = monitor
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        output = get_arg(req, "output", "html").lower()
-        if output == "text":
-            return self.text(req)
-        if output == "json":
-            return self.json(req)
-        return rend.Page.renderHTTP(self, ctx)
+    # The default format is HTML but the HTML renderer is just renderHTTP.
+    render_HTML = None
 
     def slashify_path(self, path):
         if not path:
             return ""
         return "/".join([p.encode("utf-8") for p in path])
 
-    def text(self, req):
+    def render_TEXT(self, req):
         req.setHeader("content-type", "text/plain")
         lines = []
         is_finished = self.monitor.is_finished()
@@ -985,7 +971,7 @@ class ManifestResults(rend.Page, ReloadMixin):
             lines.append(self.slashify_path(path) + " " + cap)
         return "\n".join(lines) + "\n"
 
-    def json(self, req):
+    def render_JSON(self, req):
         req.setHeader("content-type", "text/plain")
         m = self.monitor
         s = m.get_status()
@@ -1014,7 +1000,7 @@ class ManifestResults(rend.Page, ReloadMixin):
             # generator that walks the set rather than list(setofthing) to
             # save a small amount of memory (4B*len) and a moderate amount of
             # CPU.
-        return simplejson.dumps(status, indent=1)
+        return json.dumps(status, indent=1)
 
     def _si_abbrev(self):
         si = self.monitor.origin_si
@@ -1031,7 +1017,8 @@ class ManifestResults(rend.Page, ReloadMixin):
     def data_items(self, ctx, data):
         return self.monitor.get_status()["manifest"]
 
-    def render_row(self, ctx, (path, cap)):
+    def render_row(self, ctx, path_cap):
+        path, cap = path_cap
         ctx.fillSlots("path", self.slashify_path(path))
         root = get_root(ctx)
         # TODO: we need a clean consistent way to get the type of a cap string
@@ -1047,18 +1034,16 @@ class ManifestResults(rend.Page, ReloadMixin):
             ctx.fillSlots("cap", "")
         return ctx.tag
 
-class DeepSizeResults(rend.Page):
+class DeepSizeResults(MultiFormatPage):
+    # Control MultiFormatPage
+    formatArgument = "output"
+    formatDefault = "html"
+
     def __init__(self, client, monitor):
         self.client = client
         self.monitor = monitor
 
-    def renderHTTP(self, ctx):
-        req = inevow.IRequest(ctx)
-        output = get_arg(req, "output", "html").lower()
-        req.setHeader("content-type", "text/plain")
-        if output == "json":
-            return self.json(req)
-        # plain text
+    def render_HTML(self, req):
         is_finished = self.monitor.is_finished()
         output = "finished: " + {True: "yes", False: "no"}[is_finished] + "\n"
         if is_finished:
@@ -1068,12 +1053,14 @@ class DeepSizeResults(rend.Page):
                      + stats.get("size-directories", 0))
             output += "size: %d\n" % total
         return output
+    render_TEXT = render_HTML
 
-    def json(self, req):
+    def render_JSON(self, req):
+        req.setHeader("content-type", "text/plain")
         status = {"finished": self.monitor.is_finished(),
                   "size": self.monitor.get_status(),
                   }
-        return simplejson.dumps(status)
+        return json.dumps(status)
 
 class DeepStatsResults(rend.Page):
     def __init__(self, client, monitor):
@@ -1085,10 +1072,10 @@ class DeepStatsResults(rend.Page):
         inevow.IRequest(ctx).setHeader("content-type", "text/plain")
         s = self.monitor.get_status().copy()
         s["finished"] = self.monitor.is_finished()
-        return simplejson.dumps(s, indent=1)
+        return json.dumps(s, indent=1)
 
+@implementer(IPushProducer)
 class ManifestStreamer(dirnode.DeepStats):
-    implements(IPushProducer)
 
     def __init__(self, ctx, origin):
         dirnode.DeepStats.__init__(self, origin)
@@ -1130,7 +1117,7 @@ class ManifestStreamer(dirnode.DeepStats):
             si = base32.b2a(si)
         d["storage-index"] = si or ""
 
-        j = simplejson.dumps(d, ensure_ascii=True)
+        j = json.dumps(d, ensure_ascii=True)
         assert "\n" not in j
         self.req.write(j+"\n")
 
@@ -1139,13 +1126,13 @@ class ManifestStreamer(dirnode.DeepStats):
         d = {"type": "stats",
              "stats": stats,
              }
-        j = simplejson.dumps(d, ensure_ascii=True)
+        j = json.dumps(d, ensure_ascii=True)
         assert "\n" not in j
         self.req.write(j+"\n")
         return ""
 
+@implementer(IPushProducer)
 class DeepCheckStreamer(dirnode.DeepStats):
-    implements(IPushProducer)
 
     def __init__(self, ctx, origin, verify, repair, add_lease):
         dirnode.DeepStats.__init__(self, origin)
@@ -1208,7 +1195,7 @@ class DeepCheckStreamer(dirnode.DeepStats):
         return data
 
     def write_line(self, data):
-        j = simplejson.dumps(data, ensure_ascii=True)
+        j = json.dumps(data, ensure_ascii=True)
         assert "\n" not in j
         self.req.write(j+"\n")
 
@@ -1217,7 +1204,7 @@ class DeepCheckStreamer(dirnode.DeepStats):
         d = {"type": "stats",
              "stats": stats,
              }
-        j = simplejson.dumps(d, ensure_ascii=True)
+        j = json.dumps(d, ensure_ascii=True)
         assert "\n" not in j
         self.req.write(j+"\n")
         return ""
@@ -1263,4 +1250,4 @@ def UnknownJSONMetadata(ctx, node, edge_metadata, is_parent_known_immutable):
 
     if edge_metadata is not None:
         data[1]['metadata'] = edge_metadata
-    return text_plain(simplejson.dumps(data, indent=1) + "\n", ctx)
+    return text_plain(json.dumps(data, indent=1) + "\n", ctx)

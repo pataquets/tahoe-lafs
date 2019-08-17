@@ -28,9 +28,9 @@ This document contains a complete list of the config files that are examined
 by the client node, as well as the state files that you'll observe in its
 base directory.
 
-The main file is named "``tahoe.cfg``", and is an ".INI"-style configuration
-file (parsed by the Python stdlib 'ConfigParser' module: "``[name]``" section
-markers, lines with "``key.subkey: value``", rfc822-style
+The main file is named "``tahoe.cfg``", and is an "`.INI`_"-style configuration
+file (parsed by the Python stdlib `ConfigParser`_ module: "``[name]``" section
+markers, lines with "``key.subkey: value``", `RFC822-style`_
 continuations). There are also other files containing information that does
 not easily fit into this format. The "``tahoe create-node``" or "``tahoe
 create-client``" command will create an initial ``tahoe.cfg`` file for
@@ -65,6 +65,9 @@ The item descriptions below use the following types:
     a Foolscap endpoint identifier, like
     ``pb://soklj4y7eok5c3xkmjeqpw@192.168.69.247:44801/eqpwqtzm``
 
+.. _.INI: https://en.wikipedia.org/wiki/INI_file
+.. _ConfigParser: https://docs.python.org/2/library/configparser.html
+.. _RFC822-style: https://www.ietf.org/rfc/rfc0822
 .. _the Twisted strports documentation: https://twistedmatrix.com/documents/current/api/twisted.application.strports.html
 .. _the Twisted Endpoints documentation: http://twistedmatrix.com/documents/current/core/howto/endpoints.html#endpoint-types-included-with-twisted
 
@@ -149,6 +152,14 @@ set the ``tub.location`` option described below.
     use something like ``tcp6:interface=2600\:3c01\:f03c\:91ff\:fe93\:d272:3456,tcp:interface=8.8.8.8:3456``.
     Lists of endpoint descriptor strings like the following ``tcp:12345,tcp6:12345``
     are known to not work because an ``Address already in use.`` error.
+
+    If any descriptor begins with ``listen:tor``, or ``listen:i2p``, the
+    corresponding tor/i2p Provider object will construct additional endpoints
+    for the Tub to listen on. This allows the ``[tor]`` or ``[i2p]`` sections
+    in ``tahoe.cfg`` to customize the endpoint; e.g. to add I2CP control
+    options. If you use ``listen:i2p``, you should not also have an
+    ``i2p:..`` endpoint in ``tub.port``, as that would result in multiple
+    I2P-based listeners.
 
     If ``tub.port`` is the string ``disabled``, the node will not listen at
     all, and thus cannot accept connections from other nodes. If ``[storage]
@@ -365,6 +376,8 @@ set the ``tub.location`` option described below.
       rather than being set to ``tor`` or ``disabled``
 
 
+.. _Connection Management:
+
 Connection Management
 =====================
 
@@ -558,6 +571,7 @@ on port 7656. This is the default SAM port for the ``i2p`` daemon.
     be used.
 
 
+.. _Client Configuration:
 
 Client Configuration
 ====================
@@ -669,14 +683,16 @@ Client Configuration
     location to prefer their local servers so that they can maintain access to
     all of their uploads without using the internet.
 
+In addition,
+see :doc:`accepting-donations` for a convention for donating to storage server operators.
 
 Frontend Configuration
 ======================
 
-The Tahoe client process can run a variety of frontend file-access protocols.
-You will use these to create and retrieve files from the virtual filesystem.
-Configuration details for each are documented in the following
-protocol-specific guides:
+The Tahoe-LAFS client process can run a variety of frontend file access
+protocols. You will use these to create and retrieve files from the
+Tahoe-LAFS file store. Configuration details for each are documented in
+the following protocol-specific guides:
 
 HTTP
 
@@ -692,7 +708,7 @@ HTTP
 CLI
 
     The main ``tahoe`` executable includes subcommands for manipulating the
-    filesystem, uploading/downloading files, and creating/running Tahoe
+    file store, uploading/downloading files, and creating/running Tahoe
     nodes. See :doc:`frontends/CLI` for details.
 
 SFTP, FTP
@@ -770,6 +786,17 @@ Storage Server Configuration
 
 .. _#390: https://tahoe-lafs.org/trac/tahoe-lafs/ticket/390
 
+``storage_dir = (string, optional)``
+
+    This specifies a directory where share files and other state pertaining to
+    storage servers will be kept.
+
+    The default value is the ``storage`` directory in the node's base directory
+    (i.e. ``BASEDIR/storage``), but it can be placed elsewhere. Relative paths
+    will be interpreted relative to the node's base directory.
+
+In addition,
+see :doc:`accepting-donations` for a convention encouraging donations to storage server operators.
 
 Running A Helper
 ================
@@ -835,7 +862,7 @@ This section describes these other files.
   files on behalf of other clients. There will be a directory underneath it
   for each StorageIndex for which this node is holding shares. There is also
   an "incoming" directory where partially-completed shares are held while
-  they are being received.
+  they are being received.  This location may be overridden in ``tahoe.cfg``.
 
 ``tahoe-client.tac``
 
@@ -916,8 +943,10 @@ introducer.furl``. To use two or more Introducers, choose a locally-unique
 ``private/introducers.yaml`` like this::
 
   introducers:
-    petname2:  furl = FURL2
-    petname3:  furl = FURL3
+    petname2:
+      furl: FURL2
+    petname3:
+      furl: FURL3
 
 Servers will announce themselves to all configured introducers. Clients will
 merge the announcements they receive from all introducers. Nothing will
@@ -1089,16 +1118,16 @@ a legal one.
   log_gatherer.furl = pb://soklj4y7eok5c3xkmjeqpw@192.168.69.247:44801/eqpwqtzm
   timeout.keepalive = 240
   timeout.disconnect = 1800
-  
+
   [client]
   introducer.furl = pb://ok45ssoklj4y7eok5c3xkmj@tcp:tahoe.example:44801/ii3uumo
   helper.furl = pb://ggti5ssoklj4y7eok5c3xkmj@tcp:helper.tahoe.example:7054/kk8lhr
-  
+
   [storage]
   enabled = True
   readonly = True
   reserved_space = 10000000000
-  
+
   [helper]
   enabled = True
 

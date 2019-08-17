@@ -1,6 +1,6 @@
 
 import time
-import simplejson
+import json
 from nevow import rend, inevow, tags as T
 from twisted.web import http, html
 from allmydata.web.common import getxmlfile, get_arg, get_root, WebError
@@ -63,7 +63,7 @@ def json_check_and_repair_results(r):
     data["post-repair-results"] = json_check_results(post)
     return data
 
-class ResultsBase:
+class ResultsBase(object):
     # self.client must point to the Client, so we can get nicknames and
     # determine the permuted peer order
 
@@ -196,7 +196,7 @@ class LiteralCheckResultsRenderer(rend.Page, ResultsBase):
     def json(self, ctx):
         inevow.IRequest(ctx).setHeader("content-type", "text/plain")
         data = json_check_results(None)
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_return(self, ctx, data):
         req = inevow.IRequest(ctx)
@@ -205,7 +205,7 @@ class LiteralCheckResultsRenderer(rend.Page, ResultsBase):
             return T.div[T.a(href=return_to)["Return to file."]]
         return ""
 
-class CheckerBase:
+class CheckerBase(object):
 
     def renderHTTP(self, ctx):
         if self.want_json(ctx):
@@ -233,7 +233,7 @@ class CheckResultsRenderer(CheckerBase, rend.Page, ResultsBase):
     def json(self, ctx):
         inevow.IRequest(ctx).setHeader("content-type", "text/plain")
         data = json_check_results(self.r)
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_summary(self, ctx, data):
         results = []
@@ -250,16 +250,16 @@ class CheckResultsRenderer(CheckerBase, rend.Page, ResultsBase):
     def render_repair(self, ctx, data):
         if data.is_healthy():
             return ""
-        repair = T.form(action=".", method="post",
-                        enctype="multipart/form-data")[
-            T.fieldset[
-            T.input(type="hidden", name="t", value="check"),
-            T.input(type="hidden", name="repair", value="true"),
-            T.input(type="submit", value="Repair"),
-            ]]
+        #repair = T.form(action=".", method="post",
+        #                enctype="multipart/form-data")[
+        #    T.fieldset[
+        #    T.input(type="hidden", name="t", value="check"),
+        #    T.input(type="hidden", name="repair", value="true"),
+        #    T.input(type="submit", value="Repair"),
+        #    ]]
+        #return ctx.tag[repair]
         return "" # repair button disabled until we make it work correctly,
                   # see #622 for details
-        return ctx.tag[repair]
 
     def render_results(self, ctx, data):
         cr = self._render_results(ctx, data)
@@ -278,7 +278,7 @@ class CheckAndRepairResultsRenderer(CheckerBase, rend.Page, ResultsBase):
     def json(self, ctx):
         inevow.IRequest(ctx).setHeader("content-type", "text/plain")
         data = json_check_and_repair_results(self.r)
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_summary(self, ctx, data):
         cr = data.get_post_repair_results()
@@ -359,7 +359,7 @@ class DeepCheckResultsRenderer(rend.Page, ResultsBase, ReloadMixin):
                                          in res.get_all_results().items()
                                          if not r.is_healthy() ]
         data["stats"] = res.get_stats()
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_root_storage_index(self, ctx, data):
         return self.monitor.get_status().get_root_storage_index_string()
@@ -529,7 +529,7 @@ class DeepCheckAndRepairResultsRenderer(rend.Page, ResultsBase, ReloadMixin):
                       if not crr.get_pre_repair_results().is_healthy() ]
         data["list-unhealthy-files"] = unhealthy
         data["stats"] = res.get_stats()
-        return simplejson.dumps(data, indent=1) + "\n"
+        return json.dumps(data, indent=1) + "\n"
 
     def render_root_storage_index(self, ctx, data):
         return self.monitor.get_status().get_root_storage_index_string()

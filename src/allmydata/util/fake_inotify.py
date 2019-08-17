@@ -2,24 +2,28 @@
 # Most of this is copied from Twisted 11.0. The reason for this hack is that
 # twisted.internet.inotify can't be imported when the platform does not support inotify.
 
+import six
+
+if six.PY3:
+    long = int
 
 # from /usr/src/linux/include/linux/inotify.h
 
-IN_ACCESS = 0x00000001L         # File was accessed
-IN_MODIFY = 0x00000002L         # File was modified
-IN_ATTRIB = 0x00000004L         # Metadata changed
-IN_CLOSE_WRITE = 0x00000008L    # Writeable file was closed
-IN_CLOSE_NOWRITE = 0x00000010L  # Unwriteable file closed
-IN_OPEN = 0x00000020L           # File was opened
-IN_MOVED_FROM = 0x00000040L     # File was moved from X
-IN_MOVED_TO = 0x00000080L       # File was moved to Y
-IN_CREATE = 0x00000100L         # Subfile was created
-IN_DELETE = 0x00000200L         # Subfile was delete
-IN_DELETE_SELF = 0x00000400L    # Self was deleted
-IN_MOVE_SELF = 0x00000800L      # Self was moved
-IN_UNMOUNT = 0x00002000L        # Backing fs was unmounted
-IN_Q_OVERFLOW = 0x00004000L     # Event queued overflowed
-IN_IGNORED = 0x00008000L        # File was ignored
+IN_ACCESS = long(0x00000001)         # File was accessed
+IN_MODIFY = long(0x00000002)         # File was modified
+IN_ATTRIB = long(0x00000004)         # Metadata changed
+IN_CLOSE_WRITE = long(0x00000008)    # Writeable file was closed
+IN_CLOSE_NOWRITE = long(0x00000010)  # Unwriteable file closed
+IN_OPEN = long(0x00000020)           # File was opened
+IN_MOVED_FROM = long(0x00000040)     # File was moved from X
+IN_MOVED_TO = long(0x00000080)       # File was moved to Y
+IN_CREATE = long(0x00000100)         # Subfile was created
+IN_DELETE = long(0x00000200)         # Subfile was delete
+IN_DELETE_SELF = long(0x00000400)    # Self was deleted
+IN_MOVE_SELF = long(0x00000800)      # Self was moved
+IN_UNMOUNT = long(0x00002000)        # Backing fs was unmounted
+IN_Q_OVERFLOW = long(0x00004000)     # Event queued overflowed
+IN_IGNORED = long(0x00008000)        # File was ignored
 
 IN_ONLYDIR = 0x01000000         # only watch the path if it is a directory
 IN_DONT_FOLLOW = 0x02000000     # don't follow a sym link
@@ -74,6 +78,8 @@ def humanReadableMask(mask):
     return s
 
 
+from eliot import start_action
+
 # This class is not copied from Twisted; it acts as a mock.
 class INotify(object):
     def startReading(self):
@@ -82,12 +88,16 @@ class INotify(object):
     def stopReading(self):
         pass
 
+    def loseConnection(self):
+        pass
+
     def watch(self, filepath, mask=IN_WATCH_MASK, autoAdd=False, callbacks=None, recursive=False):
         self.callbacks = callbacks
 
     def event(self, filepath, mask):
-        for cb in self.callbacks:
-            cb(None, filepath, mask)
+        with start_action(action_type=u"fake-inotify:event", path=filepath.asTextMode().path, mask=mask):
+            for cb in self.callbacks:
+                cb(None, filepath, mask)
 
 
 __all__ = ["INotify", "humanReadableMask", "IN_WATCH_MASK", "IN_ACCESS",

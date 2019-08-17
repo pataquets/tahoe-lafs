@@ -1,6 +1,6 @@
 
 import os, time, tempfile
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.application import service
 from twisted.internet import defer
 from twisted.internet.interfaces import IConsumer
@@ -37,8 +37,8 @@ def log_memory_usage(where=""):
                                               stats["VmPeak"],
                                               where))
 
-class FileWritingConsumer:
-    implements(IConsumer)
+@implementer(IConsumer)
+class FileWritingConsumer(object):
     def __init__(self, filename):
         self.done = False
         self.f = open(filename, "wb")
@@ -54,8 +54,8 @@ class FileWritingConsumer:
         self.done = True
         self.f.close()
 
+@implementer(RIControlClient)
 class ControlServer(Referenceable, service.Service):
-    implements(RIControlClient)
 
     def remote_wait_for_client_connections(self, num_clients):
         return self.parent.debug_wait_for_client_connections(num_clients)
@@ -72,6 +72,7 @@ class ControlServer(Referenceable, service.Service):
         f.close()
         uploader = self.parent.getServiceNamed("uploader")
         u = upload.FileName(filename, convergence=convergence)
+        # XXX should pass reactor arg
         d = uploader.upload(u)
         d.addCallback(lambda results: results.get_uri())
         def _done(uri):
@@ -122,9 +123,9 @@ class ControlServer(Referenceable, service.Service):
             return results
         server = everyone_left.pop(0)
         server_name = server.get_longname()
-        connection = server.get_rref()
+        storage_server = server.get_storage_server()
         start = time.time()
-        d = connection.callRemote("get_buckets", "\x00"*16)
+        d = storage_server.get_buckets("\x00" * 16)
         def _done(ignored):
             stop = time.time()
             elapsed = stop - start
@@ -142,14 +143,14 @@ class ControlServer(Referenceable, service.Service):
         d.addCallback(_average)
         return d
 
-class SpeedTest:
+class SpeedTest(object):
     def __init__(self, parent, count, size, mutable):
         self.parent = parent
         self.count = count
         self.size = size
         self.mutable_mode = mutable
         self.uris = {}
-        self.basedir = os.path.join(self.parent.basedir, "_speed_test_data")
+        self.basedir = self.parent.config.get_config_path("_speed_test_data")
 
     def run(self):
         self.create_data()
@@ -245,8 +246,8 @@ class SpeedTest:
             os.unlink(fn)
         return res
 
-class DiscardingConsumer:
-    implements(IConsumer)
+@implementer(IConsumer)
+class DiscardingConsumer(object):
     def __init__(self):
         self.done = False
     def registerProducer(self, p, streaming):

@@ -1,6 +1,8 @@
+from __future__ import print_function
 
 import os.path
 import codecs
+import json
 
 from allmydata.util.assertutil import precondition
 
@@ -38,22 +40,22 @@ def add_alias(options):
     stderr = options.stderr
     if u":" in alias:
         # a single trailing colon will already have been stripped if present
-        print >>stderr, "Alias names cannot contain colons."
+        print("Alias names cannot contain colons.", file=stderr)
         return 1
     if u" " in alias:
-        print >>stderr, "Alias names cannot contain spaces."
+        print("Alias names cannot contain spaces.", file=stderr)
         return 1
 
     old_aliases = get_aliases(nodedir)
     if alias in old_aliases:
-        print >>stderr, "Alias %s already exists!" % quote_output(alias)
+        print("Alias %s already exists!" % quote_output(alias), file=stderr)
         return 1
     aliasfile = os.path.join(nodedir, "private", "aliases")
     cap = uri.from_string_dirnode(cap).to_string()
 
     add_line_to_aliasfile(aliasfile, alias, cap)
 
-    print >>stdout, "Alias %s added" % quote_output(alias)
+    print("Alias %s added" % quote_output(alias), file=stdout)
     return 0
 
 def create_alias(options):
@@ -65,15 +67,15 @@ def create_alias(options):
     stderr = options.stderr
     if u":" in alias:
         # a single trailing colon will already have been stripped if present
-        print >>stderr, "Alias names cannot contain colons."
+        print("Alias names cannot contain colons.", file=stderr)
         return 1
     if u" " in alias:
-        print >>stderr, "Alias names cannot contain spaces."
+        print("Alias names cannot contain spaces.", file=stderr)
         return 1
 
     old_aliases = get_aliases(nodedir)
     if alias in old_aliases:
-        print >>stderr, "Alias %s already exists!" % quote_output(alias)
+        print("Alias %s already exists!" % quote_output(alias), file=stderr)
         return 1
 
     aliasfile = os.path.join(nodedir, "private", "aliases")
@@ -92,26 +94,51 @@ def create_alias(options):
 
     add_line_to_aliasfile(aliasfile, alias, new_uri)
 
-    print >>stdout, "Alias %s created" % (quote_output(alias),)
+    print("Alias %s created" % (quote_output(alias),), file=stdout)
     return 0
+
+
+def _get_alias_details(nodedir):
+    aliases = get_aliases(nodedir)
+    alias_names = sorted(aliases.keys())
+    data = {}
+    for name in alias_names:
+        dircap = uri.from_string(aliases[name])
+        data[name] = {
+            "readwrite": dircap.to_string(),
+            "readonly": dircap.get_readonly().to_string(),
+        }
+    return data
+
 
 def list_aliases(options):
     nodedir = options['node-directory']
     stdout = options.stdout
     stderr = options.stderr
-    aliases = get_aliases(nodedir)
-    alias_names = sorted(aliases.keys())
-    max_width = max([len(quote_output(name)) for name in alias_names] + [0])
+
+    data = _get_alias_details(nodedir)
+
+    max_width = max([len(quote_output(name)) for name in data.keys()] + [0])
     fmt = "%" + str(max_width) + "s: %s"
     rc = 0
-    for name in alias_names:
+
+    if options['json']:
         try:
-            print >>stdout, fmt % (unicode_to_output(name), unicode_to_output(aliases[name].decode('utf-8')))
+            # XXX why are we presuming utf-8 output?
+            print(json.dumps(data, indent=4).decode('utf-8'), file=stdout)
         except (UnicodeEncodeError, UnicodeDecodeError):
-            print >>stderr, fmt % (quote_output(name), quote_output(aliases[name]))
+            print(json.dumps(data, indent=4), file=stderr)
             rc = 1
+    else:
+        for name, details in data.items():
+            dircap = details['readonly'] if options['readonly-uri'] else details['readwrite']
+            try:
+                print(fmt % (unicode_to_output(name), unicode_to_output(dircap.decode('utf-8'))), file=stdout)
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                print(fmt % (quote_output(name), quote_output(dircap)), file=stderr)
+                rc = 1
 
     if rc == 1:
-        print >>stderr, "\nThis listing included aliases or caps that could not be converted to the terminal" \
-                        "\noutput encoding. These are shown using backslash escapes and in quotes."
+        print("\nThis listing included aliases or caps that could not be converted to the terminal" \
+                        "\noutput encoding. These are shown using backslash escapes and in quotes.", file=stderr)
     return rc

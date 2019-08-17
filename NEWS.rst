@@ -4,6 +4,518 @@
 User-Visible Changes in Tahoe-LAFS
 ==================================
 
+.. towncrier start line
+Release 1.13.0 (05-August-2018)
+'''''''''''''''''''''''''''''''
+
+New Features
+------------
+
+The ``tahoe list-aliases`` command gained the ``--readonly-uri``
+option in `PR400`_, which lists read-only capabilities (the default
+shows read/write capabilities if available). This command also gained
+a ``--json`` option in `PR452`_, providing machine-readable output.
+
+A new command ``tahoe status`` is added, showing some statistics and
+currently active operations (similar to the ``/status`` page in the
+Web UI). See also `PR502`_.
+
+Immutable uploads now use the "servers of happiness" algorithm for
+uploading shares. This means better placement of shares on available
+servers. See `PR416`_.
+
+To join a new client to a grid, the command ``tahoe invite`` was
+added. This uses `magic wormhole`_ to connect two computers and
+exchange the required information to start the client. The "client
+side" of this command is the also new option ``tahoe
+create-client --join=``. Together, this provides a way to provision a
+new client without having to securely transmit the fURL and other
+details. `PR418`_
+
+``tahoe backup`` now reports progress. `PR474`_
+
+The ``tub.port=`` option can now accept ``listen:i2p`` or
+``listen:tor`` options to use popular anonymity networks with storage
+servers. See `PR437`_
+
+The place where storage servers put shares (the "storage path") is now
+configurable (`PR472`_).
+
+A PyInstaller-based build is now available (`PR421`_). A "Docker
+compose" setup for development purposes is now available (`PR445`_).
+
+There is now a recommended workflow for Zcash-based donations to support
+storage server operators (`PR506`_).
+
+Bug Fixes in Core
+-----------------
+
+Some bugs with pidfile handling were fixed (`PR440`_ and `PR450`_)
+meaning invalid pidfiles are now deleted. Error-messages related to
+``tahoe.cfg`` now include the full path to the file. `PR501`_ fixes
+"address already in use" test failures. `PR502`_ fixes ticket #2926
+("tahoe status" failures). `PR487`_ fixes ticket #1455 (setting
+``X-Frame-Options: DENY``)
+
+
+Web UI Changes
+--------------
+
+We set the "Referrer-Policy: no-referrer" header on all requests. The
+Welcome page now understands the JSON option (`PR430`_) and OPTIONS
+requests are handled (`PR447`_).
+
+
+Magic Folder Changes
+--------------------
+
+Multiple magic-folders in a single Tahoe client are now
+supported. Bugs with ``.backup`` files have been fixed, meaning
+spurious ``.backup`` files will be produced less often (`PR448`_,
+`PR475`_). Handling of default umask on new magic-folder files is
+fixed in `PR458`_. The user mtime value is now correctly preserved
+(`PR457`_).
+
+A bug in ``tahoe magic-folder status`` causing active operations to
+sometimes not show up is fixed (`PR461`_). If a directory is missing,
+it is created (`PR492`_).
+
+
+Raw Pull Requests
+-----------------
+
+In total, 50 Pull Requests were merged for this release, including
+contributions of code or review from 15 different GitHub users. Thanks
+everyone! A complete list of these PRs and contributions:
+
+`PR380`_: `daira`_
+`PR400`_: `meejah`_ (with `warner`_)
+`PR403`_: `meejah`_
+`PR405`_: `meejah`_ (with `warner`_)
+`PR406`_: `meejah`_ (with `warner`_)
+`PR407`_: `david415`_ (with `meejah`_, `warner`_)
+`PR409`_: `str4d`_ (with `warner`_)
+`PR410`_: `tpltnt`_ (with `warner`_)
+`PR411`_: `tpltnt`_ (with `warner`_, `meejah`_)
+`PR412`_: `tpltnt`_ (with `warner`_)
+`PR414`_: `tpltnt`_ (with `meejah`_, `warner`_)
+`PR416`_: `david415`_, `meejah`_, `markberger`_, `warner`_
+`PR417`_: `meejah`_ (with `pataquets`_, `warner`_)
+`PR418`_: `meejah`_ (with `crwood`_, `exarkun`_, `warner`_)
+`PR419`_: `tpltnt`_ (with `warner`_)
+`PR420`_: `ValdikSS`_ (with `warner`_)
+`PR421`_: `crwood`_ (with `meejah`_, `warner`_)
+`PR423`_: `warner`_
+`PR428`_: `warner`_
+`PR429`_: `exarkun`_ (with `warner`_)
+`PR430`_: `david415`_, `exarkun`_ (with `warner`_)
+`PR432`_: `exarkun`_ (with `meejah`_)
+`PR433`_: `exarkun`_ (with `warner`_)
+`PR434`_: `exarkun`_ (with `warner`_)
+`PR437`_: `warner`_
+`PR438`_: `warner`_ (with `meejah`_)
+`PR440`_: `exarkun`_, `lpirl`_ (with `meejah`_)
+`PR444`_: `AnBuKu`_ (with `warner`_)
+`PR445`_: `bookchin`_ (with `warner`_)
+`PR447`_: `meejah`_ (with `tpltnt`_, `meejah`_)
+`PR448`_: `meejah`_ (with `warner`_)
+`PR450`_: `exarkun`_, `meejah`_, `lpirl`_
+`PR452`_: `meejah`_ (with `tpltnt`_)
+`PR453`_: `meejah`_
+`PR454`_: `meejah`_ (with `tpltnt`_, `meejah`_, `warner`_)
+`PR455`_: `tpltnt`_ (with `meejah`_)
+`PR456`_: `meejah`_ (with `meejah`_)
+`PR457`_: `meejah`_ (with `crwood`_, `tpltnt`_)
+`PR458`_: `meejah`_ (with `tpltnt`_)
+`PR460`_: `tpltnt`_ (with `exarkun`_, `meejah`_)
+`PR462`_: `meejah`_ (with `crwood`_)
+`PR464`_: `meejah`_
+`PR470`_: `meejah`_ (with `exarkun`_, `tpltnt`_, `warner`_)
+`PR472`_: `exarkun`_, `meskio`_
+`PR474`_: `exarkun`_
+`PR475`_: `meejah`_ (with `exarkun`_)
+`PR482`_: `crwood`_ (with `warner`_)
+`PR485`_: `warner`_
+`PR486`_: `exarkun`_ (with `warner`_)
+`PR487`_: `exarkun`_ (with `tpltnt`_)
+`PR489`_: `exarkun`_
+`PR490`_: `exarkun`_
+`PR491`_: `exarkun`_ (with `meejah`_)
+`PR492`_: `exarkun`_ (with `meejah`_, `tpltnt`_)
+`PR493`_: `exarkun`_ (with `meejah`_)
+`PR494`_: `exarkun`_ (with `meejah`_)
+`PR497`_: `meejah`_ (with `multikatt`_, `exarkun`_)
+`PR499`_: `exarkun`_ (with `meejah`_)
+`PR501`_: `exarkun`_ (with `meejah`_)
+`PR502`_: `exarkun`_ (with `meejah`_)
+`PR506`_: `exarkun`_ (with `crwood`_, `nejucomo`_)
+
+
+Developer and Internal Changes
+------------------------------
+
+People hacking on Tahoe-LAFS code will be interested in some internal
+improvements which shouldn't have any user-visible effects:
+
+* internal: skip some unicode tests on non-unicode platforms #2912
+* internal: tox: pre-install Incremental to workaround setuptools bug #2913
+* internal: fix PyInstaller builds `PR482`_
+* internal: use @implementer instead of implements `PR406`_
+* internal: improve happiness integration test #2895 `PR432`_
+* web internal: refactor response-format (?t=) logic #2893 `PR429`_
+* internal: fix pyflakes issues #2898 `PR434`_
+* internal: setup.py use find_packages #2897 `PR433`_
+* internal: ValueOrderedDict fixes #2891
+* internal: remove unnused NumDict #2891 `PR438`_
+* internal: setup.py use python_requires= so tox3 works #2876
+* internal: rewrite tahoe stop/start/daemonize refs #1148 #275 #1121 #1377 #2149 #719 `PR417`_
+* internal: add docs links to RFCs/etc `PR456`_
+* internal: magic-folder test improvement `PR453`_
+* internal: pytest changes `PR462`_
+* internal: upload appveyor generated wheels as artifacts #2903
+* internal: fix tox-vs-setuptools-upgrade #2910
+* deps: require txi2p>=0.3.2 to work around TLS who-is-client issue #2861 `PR409`_
+* deps: now need libyaml-dev from system before build `PR420`_
+* deps: twisted>=16.4.0 for "python -m twisted.trial" `PR454`_
+* deps: pin pypiwin32 to 219 until upstream bug resolved `PR464`_
+* deps: setuptools >=28.8.0 for something `PR470`_
+* deps: use stdlib "json" instead of external "simplejson" #2766 `PR405`_
+* complain more loudly in setup.py under py3 `PR414`_
+* rename "filesystem" to "file store" #2345 `PR380`_
+* replace deprecated twisted.web.client with treq #2857 `PR428`_
+* improve/stablize some test coverage #2891
+* TODO: can we remove this now? pypiwin32 is now at 223
+* use secure mkstemp() `PR460`_
+* test "tahoe list-aliases --readonly-uri" #2863 `PR403`_
+* #455: remove outdated comment
+* `PR407`_ fix stopService calls
+* `PR410`_ explicit python2.7 virtualenv
+* `PR419`_ fix list of supported OSes
+* `PR423`_ switch travis to a supported Ubuntu
+* deps: no longer declare a PyCrypto dependency (actual use vanished long ago) `PR514`_
+
+
+
+.. _PR380: https://github.com/tahoe-lafs/tahoe-lafs/pull/380
+.. _PR400: https://github.com/tahoe-lafs/tahoe-lafs/pull/400
+.. _PR403: https://github.com/tahoe-lafs/tahoe-lafs/pull/403
+.. _PR405: https://github.com/tahoe-lafs/tahoe-lafs/pull/405
+.. _PR406: https://github.com/tahoe-lafs/tahoe-lafs/pull/406
+.. _PR407: https://github.com/tahoe-lafs/tahoe-lafs/pull/407
+.. _PR409: https://github.com/tahoe-lafs/tahoe-lafs/pull/409
+.. _PR410: https://github.com/tahoe-lafs/tahoe-lafs/pull/410
+.. _PR412: https://github.com/tahoe-lafs/tahoe-lafs/pull/412
+.. _PR414: https://github.com/tahoe-lafs/tahoe-lafs/pull/414
+.. _PR416: https://github.com/tahoe-lafs/tahoe-lafs/pull/416
+.. _PR417: https://github.com/tahoe-lafs/tahoe-lafs/pull/417
+.. _PR418: https://github.com/tahoe-lafs/tahoe-lafs/pull/418
+.. _PR419: https://github.com/tahoe-lafs/tahoe-lafs/pull/419
+.. _PR420: https://github.com/tahoe-lafs/tahoe-lafs/pull/420
+.. _PR421: https://github.com/tahoe-lafs/tahoe-lafs/pull/421
+.. _PR423: https://github.com/tahoe-lafs/tahoe-lafs/pull/423
+.. _PR428: https://github.com/tahoe-lafs/tahoe-lafs/pull/428
+.. _PR429: https://github.com/tahoe-lafs/tahoe-lafs/pull/429
+.. _PR430: https://github.com/tahoe-lafs/tahoe-lafs/pull/430
+.. _PR432: https://github.com/tahoe-lafs/tahoe-lafs/pull/432
+.. _PR433: https://github.com/tahoe-lafs/tahoe-lafs/pull/433
+.. _PR434: https://github.com/tahoe-lafs/tahoe-lafs/pull/434
+.. _PR437: https://github.com/tahoe-lafs/tahoe-lafs/pull/437
+.. _PR438: https://github.com/tahoe-lafs/tahoe-lafs/pull/438
+.. _PR440: https://github.com/tahoe-lafs/tahoe-lafs/pull/440
+.. _PR444: https://github.com/tahoe-lafs/tahoe-lafs/pull/444
+.. _PR445: https://github.com/tahoe-lafs/tahoe-lafs/pull/445
+.. _PR447: https://github.com/tahoe-lafs/tahoe-lafs/pull/447
+.. _PR448: https://github.com/tahoe-lafs/tahoe-lafs/pull/448
+.. _PR450: https://github.com/tahoe-lafs/tahoe-lafs/pull/450
+.. _PR452: https://github.com/tahoe-lafs/tahoe-lafs/pull/452
+.. _PR453: https://github.com/tahoe-lafs/tahoe-lafs/pull/453
+.. _PR454: https://github.com/tahoe-lafs/tahoe-lafs/pull/454
+.. _PR456: https://github.com/tahoe-lafs/tahoe-lafs/pull/456
+.. _PR457: https://github.com/tahoe-lafs/tahoe-lafs/pull/457
+.. _PR458: https://github.com/tahoe-lafs/tahoe-lafs/pull/458
+.. _PR460: https://github.com/tahoe-lafs/tahoe-lafs/pull/460
+.. _PR462: https://github.com/tahoe-lafs/tahoe-lafs/pull/462
+.. _PR464: https://github.com/tahoe-lafs/tahoe-lafs/pull/464
+.. _PR470: https://github.com/tahoe-lafs/tahoe-lafs/pull/470
+.. _PR472: https://github.com/tahoe-lafs/tahoe-lafs/pull/472
+.. _PR474: https://github.com/tahoe-lafs/tahoe-lafs/pull/474
+.. _PR482: https://github.com/tahoe-lafs/tahoe-lafs/pull/482
+.. _PR502: https://github.com/tahoe-lafs/tahoe-lafs/pull/502
+.. _PR506: https://github.com/tahoe-lafs/tahoe-lafs/pull/506
+.. _PR514: https://github.com/tahoe-lafs/tahoe-lafs/pull/514
+.. _AnBuKu: https://github.com/AnBuKu
+.. _ValdikSS: https://github.com/ValdikSS
+.. _bookchin: https://github.com/bookchin
+.. _crwood: https://github.com/crwood
+.. _nejucomo: https://github.com/nejucomo
+.. _daira: https://github.com/daira
+.. _david415: https://github.com/david415
+.. _exarkun: https://github.com/exarkun
+.. _lpirl: https://github.com/lpirl
+.. _markberger: https://github.com/markberger
+.. _meejah: https://github.com/meejah
+.. _meskio: https://github.com/meskio
+.. _multikatt: https://github.com/multikatt
+.. _pataquets: https://github.com/pataquets
+.. _str4d: https://github.com/str4d
+.. _tpltnt: https://github.com/tpltnt
+.. _warner: https://github.com/warner
+
+
+
+
+Release 1.12.1 (18-Jan-2017)
+''''''''''''''''''''''''''''
+
+This fixes a few small problems discovered just after 1.12.0 was released.
+
+* ``introducers.yaml`` was entirely broken (due to a unicode-vs-ascii
+  problem), and the documentation recommended an invalid syntax. Both have
+  been fixed. (#2862)
+* Creating a node with ``--hide-ip`` shouldn't set ``tcp = tor`` if txtorcon
+  is unavailable. I2P-only systems should get ``tcp = disabled``. (#2860)
+* As a result, we now require foolscap-0.12.6 .
+* setup.py now creates identical wheels on win32 and unix. Previously wheels
+  created on windows got an unconditional dependency upon ``pypiwin32``,
+  making them uninstallable on unix. Now that dependency is marked as
+  ``sys_platform=win32`` only. (#2763)
+
+Some other small changes include:
+
+* The deep-stats t=json response now includes an "api-version" field,
+  currently set to 1. (#567)
+* WUI Directory listings use ``rel=noreferrer`` to avoid leaking the dircap
+  to the JS contents of the target file. (#151, #378)
+* Remove the dependency on ``shutilwhich`` (#2856)
+
+
+Release 1.12.0 (17-Dec-2016)
+''''''''''''''''''''''''''''
+
+New Features
+------------
+
+This release features improved Tor/I2P integration. It is now easy to::
+
+* use Tor to hide your IP address during external network activity
+* connect to Tor/I2P-based storage servers
+* run an Introducer or a storage node as a Tor "onion service"
+
+See docs/anonymity-configuration.rst for instructions and new node-creation
+arguments (--hide-ip, --listen=tor), which include ways to use SOCKS servers
+for outbound connections. Tor/I2P/Socks support requires extra python
+libraries to be installed (e.g. 'pip install tahoe-lafs[tor]'), as well as
+matching (non-python) daemons available on the host system. (tickets #517,
+#2490, #2838)
+
+Nodes can use multiple introducers by adding entries to a new
+``private/introducers.yaml`` file, or stop using introduction entirely by
+omitting the ``introducer.furl`` key from tahoe.cfg (introducerless clients
+will need static servers configured to connect anywhere). Server
+announcements are sent to all connected Introducers, and clients merge all
+announcements they see, which can improve grid reliability. (#68)
+
+In addition, nodes now cache the announcements they receive in a YAML file,
+and use their cached information at startup until the Introducer connection
+is re-established. This makes nodes more tolerant of Introducers that are
+temporarily offline. Nodes admins can copy text from the cache into a new
+``private/servers.yaml`` file to add "static servers", which augment/override
+what the Introducer offers. This can modify aspects of the server, or use
+servers that were never announced in the first place. (#2788)
+
+Nodes now use a separate Foolscap "Tub" for each server connection, so
+``servers.yaml`` can override the connection rules (Tor vs direct-TCP) for
+each one independently. This offers a slight privacy improvement, but slows
+down connections slightly (perhaps 75ms per server), and breaks an obscure
+NAT-bypass trick which enabled storage servers to run behind NAT boxes (but
+only when all the *clients* of the storage server had public IP addresses,
+and were also configured as servers). (#2759, #517)
+
+"Magic Folders" is an experimental two-way directory synchronization tool,
+contributed by Least Authority Enterprises, which replaces the previous
+experimental (one-way) "drop-upload" feature. This allows multiple users to
+keep a single directory in-sync, using Tahoe as the backing store. See
+docs/frontends/magic-folder.rst for details and configuration instructions.
+
+Compatibility Issues
+--------------------
+
+The old version-1 Introducer protocol has been removed. Tahoe has used the
+version-2 protocol since 1.10 (released in 2013), but all nodes (clients,
+servers, and the Introducer itself) provided backwards-compatibility
+translations when encountering older peers. These translations were finally
+removed, so Tahoe nodes at 1.12 or later will not be able to interact with
+nodes at 1.9 or older. (#2784)
+
+The versions of Tahoe (1.11.0) and Foolscap (0.6.5) that shipped in
+Debian/Jesse (the most recent stable release, as of December 2016) are
+regrettably not forwards-compatible with this new version. Nodes running
+Jesse will not be able to connect to servers or introducers created with this
+release because they cannot parse the new ``tcp:HOST:PORT`` hint syntax (this
+syntax has been around for a while, but this is the first Tahoe release to
+automatically generate such hints). If you need to work around this, then
+after creating your new node, edit the tahoe.cfg of your new
+server/introducer: in ``[node] tub.location``, make each connection hint look
+like ``HOST:PORT`` instead of ``tcp:HOST:PORT``. If your grid only has nodes
+with Foolscap-0.7.0 or later, you will not need this workaround. (#2831)
+
+Nodes now use an Ed25519 public key as a serverid, instead of a Foolscap "tub
+id", so status displays will report a different serverid after upgrade. For
+the most part this should be self-consistent, however if you have an old
+(1.11) client talking to a new (1.12) Helper, then the client's upload
+results (on the "Recent Uploads And Downloads" web page) will show unusual
+server ids. (#1363)
+
+Dependency/Installation changes
+-------------------------------
+
+Tahoe now requires Twisted >= 16.1.0, so ensure that unit tests do not fail
+because of uncancelled timers left running by HostnameEndpoint. It also
+requires the Tor/I2P supporting code from Foolscap >= 0.12.5 . (#2781)
+
+Configuration Changes
+---------------------
+
+Some small changes were made to the way Tahoe-LAFS is configured, via
+``tahoe.cfg`` and other files. In general, node behavior should now be more
+predictable, and errors should be surfaced earlier.
+
+* ``tub.port`` is now an Endpoint server specification string (which is
+  pretty much just like a strports string, but can be extended by plugins).
+  It now rejects "tcp:0" and "0". The tahoe.cfg value overrides anything
+  stored on disk (in client.port). This should have no effect on most old
+  nodes (which did not set tub.port in tahoe.cfg, and which wrote an
+  allocated port number to client.port the first time they launched). Folks
+  who want to listen on a specific port number typically set tub.port to
+  "tcp:12345" or "12345", not "0". (ticket #2491)
+* This should enable IPv6 on servers, either via AAAA records or colon-hex
+  addresses. (#2827)
+* The "portnumfile" (e.g. NODEDIR/client.port) is written as soon as the port
+  is allocated, before the tub is created, and only if "tub.port" was empty.
+  The old code wrote to it unconditionally, and after Tub startup. So if the
+  user allows NODEDIR/client.port to be written, then later modifies
+  tahoe.cfg to set "tub.port" to a different value, this difference will
+  persist (and the node will honor tahoe.cfg "tub.port" exclusively).
+* We now encourage static allocation of tub.port, and pre-configuration of
+  the node's externally-reachable IP address or hostname (by setting
+  tub.location). Automatic IP-address detection is deprecated. Automatic port
+  allocation is discouraged. Both are managed by the new arguments to "tahoe
+  create-node".
+* "tahoe start" now creates the Tub, and all primary software components,
+  before the child process daemonizes. Many configuration errors which would
+  previously have been reported in a logfile (after node startup), will now
+  be signalled immediately, via stderr. In these cases, the "tahoe start"
+  process will exit with a non-zero return code. (#2491)
+* Unrecognized tahoe.cfg options are rejected at startup, not ignored (#2809)
+* ``tub.port`` can take multple (comma-separated) endpoints, to listen on
+  multiple ports at the same time, useful for dual IPv4+IPv6 servers. (#867)
+* An empty ``tub.port`` means don't listen at all, which is appropriate for
+  client-only nodes (#2816)
+* A new setting, ``reveal-ip-address = false``, acts as a safety belt,
+  causing an error to be thrown if any other setting might reveal the node's
+  IP address (i.e. it requires Tor or I2P to be used, rather than direct TCP
+  connections). This is set automatically by ``tahoe create-client
+  --hide-ip``. (#1010)
+
+Server-like nodes (Storage Servers and Introducers), created with ``tahoe
+create-node`` and ``tahoe create-introducer``, now accept new arguments to
+control how they listen for connections, and how they advertise themselves to
+other nodes. You can use ``--listen=tcp`` and ``--hostname=`` to choose a
+port automatically, or ``--listen=tor`` / ``--listen=i2p`` to use Tor/I2P
+hidden services instead. You can also use ``--port=`` and ``--location=`` to
+explicitly control the listener and the advertised location. (#2773, #2490)
+
+The "stats-gatherer", used by enterprise deployments to collect runtime
+statistics from a fleet of Tahoe storage servers, must now be assigned a
+hostname, or location+port pair, at creation time. It will no longer attempt
+to guess its location (with /sbin/ifconfig). The "tahoe
+create-stats-gatherer" command requires either "--hostname=", or both
+"--location=" and "--port". (#2773)
+
+To keep your old stats-gatherers working, with their original FURL, you must
+determine a suitable --location and --port, and write their values into
+NODEDIR/location and NODEDIR/port, respectively. Or you could simply rebuild
+it by re-running "tahoe create-stats-gatherer" with the new arguments.
+
+The stats gatherer now updates a JSON file named "stats.json", instead of a
+Pickle named "stats.pickle". The munin plugins in
+misc/operations_helpers/munin/ have been updated to match, and must be
+re-installed and re-configured if you use munin.
+
+Removed Features
+----------------
+
+The "key-generator" node type has been removed. This was a standalone process
+that maintained a queue of RSA keys, and clients could offload their
+key-generation work by adding "key_generator.furl=" in their tahoe.cfg files,
+to create mutable files and directories faster. This seemed important back in
+2006, but these days computers are faster and RSA key generation only takes
+about 90ms. This removes the "tahoe create-key-generator" command. Any
+"key_generator.furl" settings in tahoe.cfg will log a warning and are
+otherwise ignored. Attempts to "tahoe start" a previously-generated
+key-generator node will result in an error. (#2783)
+
+Tahoe's HTTP Web-API (aka "the WAPI") had an endpoint named "/file/". This
+has been deprecated, and applications should use "/named/" instead. (#1903)
+
+The little-used "manhole" debugging feature has been removed. This allowed
+you to SSH or Telnet "into" a Tahoe node, providing an interactive
+Read-Eval-Print-Loop (REPL) that executed inside the context of the running
+process. (#2367)
+
+The "tahoe debug trial" and "tahoe debug repl" CLI commands were removed, as
+"tox" is now the preferred way to run tests. (#2735)
+
+One of the "recent uploads and downloads" status pages was using a
+Google-hosted API to draw a timing chart of the "mapupdate" operation. This
+has been removed, both for privacy (to avoid revealing the serverids to
+Google) and because the API was deprecated several years ago. (#1942)
+
+The "_appname.py" feature was removed. Early in Tahoe's history (at
+AllMyData), this file allowed the "tahoe" executable to be given a different
+name depending upon which Darcs patches were included in the particular
+source tree (one for production, another for development, etc). We haven't
+needed this for a long time, so it was removed. (#2754)
+
+Other Changes
+-------------
+
+Documentation is now hosted at http://tahoe-lafs.readthedocs.io/ (not .org).
+
+Tahoe's testing-only dependencies can now be installed by asking for the
+[test] extra, so if you want to set up a virtualenv for testing, use "pip
+install -e .[test]" instead just of "pip install -e ." . This includes "tox",
+"coverage", "pyflakes", "mock", and all the Tor/I2P extras. Most developer
+tooling (code-checks, documentation builds, deprecation warnings, etc) have
+been moved from a Makefile into tox environments. (#2776)
+
+The "Welcome" (web) page now shows more detail about the introducer and
+storage-server connections, including which connection handler is being used
+(tcp/tor/i2p) and why specific connection hints failed to connect. (#2818,
+#2819)
+
+The little-used "control port" now uses a separate (ephemeral) Tub. This
+means the FURL changes each time the node is restarted, and it only listens
+on the loopback (127.0.0.1) interface, on a random port. As the control port
+is only used by some automated tests (check_memory, check_speed), this
+shouldn't affect anyone. (#2794)
+
+The slightly-more-used "log port" now also uses a separate (ephemeral) Tub,
+with the same consequences. The lack of a stable (and externally-reachable)
+logport.furl means it is no longer possible to use ``flogtool tail FURL``
+against a distant Tahoe server, however ``flogtool tail
+.../nodedir/private/logport.furl`` still works just fine (and is the more
+common use case anyways). We might bring back the ability to configure the
+port and location of the logport in the future, if there is sufficient
+demand, but for now it seems better to avoid the complexity.
+
+The default tahoe.cfg setting of ``web.static = public_html``, when
+``NODEDIR/public_html/`` does not exist, no longer causes web browsers to
+display a traceback which reveals somewhat-private information like the value
+of NODEDIR, and the Python/OS versions in use. Instead it just shows a plain
+404 error. (#1720)
+
+
 Release 1.11.0 (30-Mar-2016)
 ''''''''''''''''''''''''''''
 

@@ -10,10 +10,15 @@ function correctly, preserving your privacy and security.
 For full documentation, please see
 http://tahoe-lafs.readthedocs.io/en/latest/ .
 
-|readthedocs|  |travis|  |coveralls|
+|readthedocs|  |travis|  |circleci|  |codecov|
 
 INSTALLING
 ==========
+
+There are three ways to install Tahoe-LAFS.
+
+using OS packages
+^^^^^^^^^^^^^^^^^
 
 Pre-packaged versions are available for several operating systems:
 
@@ -21,6 +26,9 @@ Pre-packaged versions are available for several operating systems:
 * NixOS, NetBSD (pkgsrc), ArchLinux, Slackware, and Gentoo have packages
   available, see `OSPackages`_ for details
 * `Mac`_ and Windows installers are in development.
+
+via pip
+^^^^^^^
 
 If you don't use an OS package, you'll need Python 2.7 and `pip`_. You may
 also need a C compiler, and the development headers for python, libffi, and
@@ -32,18 +40,26 @@ Then, to install the most recent release, just run:
 
 * ``pip install tahoe-lafs``
 
+from source
+^^^^^^^^^^^
 To install from source (either so you can hack on it, or just to run
 pre-release code), you should create a virtualenv and install into that:
 
 * ``git clone https://github.com/tahoe-lafs/tahoe-lafs.git``
 * ``cd tahoe-lafs``
-* ``virtualenv venv``
+* ``virtualenv --python=python2.7 venv``
+* ``venv/bin/pip install --upgrade setuptools``
 * ``venv/bin/pip install --editable .``
 * ``venv/bin/tahoe --version``
 
 To run the unit test suite:
 
 * ``tox``
+
+You can pass arguments to ``trial`` with an environment variable.  For
+example, you can run the test suite on multiple cores to speed it up:
+
+* ``TAHOE_LAFS_TRIAL_ARGS="-j4" tox``
 
 For more detailed instructions, read `<docs/INSTALL.rst>`_ .
 
@@ -53,7 +69,7 @@ up your first Tahoe-LAFS node.
 LICENCE
 =======
 
-Copyright 2006-2016 The Tahoe-LAFS Software Foundation
+Copyright 2006-2018 The Tahoe-LAFS Software Foundation
 
 You may use this package under the GNU General Public License, version 2 or,
 at your option, any later version. You may use this package under the
@@ -83,6 +99,9 @@ slides.
     :alt: build status
     :target: https://travis-ci.org/tahoe-lafs/tahoe-lafs
 
-.. |coveralls| image:: https://coveralls.io/repos/tahoe-lafs/tahoe-lafs/badge.png?branch=master
+.. |circleci| image:: https://circleci.com/gh/tahoe-lafs/tahoe-lafs.svg?style=svg
+    :target: https://circleci.com/gh/tahoe-lafs/tahoe-lafs
+
+.. |codecov| image:: https://codecov.io/github/tahoe-lafs/tahoe-lafs/coverage.svg?branch=master
     :alt: test coverage percentage
-    :target: https://coveralls.io/r/tahoe-lafs/tahoe-lafs?branch=master
+    :target: https://codecov.io/github/tahoe-lafs/tahoe-lafs?branch=master

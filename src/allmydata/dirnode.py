@@ -1,33 +1,69 @@
+"""Directory Node implementation."""
+import time, unicodedata
 
-import time, math, unicodedata
-
-from zope.interface import implements
+from zope.interface import implementer
 from twisted.internet import defer
 from foolscap.api import fireEventually
-import simplejson
+import json
+
+from allmydata.crypto import aes
+from allmydata.deep_stats import DeepStats
 from allmydata.mutable.common import NotWriteableError
 from allmydata.mutable.filenode import MutableFileNode
 from allmydata.unknown import UnknownNode, strip_prefix_for_ro
 from allmydata.interfaces import IFilesystemNode, IDirectoryNode, IFileNode, \
-     IImmutableFileNode, IMutableFileNode, \
      ExistingChildError, NoSuchChildError, ICheckable, IDeepCheckable, \
      MustBeDeepImmutableError, CapConstraintError, ChildOfWrongTypeError
 from allmydata.check_results import DeepCheckResults, \
      DeepCheckAndRepairResults
 from allmydata.monitor import Monitor
-from allmydata.util import hashutil, mathutil, base32, log
+from allmydata.util import hashutil, base32, log
 from allmydata.util.encodingutil import quote_output
 from allmydata.util.assertutil import precondition
 from allmydata.util.netstring import netstring, split_netstring
 from allmydata.util.consumer import download_to_data
-from allmydata.uri import LiteralFileURI, from_string, wrap_dirnode_cap
-from pycryptopp.cipher.aes import AES
+from allmydata.uri import wrap_dirnode_cap
 from allmydata.util.dictutil import AuxValueDict
 
+from eliot import (
+    ActionType,
+    Field,
+)
+from eliot.twisted import (
+    DeferredContext,
+)
+
+NAME = Field.for_types(
+    u"name",
+    [unicode],
+    u"The name linking the parent to this node.",
+)
+
+METADATA = Field.for_types(
+    u"metadata",
+    [dict],
+    u"Data about a node.",
+)
+
+OVERWRITE = Field.for_types(
+    u"overwrite",
+    [bool],
+    u"True to replace an existing file of the same name, "
+    u"false to fail with a collision error.",
+)
+
+ADD_FILE = ActionType(
+    u"dirnode:add-file",
+    [NAME, METADATA, OVERWRITE],
+    [],
+    u"Add a new file as a child of a directory.",
+)
 
 def update_metadata(metadata, new_metadata, now):
     """Updates 'metadata' in-place with the information in 'new_metadata'.
-    Timestamps are set according to the time 'now'."""
+
+    Timestamps are set according to the time 'now'.
+    """
 
     if metadata is None:
         metadata = {}
@@ -75,7 +111,7 @@ def normalize(namex):
 # contents and end by repacking them. It might be better to apply them to
 # the unpacked contents.
 
-class Deleter:
+class Deleter(object):
     def __init__(self, node, namex, must_exist=True, must_be_directory=False, must_be_file=False):
         self.node = node
         self.name = normalize(namex)
@@ -103,7 +139,7 @@ class Deleter:
         return new_contents
 
 
-class MetadataSetter:
+class MetadataSetter(object):
     def __init__(self, node, namex, metadata, create_readonly_node=None):
         self.node = node
         self.name = normalize(namex)
@@ -128,7 +164,7 @@ class MetadataSetter:
         return new_contents
 
 
-class Adder:
+class Adder(object):
     def __init__(self, node, entries=None, overwrite=True, create_readonly_node=None):
         self.node = node
         if entries is None:
@@ -178,8 +214,8 @@ def _encrypt_rw_uri(writekey, rw_uri):
 
     salt = hashutil.mutable_rwcap_salt_hash(rw_uri)
     key = hashutil.mutable_rwcap_key_hash(salt, writekey)
-    cryptor = AES(key)
-    crypttext = cryptor.process(rw_uri)
+    encryptor = aes.create_encryptor(key)
+    crypttext = aes.encrypt_data(encryptor, rw_uri)
     mac = hashutil.hmac(key, salt + crypttext)
     assert len(mac) == 32
     return salt + crypttext + mac
@@ -249,12 +285,12 @@ def _pack_normalized_children(children, writekey, deep_immutable=False):
             entry = "".join([netstring(name.encode("utf-8")),
                              netstring(strip_prefix_for_ro(ro_uri, deep_immutable)),
                              writecap,
-                             netstring(simplejson.dumps(metadata))])
+                             netstring(json.dumps(metadata))])
         entries.append(netstring(entry))
     return "".join(entries)
 
-class DirectoryNode:
-    implements(IDirectoryNode, ICheckable, IDeepCheckable)
+@implementer(IDirectoryNode, ICheckable, IDeepCheckable)
+class DirectoryNode(object):
     filenode_class = MutableFileNode
 
     def __init__(self, filenode, nodemaker, uploader):
@@ -295,8 +331,8 @@ class DirectoryNode:
         salt = encwrcap[:16]
         crypttext = encwrcap[16:-32]
         key = hashutil.mutable_rwcap_key_hash(salt, self._node.get_writekey())
-        cryptor = AES(key)
-        plaintext = cryptor.process(crypttext)
+        encryptor = aes.create_decryptor(key)
+        plaintext = aes.decrypt_data(encryptor, crypttext)
         return plaintext
 
     def _create_and_validate_node(self, rw_uri, ro_uri, name):
@@ -358,15 +394,15 @@ class DirectoryNode:
             try:
                 child = self._create_and_validate_node(rw_uri, ro_uri, name)
                 if mutable or child.is_allowed_in_immutable_directory():
-                    metadata = simplejson.loads(metadata_s)
+                    metadata = json.loads(metadata_s)
                     assert isinstance(metadata, dict)
                     children[name] = (child, metadata)
                     children.set_with_aux(name, (child, metadata), auxilliary=entry)
                 else:
                     log.msg(format="mutable cap for child %(name)s unpacked from an immutable directory",
-                                   name=quote_output(name, encoding='utf-8'),
-                                   facility="tahoe.webish", level=log.UNUSUAL)
-            except CapConstraintError, e:
+                            name=quote_output(name, encoding='utf-8'),
+                            facility="tahoe.webish", level=log.UNUSUAL)
+            except CapConstraintError as e:
                 log.msg(format="unmet constraint on cap for child %(name)s unpacked from a directory:\n"
                                "%(message)s", message=e.args[0], name=quote_output(name, encoding='utf-8'),
                                facility="tahoe.webish", level=log.UNUSUAL)
@@ -496,7 +532,7 @@ class DirectoryNode:
         path-name elements.
         """
         d = self.get_child_and_metadata_at_path(pathx)
-        d.addCallback(lambda (node, metadata): node)
+        d.addCallback(lambda node_and_metadata: node_and_metadata[0])
         return d
 
     def get_child_and_metadata_at_path(self, pathx):
@@ -593,16 +629,20 @@ class DirectoryNode:
         resulting FileNode to the directory at the given name. I return a
         Deferred that fires (with the IFileNode of the uploaded file) when
         the operation completes."""
-        name = normalize(namex)
-        if self.is_readonly():
-            return defer.fail(NotWriteableError())
-        d = self._uploader.upload(uploadable, progress=progress)
-        d.addCallback(lambda results:
-                      self._create_and_validate_node(results.get_uri(), None,
-                                                     name))
-        d.addCallback(lambda node:
-                      self.set_node(name, node, metadata, overwrite))
-        return d
+        with ADD_FILE(name=namex, metadata=metadata, overwrite=overwrite).context():
+            name = normalize(namex)
+            if self.is_readonly():
+                d = DeferredContext(defer.fail(NotWriteableError()))
+            else:
+                # XXX should pass reactor arg
+                d = DeferredContext(self._uploader.upload(uploadable, progress=progress))
+                d.addCallback(lambda results:
+                              self._create_and_validate_node(results.get_uri(), None,
+                                                             name))
+                d.addCallback(lambda node:
+                              self.set_node(name, node, metadata, overwrite))
+
+        return d.addActionFinish()
 
     def delete(self, namex, must_exist=True, must_be_directory=False, must_be_file=False):
         """I remove the child at the specific name. I return a Deferred that
@@ -669,7 +709,8 @@ class DirectoryNode:
             return defer.succeed("redundant rename/relink")
 
         d = self.get_child_and_metadata(current_child_name)
-        def _got_child( (child, metadata) ):
+        def _got_child(child_and_metadata):
+            (child, metadata) = child_and_metadata
             return new_parent.set_node(new_child_name, child, metadata,
                                        overwrite=overwrite)
         d.addCallback(_got_child)
@@ -794,111 +835,6 @@ class DirectoryNode:
         return self.deep_traverse(DeepChecker(self, verify, repair=True, add_lease=add_lease))
 
 
-
-class DeepStats:
-    def __init__(self, origin):
-        self.origin = origin
-        self.stats = {}
-        for k in ["count-immutable-files",
-                  "count-mutable-files",
-                  "count-literal-files",
-                  "count-files",
-                  "count-directories",
-                  "count-unknown",
-                  "size-immutable-files",
-                  #"size-mutable-files",
-                  "size-literal-files",
-                  "size-directories",
-                  "largest-directory",
-                  "largest-directory-children",
-                  "largest-immutable-file",
-                  #"largest-mutable-file",
-                  ]:
-            self.stats[k] = 0
-        self.histograms = {}
-        for k in ["size-files-histogram"]:
-            self.histograms[k] = {} # maps (min,max) to count
-        self.buckets = [ (0,0), (1,3)]
-        self.root = math.sqrt(10)
-
-    def set_monitor(self, monitor):
-        self.monitor = monitor
-        monitor.origin_si = self.origin.get_storage_index()
-        monitor.set_status(self.get_results())
-
-    def add_node(self, node, childpath):
-        if isinstance(node, UnknownNode):
-            self.add("count-unknown")
-        elif IDirectoryNode.providedBy(node):
-            self.add("count-directories")
-        elif IMutableFileNode.providedBy(node):
-            self.add("count-files")
-            self.add("count-mutable-files")
-            # TODO: update the servermap, compute a size, add it to
-            # size-mutable-files, max it into "largest-mutable-file"
-        elif IImmutableFileNode.providedBy(node): # CHK and LIT
-            self.add("count-files")
-            size = node.get_size()
-            self.histogram("size-files-histogram", size)
-            theuri = from_string(node.get_uri())
-            if isinstance(theuri, LiteralFileURI):
-                self.add("count-literal-files")
-                self.add("size-literal-files", size)
-            else:
-                self.add("count-immutable-files")
-                self.add("size-immutable-files", size)
-                self.max("largest-immutable-file", size)
-
-    def enter_directory(self, parent, children):
-        dirsize_bytes = parent.get_size()
-        if dirsize_bytes is not None:
-            self.add("size-directories", dirsize_bytes)
-            self.max("largest-directory", dirsize_bytes)
-        dirsize_children = len(children)
-        self.max("largest-directory-children", dirsize_children)
-
-    def add(self, key, value=1):
-        self.stats[key] += value
-
-    def max(self, key, value):
-        self.stats[key] = max(self.stats[key], value)
-
-    def which_bucket(self, size):
-        # return (min,max) such that min <= size <= max
-        # values are from the set (0,0), (1,3), (4,10), (11,31), (32,100),
-        # (101,316), (317, 1000), etc: two per decade
-        assert size >= 0
-        i = 0
-        while True:
-            if i >= len(self.buckets):
-                # extend the list
-                new_lower = self.buckets[i-1][1]+1
-                new_upper = int(mathutil.next_power_of_k(new_lower, self.root))
-                self.buckets.append( (new_lower, new_upper) )
-            maybe = self.buckets[i]
-            if maybe[0] <= size <= maybe[1]:
-                return maybe
-            i += 1
-
-    def histogram(self, key, size):
-        bucket = self.which_bucket(size)
-        h = self.histograms[key]
-        if bucket not in h:
-            h[bucket] = 0
-        h[bucket] += 1
-
-    def get_results(self):
-        stats = self.stats.copy()
-        for key in self.histograms:
-            h = self.histograms[key]
-            out = [ (bucket[0], bucket[1], h[bucket]) for bucket in h ]
-            out.sort()
-            stats[key] = out
-        return stats
-
-    def finish(self):
-        return self.get_results()
-
 class ManifestWalker(DeepStats):
     def __init__(self, origin):
         DeepStats.__init__(self, origin)
@@ -925,7 +861,7 @@ class ManifestWalker(DeepStats):
                 }
 
 
-class DeepChecker:
+class DeepChecker(object):
     def __init__(self, root, verify, repair, add_lease):
         root_si = root.get_storage_index()
         if root_si:
@@ -968,5 +904,3 @@ class DeepChecker:
 
 
 # use client.create_dirnode() to make one of these
-
-
